@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pdyna.io import print_time
-from tqdm import tqdm
 import numpy as np
 import time
+import os
 
 
 @dataclass
@@ -71,12 +71,14 @@ class Trajectory:
             with open(incar_path,"r") as fp:
                 lines = fp.readlines()
                 nblock = 1
+                Tf = None
                 for line in lines:
                     if line.startswith('NBLOCK'):
                         nblock = int(line.split()[2])
                     if line.startswith('TEBEG'):
                         Ti = int(line.split()[2])
-                        Tf = int(Ti)
+                        if Tf == None:
+                            Tf = int(Ti)
                     if line.startswith('TEEND'):
                         Tf = int(line.split()[2])
                     if line.startswith('POTIM'):
@@ -223,11 +225,11 @@ class Trajectory:
                  # general parameters
                  uniname: str, # A unique user-defined name for this trajectory, will be used in printing and figure saving
                  read_mode: int, # key parameter, 1: equilibration mode, 2: quench/anneal mode
-                 allow_equil = 0, # take the first x fraction of the trajectory as equilibration, this part will not be computed
+                 allow_equil = 0.5, # take the first x fraction of the trajectory as equilibration, this part will not be computed
                  read_every = 0, # read only every n steps, default is 0 which the code will decide an appropriate value according to the system size
                  saveFigures = False, # whether to save produced figures
                  lib_saver = False,  # whether to save computed material properties in lib file
-                 lib_overwrite = True, # whether to overwrite existing lib entry, or just change upon them
+                 lib_overwrite = False, # whether to overwrite existing lib entry, or just change upon them
                  
                  # function toggles
                  preset = 0, # 0: no preset, uses the toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
@@ -239,7 +241,7 @@ class Trajectory:
                  toggle_A_disp = False, # switch of A-site cation displacement calculation
                  
                  # Lattice parameter calculation
-                 lat_method = 2, # lattice parameter analysis methods
+                 lat_method = 1, # lattice parameter analysis methods, 1: direct lattice cell dimension, 2: pseudo-cubic lattice parameter
                  zdir = 2, # specified z-direction in case of lat_method 2
                  lattice_rot = [0,0,0], # the rotation of system before lattice calculation in case of lat_method 2
                  smoother = True, # whether to use S-G smoothing on outputs 
@@ -247,6 +249,7 @@ class Trajectory:
                  
                  # time averaged structure
                  start_ratio = 0.5, # time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory
+                 tavg_save_dir = ".\\", # directory for saving the time-averaging structures
                  
                  # octahedral tilting and distortion
                  multi_thread = 1, # if >1, enable multi-threading in this calculation, since not vectorized
@@ -260,7 +263,7 @@ class Trajectory:
                  
                  # molecular orientation (MO)
                  MOautoCorr = False, # compute MO reorientation time constant
-                 MO_corr_NN12 = True, # enable first and second NN correlation function of MO
+                 MO_corr_NN12 = False, # enable first and second NN correlation function of MO
                  ):
         
         # pre-definitions
@@ -375,7 +378,7 @@ class Trajectory:
                 else:     
                     neigh_list[B_site,:] = np.array(X_idx)
                 
-            self.octahedra = neigh_list
+            self.octahedra = neigh_list.astype(int)
         
         # label the constituent A-sites
         if toggle_MO or toggle_A_disp:
@@ -437,7 +440,7 @@ class Trajectory:
             et0 = time.time()
             
             from pdyna.structural import structure_time_average_ase, simply_calc_distortion
-            struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path='.\\relaxed_cif\\'+f"{uniname}_tavg.cif")
+            struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif")
             self.tavg_struct = struct
             tavg_dist = simply_calc_distortion(self)[0]
             print("time-averaged structure distortion mode: ")
@@ -451,7 +454,6 @@ class Trajectory:
         
         if toggle_tilt_distort:
             print("Computing octahedral tilting and distortion...")
-            print(" ")
             self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,ref_with_initial_structure=ref_with_initial_structure,octa_locality=octa_locality,enable_refit=enable_refit, symm_8_fold=symm_8_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame)
         
         if toggle_MO:
@@ -469,7 +471,13 @@ class Trajectory:
         
         if lib_saver and read_mode == 1:
             import pickle
-            with open("perovskite_gaussian_data", "rb") as fp:   # Unpickling
+            lib_name = "perovskite_gaussian_data"
+            if not os.path.isfile(lib_name): # create the data file if not found in work dir
+                datalib = {}
+                with open(lib_name, "wb") as fp:   #Pickling
+                    pickle.dump(datalib, fp)
+
+            with open(lib_name, "rb") as fp:   # Unpickling
                 datalib = pickle.load(fp)
             
             if lib_overwrite:
@@ -478,7 +486,7 @@ class Trajectory:
                 for ent in self.prop_lib:
                     datalib[uniname][ent] = self.prop_lib[ent]
             
-            with open("perovskite_gaussian_data", "wb") as fp:   #Pickling
+            with open(lib_name, "wb") as fp:   #Pickling
                 pickle.dump(datalib, fp)
                 
             print("lib_saver: Calculated properties are saved in the data library. ")
@@ -1133,7 +1141,10 @@ class Trajectory:
             corrtime, autocorr = MO_correlation(CN,self.MDTimestep,False,uniname)
             self.MO_autocorr = np.concatenate((corrtime,autocorr),axis=0)
             tconst = fit_exp_decay(corrtime, autocorr)
+
             print("MO decorrelation time: "+str(round(tconst,4))+' ps')
+            if tconst < 0:
+                print("!MO: Negative decorrelation time constant is found, please check if the trajectory is too short or system size too small. ")
             print(" ")
             
             self.prop_lib['reorientation'] = tconst

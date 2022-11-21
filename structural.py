@@ -2,7 +2,6 @@ import numpy as np
 import re, os
 import json
 import sys
-from copy import deepcopy
 from joblib import Parallel, delayed
 from tqdm import tqdm
 import pymatgen.io.cif
@@ -11,20 +10,10 @@ from pymatgen.core.periodic_table import Element
 from scipy.spatial.transform import Rotation as sstr
 
 
-def periodicity_fold(arrin):
-    arr = deepcopy(arrin)
-    arr[arr<-45] = arr[arr<-45]+90
-    arr[arr<-45] = arr[arr<-45]+90
-    arr[arr>45] = arr[arr>45]-90
-    arr[arr>45] = arr[arr>45]-90
-    return arr
-
-
 def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_list,ref_with_initial_structure,Rmat_ref,orthogonal_frame):
     
     def frame_wise(fr):
         mybox=lattice[fr,:]
-        imybox=1/mybox[:3]
         
         #R[i,:] = distance_array(Bpos[i,:],Xpos[i,:],mybox)
         disto = np.empty((0,4))
@@ -32,19 +21,8 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
         Rmsd = np.zeros((Bcount,1))
         for B_site in range(Bcount): # for each B-site atom
                 
-            #bx_ea = np.zeros((6,3))
-            bx = np.zeros((6,3))
-            for j in range(6):
-                temp = Xpos[fr,int(neigh_list[B_site,j]),:] - Bpos[fr,B_site,:] 
-                
-                # Filthily hack in some orthorhombic (only) PBCs as I can't see how MDanalysis does this properly
-                for dim in 0,1,2:
-                    s=imybox[dim] * temp[dim] # Minimum image convention, algo from MDAnalysis calc_distances.h
-                    temp[dim]=mybox[dim]*(s-round(s)) 
-                    
-                #temp=temp/np.linalg.norm(temp) # suppressed since it is not correct!
-                bx[j,:] = temp
-            bx = bx/np.mean(np.linalg.norm(bx,axis=1))
+            raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
+            bx = octahedra_coords_into_bond_vectors(raw,mybox)
             if ref_with_initial_structure:
                 bx = np.matmul(bx,Rmat_ref[B_site,:])        
             dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,orthogonal_frame)
@@ -71,28 +49,15 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
         for subfr in tqdm(range(len(readfr))):
             fr = readfr[subfr]
             mybox=lattice[fr,:]
-            imybox=1/mybox[:3]
             
             #R[i,:] = distance_array(Bpos[i,:],Xpos[i,:],mybox)
             disto = np.empty((0,4))
             Rmat = np.zeros((Bcount,3,3))
             Rmsd = np.zeros((Bcount,1))
             for B_site in range(Bcount): # for each B-site atom
-                    
-                #bx_ea = np.zeros((6,3))
-                bx = np.zeros((6,3))
-                for j in range(6):
-                    temp = Xpos[fr,int(neigh_list[B_site,j]),:] - Bpos[fr,B_site,:]
-                    
-                    # Filthily hack in some orthorhombic (only) PBCs as I can't see how MDanalysis does this properly
-                    for dim in 0,1,2:
-                        s=imybox[dim] * temp[dim] # Minimum image convention, algo from MDAnalysis calc_distances.h
-                        temp[dim]=mybox[dim]*(s-round(s)) 
-                        
-                    #temp=temp/np.linalg.norm(temp) # suppressed since it is not correct!
-                    
-                    bx[j,:] = temp
-                bx = bx/np.mean(np.linalg.norm(bx,axis=1))
+
+                raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
+                bx = octahedra_coords_into_bond_vectors(raw,mybox)
 
                 if ref_with_initial_structure:
                     bx = np.matmul(bx,Rmat_ref[B_site,:])        
@@ -105,25 +70,29 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
                 from MDAnalysis.analysis.distances import distance_array    
                 disto_prev = np.mean(disto,axis=0)
                 neigh_list_prev = neigh_list
+ 
                 r=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
                 
-                X_neigh = np.empty((Xpos.shape[1],2))
-                for xidx in range(r.shape[1]):
-                    X_neigh[xidx,:] = sorted(range(len(r[:,xidx])), key = lambda sub: r[:,xidx][sub])[:2]
-                
-                neigh_list = [[] for _ in range(Bcount)]
-                for bidx in range(Bcount):  # use X atom neighbour list instead of B atoms
-                    for xidx in range(Xpos.shape[1]):
-                        if bidx in X_neigh[xidx,:]:
-                            neigh_list[bidx].append(xidx)
-                neigh_list = np.array(neigh_list)
-                
+                max_BX_distance = 4.2
+                neigh_list = np.zeros((Bpos.shape[1],6))
+                for B_site, X_list in enumerate(r): # for each B-site atom
+                    X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
+                    if len(X_idx) != 6:
+                        raise ValueError(f"The number of X site atoms connected to B site atom no.{B_site} is not 6 but {len(X_idx)}. \n")
+                    
+                    if orthogonal_frame:
+                        bx_raw = Xpos[fr,:][X_idx,:] - Bpos[fr,:][B_site,:]
+                        order1 = match_bx(bx_raw,mybox) 
+                        neigh_list[B_site,:] = np.array(X_idx)[order1]
+                    else:     
+                        neigh_list[B_site,:] = np.array(X_idx)
+                    
+                neigh_list = neigh_list.astype(int)
                 
                 if neigh_list.shape != (Bcount, 6):
                     raise ValueError(f"refit of neighbour list at frame no.{fr} is unsuccessful, check neigh_list. ")
                 
                 mybox=lattice[fr,:]
-                imybox=1/mybox[:3]
                 
                 # re-calculate distortion values
                 disto = np.empty((0,4))
@@ -131,20 +100,8 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
                 Rmsd = np.zeros((Bcount,1))
                 for B_site in range(Bcount): # for each B-site atom
                         
-                    #bx_ea = np.zeros((6,3))
-                    bx = np.zeros((6,3))
-                    for j in range(6):
-                        temp = Xpos[fr,int(neigh_list[B_site,j]),:] - Bpos[fr,B_site,:]
-                        
-                        # Filthily hack in some orthorhombic (only) PBCs as I can't see how MDanalysis does this properly
-                        for dim in 0,1,2:
-                            s=imybox[dim] * temp[dim] # Minimum image convention, algo from MDAnalysis calc_distances.h
-                            temp[dim]=mybox[dim]*(s-round(s)) 
-                            
-                        #temp=temp/np.linalg.norm(temp) # suppressed since it is not correct!
-                        
-                        bx[j,:] = temp
-                    bx = bx/np.mean(np.linalg.norm(bx,axis=1))
+                    raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
+                    bx = octahedra_coords_into_bond_vectors(raw,mybox)
                     if ref_with_initial_structure:
                         bx = np.matmul(bx,Rmat_ref[B_site,:])
                     dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,orthogonal_frame)
@@ -401,23 +358,14 @@ def simply_calc_distortion(traj):
     Xpos = struct.cart_coords[traj.Xindex,:]
     
     mybox=np.array([struct.lattice.abc,struct.lattice.angles]).reshape(6,)
-    imybox=1/mybox[:3]
     
     disto = np.empty((0,4))
     Rmat = np.zeros((len(traj.Bindex),3,3))
     Rmsd = np.zeros((len(traj.Bindex),1))
     for B_site in range(len(traj.Bindex)): # for each B-site atom
-        bx = np.zeros((6,3))
-        for j in range(6):
-            temp = Xpos[int(neigh_list[B_site,j]),:] - Bpos[B_site,:]
-            
-            for dim in 0,1,2:
-                s=imybox[dim] * temp[dim] 
-                temp[dim]=mybox[dim]*(s-round(s)) 
-                
-            #temp=temp/np.linalg.norm(temp) # suppressed since it is not correct!
-            bx[j,:] = temp
-        bx = bx/np.mean(np.linalg.norm(bx,axis=1))
+    
+        raw = Xpos[neigh_list[B_site,:],:] - Bpos[B_site,:]
+        bx = octahedra_coords_into_bond_vectors(raw,mybox)
         dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,True)
         Rmat[B_site,:] = rotmat
         Rmsd[B_site] = rmsd
@@ -435,8 +383,15 @@ def simply_calc_distortion(traj):
     
     return temp_dist, temp_std
 
-
-
+def octahedra_coords_into_bond_vectors(raw,mybox):
+    mybox = mybox[:3]
+    imybox = 1/mybox
+    
+    s = np.multiply(imybox,raw)
+    bx1 = np.multiply(mybox[:3],s-np.round(s))
+            
+    bx = bx1/np.mean(np.linalg.norm(bx1,axis=1))
+    return bx
 
 def calc_distortions_from_bond_vectors(bx,force_unique=False):
     # constants
@@ -704,7 +659,7 @@ def organic_A_site_env(struct,nc):
     elif nn1 == 4:
         mol_type = 'MA'
     else:
-        raise TypeError(f"Cannot detect the molecule type with CrystalNN.")
+        raise TypeError("Cannot detect the molecule type with CrystalNN.")
     
     
     for N in Nlist:
