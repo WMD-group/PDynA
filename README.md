@@ -5,7 +5,7 @@
 PDynA
 =====
 
-**Perovskite Dynamics Analysis** (PDynA) is a Python package for analysis of perovskite dynamics. 
+**P**erovskite **Dyn**amics **A**nalysis (**PDynA**) is a Python package for analysis of perovskite dynamics. 
 
 <!---
 Statement of need
