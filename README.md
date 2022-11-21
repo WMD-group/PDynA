@@ -23,6 +23,8 @@ Code features
 
 - The octahedral distortion and tilting calculation is the core feature of this package, which can quantitatively examine the dynamic behaviour of perovskite in terms of how octahedra tilt and distort, as well as the spatial correlation of these properties (Glazer notation). 
 
+- The octahedral distortion and tilting calculation can be accelerated with parallelization by joblib, this can be tuned with the input parameter multi_thread. 
+
 
 List of modules
 -------
