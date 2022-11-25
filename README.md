@@ -41,6 +41,7 @@ Requirements
 
 The main language is Python 3 and has been tested using Python 3.8+, with the following dependencies:
 - Numpy
+- Matplotlib
 - Pymatgen
 - MDAnalysis
 - Scipy
