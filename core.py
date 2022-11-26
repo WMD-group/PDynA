@@ -444,7 +444,7 @@ class Trajectory:
             self.tavg_struct = struct
             tavg_dist = simply_calc_distortion(self)[0]
             print("time-averaged structure distortion mode: ")
-            print(tavg_dist)
+            print(np.round(tavg_dist,4))
             print(" ")
 
             self.prop_lib['distortion_tavg'] = tavg_dist
@@ -455,7 +455,12 @@ class Trajectory:
         if toggle_tilt_distort:
             print("Computing octahedral tilting and distortion...")
             self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,ref_with_initial_structure=ref_with_initial_structure,octa_locality=octa_locality,enable_refit=enable_refit, symm_8_fold=symm_8_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame)
-        
+            print("dynamic distortion:",np.round(self.prop_lib["distortion"][0],4))
+            print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
+            if 'tilt_corr_polarity' in self.prop_lib:
+                print("tilting correlation:",np.round(np.array(self.prop_lib['tilt_corr_polarity']).reshape(3,),3))
+            print(" ")
+            
         if toggle_MO:
             self.molecular_orientation(uniname=uniname,read_mode=read_mode,allow_equil=allow_equil,MOautoCorr=MOautoCorr, MO_corr_NN12=MO_corr_NN12, title=title,saveFigures=saveFigures,smoother=smoother)    
         
@@ -617,7 +622,7 @@ class Trajectory:
         
         from MDAnalysis.analysis.distances import distance_array
         from pdyna.structural import resolve_octahedra, calc_distortions_from_bond_vectors
-        from pdyna.analysis import compute_tilt_density_sg
+        from pdyna.analysis import compute_tilt_density
         
         et0 = time.time()
         
@@ -810,7 +815,7 @@ class Trajectory:
 
         else: # read_mode 1, constant-T MD (equilibration)
             from pdyna.analysis import draw_dist_density, draw_tilt_density
-            Dmu,Dstd = draw_dist_density(Di, uniname, saveFigures, n_bins = 100, screen=not(orthogonal_frame), title=None)
+            Dmu,Dstd = draw_dist_density(Di, uniname, saveFigures, n_bins = 100, title=None)
             if not tilt_corr_NN1:
                 draw_tilt_density(T, uniname, saveFigures,symm_8_fold=symm_8_fold,title=title)
                 
@@ -862,7 +867,7 @@ class Trajectory:
             Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
         
         if read_mode == 1:
-            Tval = np.array(compute_tilt_density_sg(T, n_bins = 200, symm_8_fold = True)).reshape((3,1))
+            Tval = np.array(compute_tilt_density(T)).reshape((3,1))
             self.prop_lib['distortion'] = [Dmu,Dstd]
             self.prop_lib['tilting'] = Tval
         
@@ -1064,7 +1069,7 @@ class Trajectory:
         et0 = time.time()
         
         from MDAnalysis.analysis.distances import distance_array
-        from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay
+        from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay, orientation_density_3D
         
         Afa = self.A_sites["FA"]
         Ama = self.A_sites["MA"]
@@ -1099,6 +1104,7 @@ class Trajectory:
             self.MA_MOvec = CN
             
             orientation_density(CN,saveFigures,uniname,title=title)
+            #orientation_density_3D(CN,"MA",saveFigures,uniname)
             
             
         if len(Afa) > 0:
@@ -1132,6 +1138,8 @@ class Trajectory:
             self.FA_MOvec2 = NN
             
             orientation_density_2pan(CN,NN,saveFigures,uniname,title=title)
+            #orientation_density_3D(CN,"FA1",saveFigures,uniname)
+            #orientation_density_3D(NN,"FA2",saveFigures,uniname)
             
 
         if MOautoCorr is True:
@@ -1154,13 +1162,9 @@ class Trajectory:
             import math
             from pdyna.analysis import draw_MO_spacial_corr_time, draw_MO_spacial_corr_NN12, draw_MO_spacial_corr
             
-            default_BB_dist = 6
-            
             st0 = self.st0
             cc = st0.cart_coords[Clist,:]
             cfc = st0.frac_coords[Clist,:]
-            
-            nc = st0.cart_coords[Nlist,:]
             nfc = st0.frac_coords[Nlist,:]
             
             dm = st0.distance_matrix[Clist][:,Nlist]
@@ -1170,9 +1174,6 @@ class Trajectory:
                 raise TypeError("The supercell is not in cubic shape. \n")
             
             supercell_size = round(len(self.Bindex)**(1/3))
-            #if cc.shape[0] != supercell_size**3:
-            #    raise TypeError("The number of C atom in each repeating unit may not be 1, consider A-site organic bond breakage. ")
-            
             
             if np.linalg.norm([np.amin(cc[:,0]),np.amin(cc[:,1]),np.amin(cc[:,2])]) < 1: # the first carbon atom is too close to the origin which will lead to reading error
                 cc = cc+3 # shift the structure
@@ -1416,7 +1417,6 @@ class Trajectory:
         
         ABsep = 8.2
         mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
-        imybox=1/mybox[:3]
         st0Bpos = st0pos[Bindex,:]
         
         CN_H_tol = 1.35

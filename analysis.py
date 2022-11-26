@@ -1,11 +1,13 @@
+import os
 import math
 import numpy as np
 from math import factorial
 from scipy.stats import norm
 from matplotlib.figure import figaspect
 import matplotlib.pyplot as plt
-#plt.rcParams.update(plt.rcParamsDefault)
-plt.style.use("style.mplstyle")
+
+if os.path.exists("style.mplstyle"):
+    plt.style.use("style.mplstyle")
 
 def savitzky_golay(y, window_size=51, order=3, deriv=0, rate=1):
     r"""Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
@@ -81,7 +83,7 @@ def savitzky_golay(y, window_size=51, order=3, deriv=0, rate=1):
 
 def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_crop = 0, screen = None, title = None):
     
-    fig_name = f"{uniname}_lattice_density.png"
+    fig_name = f"lattice_density_{uniname}.png"
     
     if np.isnan(Lat).any():
         raise TypeError("The Lat array contains nan values. ")
@@ -223,7 +225,7 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
 
 def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoother = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False, num_crop = 0):
     
-    fig_name = f"{uniname}_lattice_evo.png"
+    fig_name = f"lattice_evo_{uniname}.png"
     
     assert dm.shape[0] == len(steps)
     if dm.ndim == 3:
@@ -293,7 +295,7 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoot
 
 def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = False, x_lims = None, y_lims = None):
     
-    fig_name = f"{uniname}_lattice_time.png"
+    fig_name = f"lattice_time_{uniname}.png"
     
     assert dm.shape[0] == len(steps)
     if dm.ndim == 3:
@@ -339,7 +341,7 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = F
 
 def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y_lim = None):
     
-    fig_name = f"{uniname}_traj_tilt_time.png"
+    fig_name = f"traj_tilt_time_{uniname}.png"
     
     assert T.ndim == 3
     assert T.shape[0] == len(steps)
@@ -351,7 +353,7 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y
     for i in range(T.shape[0]-aw+1):
         temp = T[list(range(i,i+aw)),:,:]
         #temp1 = temp[np.where(np.logical_and(temp<20,temp>-20))]
-        fitted = np.array(compute_tilt_density_sg(temp, n_bins = 100, symm_8_fold = True)).reshape((1,3))
+        fitted = np.array(compute_tilt_density(temp)).reshape((1,3))
         Tline = np.concatenate((Tline,fitted),axis=0)
     
     sgs = round(len(steps)/5)
@@ -391,69 +393,49 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y
     return (steps[:(len(steps)-aw+1)],Ta,Tb,Tc)
 
 
-def compute_tilt_density_sg(T, n_bins = 200, symm_8_fold = False):
+def compute_tilt_density(T,method = "curve"):
     
-    T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
-    T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
-    T_c = T[:,:,2].reshape((T.shape[0]*T.shape[1]))
-    tup_T = (T_a,T_b,T_c)
-    
-    T1 = []
-    if symm_8_fold:
-        for temp in tup_T:
-            temp = np.abs(temp)
-            T1.append(temp)
-        tup_T = (T1[0],T1[1],T1[2])
-    
-    
-    Y = []
-    for i in range(3):
-        if symm_8_fold:
-            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[0,45])
-        else:
-            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
-        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-        
-        if i == 0:
-            Y.append(bincenters)
-        
-        Y.append(y)
-    Y = np.transpose(np.array(Y))
-    
-    maxs = []
-    window_size = n_bins/4
-    if window_size%2==0:
-        window_size+=1
-    for i in range(3):
-        temp = savitzky_golay(Y[:,i+1], window_size=window_size, order=3, deriv=0, rate=1)
-        maxs.append(abs(Y[:,0][np.argmax(temp)]))
-        
-    return maxs
-
-
-def compute_tilt_density_gaussian(T, cutoff = 20):
-    from sklearn.cluster import KMeans
-    init_arr = np.array([[-6],[6]])
+    init_arr = np.array([-0.1,0.1])
     T_a = T[:,:,0].reshape((-1,))
     T_b = T[:,:,1].reshape((-1,))
     T_c = T[:,:,2].reshape((-1,))
     tup_T = (T_a,T_b,T_c)
     
-    maxs = []
-    for i in range(3):
-        temp = tup_T[i][np.abs(tup_T[i])<cutoff]
-        kmeans = KMeans(n_clusters=2, init=init_arr,n_init=7, random_state=0).fit(temp.reshape(-1,1))
-        centers = np.abs(kmeans.cluster_centers_)
-        if float(np.abs(centers[0]-centers[1])) > 0.35:
-            raise ValueError("The detected Gaussian peaks of tilting do not match in positive and negative side. ")
-        maxs.append(np.mean(centers))
+    if method == "curve":
+        n_bins = 200
         
+        Y = []
+        for i in range(3):
+            y,binEdges=np.histogram(np.abs(tup_T[i]),bins=n_bins,range=[0,45])
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            if i == 0:
+                Y.append(bincenters)
+            Y.append(y)
+        Y = np.transpose(np.array(Y))
+        
+        maxs = []
+        window_size = n_bins/4
+        if window_size%2==0:
+            window_size+=1
+        for i in range(3):
+            temp = savitzky_golay(Y[:,i+1], window_size=window_size, order=3, deriv=0, rate=1)
+            maxs.append(abs(Y[:,0][np.argmax(temp)]))
+    
+    elif method == "kmean":
+        from scipy.cluster.vq import kmeans
+        maxs = []
+        for i in range(3):
+            centers = kmeans(tup_T[i], k_or_guess=init_arr, iter=20, thresh=1e-05)[0]
+            if abs(np.abs(centers[1])-np.abs(centers[0])) > 0.3:
+                print("!Tilting-Kmeans: Fit error above threshold, turned to curve fitting, see difference below. ")
+            maxs.append((np.abs(centers[1])+np.abs(centers[0]))/2)
+
     return maxs
 
 
 def draw_distortion_evolution_sca(D, steps, uniname, saveFigures, xaxis_type = 'N', scasize = 2.5, y_lim = 0.4):
     
-    fig_name = f"{uniname}_traj_dist_sca.png"
+    fig_name = f"traj_dist_sca_{uniname}.png"
     
     assert D.shape[0] == len(steps)
     
@@ -487,7 +469,7 @@ def draw_distortion_evolution_sca(D, steps, uniname, saveFigures, xaxis_type = '
 
 def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, fig_name = None, xaxis_type = 't', scasize = 2.5, y_lim = None):
     
-    fig_name = f"{uniname}_traj_tilt_sca.png"
+    fig_name = f"traj_tilt_sca_{uniname}.png"
     
     assert T.shape[0] == len(steps)
     
@@ -519,43 +501,12 @@ def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, fig_name = None, xax
     plt.show()
 
 
-def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], screen = False, gaus_fit = True, title = None):
-    from sklearn.cluster import KMeans
+def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], gaus_fit = True, title = None):
     
-    fig_name = f"{uniname}_traj_dist_density.png"
+    fig_name = f"traj_dist_density_{uniname}.png"
     
     if D.ndim == 3:
         D = D.reshape(D.shape[0]*D.shape[1],4)
-    
-    numD = D.shape[0]
-    
-    if screen:
-        kmeans = KMeans(n_clusters=2, random_state=0).fit(D)
-        kmean_labels = kmeans.labels_
-        kmean_centers = kmeans.cluster_centers_
-        
-        Ds = []
-        for i in range(2):
-            Ds.append(D[kmean_labels == i,:])
-    
-        ind=np.argsort(kmean_centers[:,3]) # sort centers with the T2u value
-        kmean_centers=kmean_centers[ind]
-        
-        if kmean_centers[1,3]/kmean_centers[0,3] > 3:
-            Ds = [Ds[i] for i in ind]
-            D = Ds[0]
-        
-        elif kmean_centers[1,3]/kmean_centers[0,3] < 1.1:
-            pass
-        
-        else:
-            print("The separated populations have centers at: ")
-            print(kmean_centers)
-            raise ValueError("The screening of anomalies is unsuccessful. \n")
-        
-    portionD = 100 - D.shape[0]/numD*100
-    if portionD > 10:
-        print(f"Warning: {round(portionD,1)} percent of distortion value data points are excluded. ")
     
     figs, axs = plt.subplots(4, 1)
     labels = ["Eg","T2g","T1u","T2u"]
@@ -613,7 +564,7 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], s
 
 def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_8_fold = False, title = None):
     
-    fig_name=f"{uniname}_traj_tilt_density.png"
+    fig_name=f"traj_tilt_density_{uniname}.png"
     
     T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
     T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
@@ -675,7 +626,7 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_8_fold = False
 
 def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins = 100, symm_8_fold = False):
     
-    fig_name=f"{uniname}_tilt_octatype_density.png"
+    fig_name=f"tilt_octatype_density_{uniname}.png"
     
     typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
                  "I3 Br3: planar","I2 Br4: right-angle","I2 Br4: linear","I1 Br5","I0 Br6"]
@@ -742,7 +693,7 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
 
         plt.show()
         
-        m1 = np.array(compute_tilt_density_sg(T, n_bins = 200, symm_8_fold = True)).reshape(1,-1)
+        m1 = np.array(compute_tilt_density(T)).reshape(1,-1)
         maxs = np.concatenate((maxs,m1),axis=0)
     
     # plot type dependence   
@@ -772,9 +723,8 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
     return maxs
 
 
-def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], screen = True):
-    from sklearn.cluster import KMeans
-    fig_name=f"{uniname}_dist_octatype_density.png"
+def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
+    fig_name=f"dist_octatype_density_{uniname}.png"
     
     typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
                  "I3 Br3: planar","I2 Br4: right-angle","I2 Br4: linear","I1 Br5","I0 Br6"]
@@ -790,40 +740,6 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
     for di, D in enumerate(Dtype):
         if D.ndim == 3:
             D = D.reshape(D.shape[0]*D.shape[1],4)
-        
-        numD = D.shape[0]
-        
-        if screen:
-            kmeans = KMeans(n_clusters=2, random_state=0).fit(D[:,[1,3]])
-            kmean_labels = kmeans.labels_
-            
-            Ds = []
-            for i in range(2):
-                Ds.append(D[kmean_labels == i,:])
-            
-            # test if the difference between population is large enough
-            centers = np.empty((2,4))
-            for i in range(2):
-                for j in range(4):
-                    centers[i,j] = np.mean(Ds[i][:,j])
-        
-            ind=np.argsort(centers[:,3]) # sort centers with the T2u value
-            centers=centers[ind]
-            
-            if centers[1,3] > 1 and centers[0,3] < 0.5:
-                Ds = [Ds[i] for i in ind]
-                D = Ds[0]
-            
-            elif centers[1,3] < 0.5 and centers[0,3] < 0.5:
-                pass
-            
-            else:
-                print(centers)
-                raise ValueError("The screening of anomalies is unsuccessful. \n")
-            
-        portionD = 100 - D.shape[0]/numD*100
-        if portionD > 10:
-            print(f"Warning: {round(portionD,1)} percent of distortion value data points are excluded. ")
         
         figs, axs = plt.subplots(4, 1)
         labels = ["Eg","T2g","T1u","T2u"]
@@ -909,7 +825,7 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
 
 def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 100, symm_8_fold = False):
     
-    fig_name=f"{uniname}_tilt_halideconc_density.png"
+    fig_name=f"tilt_halideconc_density_{uniname}.png"
     
     maxs = np.empty((0,3))
     for ti, T in enumerate(Tconc):
@@ -967,7 +883,7 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
             
         plt.show()
         
-        m1 = np.array(compute_tilt_density_sg(T, n_bins = 200, symm_8_fold = True)).reshape(1,-1)
+        m1 = np.array(compute_tilt_density(T)).reshape(1,-1)
         maxs = np.concatenate((maxs,m1),axis=0)
     
     # plot type dependence   
@@ -994,9 +910,8 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
     return maxs
 
 
-def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], screen = True):
-    from sklearn.cluster import KMeans
-    fig_name=f"{uniname}_dist_halideconc_density.png"
+def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
+    fig_name=f"dist_halideconc_density_{uniname}.png"
     
     Dgauss = np.empty((0,4))
     Dgaussstd = np.empty((0,4))
@@ -1004,40 +919,6 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
     for di, D in enumerate(Dconc):
         if D.ndim == 3:
             D = D.reshape(D.shape[0]*D.shape[1],4)
-        
-        numD = D.shape[0]
-        
-        if screen:
-            kmeans = KMeans(n_clusters=2, random_state=0).fit(D[:,[1,3]])
-            kmean_labels = kmeans.labels_
-            
-            Ds = []
-            for i in range(2):
-                Ds.append(D[kmean_labels == i,:])
-            
-            # test if the difference between population is large enough
-            centers = np.empty((2,4))
-            for i in range(2):
-                for j in range(4):
-                    centers[i,j] = np.mean(Ds[i][:,j])
-        
-            ind=np.argsort(centers[:,3]) # sort centers with the T2u value
-            centers=centers[ind]
-            
-            if centers[1,3] > 1 and centers[0,3] < 0.5:
-                Ds = [Ds[i] for i in ind]
-                D = Ds[0]
-            
-            elif centers[1,3] < 0.5 and centers[0,3] < 0.5:
-                pass
-            
-            else:
-                print(centers)
-                raise ValueError("The screening of anomalies is unsuccessful. \n")
-            
-        portionD = 100 - D.shape[0]/numD*100
-        if portionD > 10:
-            print(f"Warning: {round(portionD,1)} percent of distortion value data points are excluded. ")
         
         figs, axs = plt.subplots(4, 1)
         labels = ["Eg","T2g","T1u","T2u"]
@@ -1126,7 +1007,7 @@ def abs_sqrt(num):
 
 def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', scasize = 1.5, y_lim = [-1,1]):
     
-    fig_name=f"{uniname}_traj_tilt_corr.png"
+    fig_name=f"traj_tilt_corr_{uniname}.png"
     
     assert T.shape[0] == len(steps)
     
@@ -1179,7 +1060,7 @@ def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't
 
 def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
     
-    fig_name=f"{uniname}_traj_tilt_corr_density.png"
+    fig_name=f"traj_tilt_corr_density_{uniname}.png"
     
     corr_power = 2.5
     fill_alpha = 0.5
@@ -1262,7 +1143,7 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
 
 def draw_tilt_spacial_corr(C, uniname, saveFigures, n_bins = 100):
     
-    fig_name = f"{uniname}_traj_tilt_spacial_corr.png"
+    fig_name = f"traj_tilt_spacial_corr_{uniname}.png"
     
     num_lens = C.shape[0]
     
@@ -1345,6 +1226,82 @@ def MO_correlation(cnsn,MDTimestep,SaveFigures,uniname):
     y = y/np.amax(y)
     
     return x, y
+
+
+def orientation_density_3D(cnsn,moltype,SaveFigures,uniname,title=None):
+    
+    def fibonacci_sphere(samples):
+
+        points = []
+        phi = math.pi * (3. - math.sqrt(5.))  # golden angle in radians
+
+        for i in range(samples):
+            y = 1 - (i / float(samples - 1)) * 2  # y goes from 1 to -1
+            radius = math.sqrt(1 - y * y)  # radius at y
+
+            theta = phi * i  # golden angle increment
+
+            x = math.cos(theta) * radius
+            z = math.sin(theta) * radius
+
+            points.append((x, y, z))
+
+        return np.array(points)
+    
+    n_sample = 2000
+    
+    p = fibonacci_sphere(n_sample)
+    sims = np.dot(cnsn.reshape(-1,3),p.T)
+    pto = np.argmax(sims,axis=1)
+
+    u,ind = np.unique(pto,return_counts=True)
+    counts = np.zeros((n_sample,))
+    for i,j in enumerate(u):
+        counts[j] = ind[i]
+    counts = counts.astype(int)
+    cnorm = counts/np.amax(counts)
+    
+    #pnorm = np.multiply(cnorm.reshape(-1,1),p)
+    #ax = plt.figure().add_subplot(projection='3d')
+    #ax.plot_trisurf(pnorm[:,0], pnorm[:,1], pnorm[:,2], linewidth=0.2, antialiased=True)
+    
+    pplot = np.empty((0,3))
+    for ip in range(n_sample):
+        muls = np.linspace(0,cnorm[ip],1+round(cnorm[ip]/0.08))[1:]
+        pplot = np.concatenate((pplot,muls.reshape(-1,1)*p[ip].reshape(1,3)),axis=0)
+    
+    box = 0.7
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.scatter(pplot[:,0],pplot[:,1],pplot[:,2],s = 7,alpha=0.5)
+    
+    limits = np.array([[-box, box],
+                       [-box, box],
+                       [-box, box]])
+
+    v, e, f = get_cube(limits)
+    ax.plot(*v.T, marker='o', color='k', ls='', markersize=10, alpha=0.5)
+    for i, j in e:
+        ax.plot(*v[[i, j], :].T, color='k', ls='-', lw=2, alpha=0.5)
+    
+    tol = 0.0001
+    ax.set_xlim([-box-tol,box+tol])
+    ax.set_ylim([-box-tol,box+tol])
+    ax.set_zlim([-box-tol,box+tol])
+    ax.view_init(30, 25)
+    set_axes_equal(ax)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax._axis3don = False
+
+    plt.show()
+    if (SaveFigures):
+        fig.savefig(f"{uniname}_MO_{moltype}_orientation_density_3D.png",bbox_inches='tight', pad_inches=0,dpi=350)
+
+
 
 
 def orientation_density(cnsn,SaveFigures,uniname,title=None):
@@ -1600,7 +1557,7 @@ def fit_exp_decay(x,y):
 
 def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, n_bins = 50):
     
-    fig_name = f"{uniname}_traj_MO_time.png"
+    fig_name = f"traj_MO_time_{uniname}.png"
     
     def three_diff(a,b,c):
         return(np.abs(a-b)**0.5+np.abs(c-b)**0.5+np.abs(a-c)**0.5)/3#**0.5
@@ -1699,7 +1656,7 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
 
 def draw_MO_spacial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
     
-    fig_name = f"{uniname}_traj_MO_spacial_corr_NN12.png"
+    fig_name = f"traj_MO_spacial_corr_NN12_{uniname}.png"
     
     if C.ndim == 3:
         pass
@@ -1747,7 +1704,7 @@ def draw_MO_spacial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
 
 def draw_MO_spacial_corr(C, uniname, saveFigures, n_bins = 50):
     
-    fig_name = f"{uniname}_traj_MO_spacial_corr.png"
+    fig_name = f"traj_MO_spacial_corr_{uniname}.png"
     
     if C.ndim == 3:
         pass
@@ -1789,10 +1746,10 @@ def draw_MO_spacial_corr(C, uniname, saveFigures, n_bins = 50):
 def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
     
     if rdftype == "CN":
-        fig_name = f"{uniname}_CN_RDF.png"
+        fig_name = f"RDF_CN_{uniname}.png"
         title = 'C-N RDF'
     elif rdftype == "BX":
-        fig_name = f"{uniname}_BX_RDF.png"
+        fig_name = f"RDF_BX_{uniname}.png"
         title = 'B-X RDF'
     
     fig, ax = plt.subplots()
@@ -1817,7 +1774,7 @@ def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
 
 def fit_3D_disp_atomwise(disp,readTimestep,uniname,moltype,saveFigures,n_bins=50,title=None):
     from scipy.fft import fft, fftfreq
-    fig_name=f"{uniname}_traj_A_vib_center_{moltype}.png"
+    fig_name=f"traj_A_vib_center_{moltype}_{uniname}.png"
     
     histlim = 1
     
@@ -1956,7 +1913,7 @@ def fit_3D_disp_atomwise(disp,readTimestep,uniname,moltype,saveFigures,n_bins=50
 
 def fit_3D_disp_total(dispt,uniname,moltype,saveFigures,n_bins=100,title=None):
     
-    fig_name=f"{uniname}_traj_A_disp_{moltype}.png"
+    fig_name=f"traj_A_disp_{moltype}_{uniname}.png"
     histlim = 1.2
     
     #if np.amin(dispt) < -histlim:
@@ -2000,57 +1957,7 @@ def fit_3D_disp_total(dispt,uniname,moltype,saveFigures,n_bins=100,title=None):
 def peaks_3D_scatter(peaks, uniname, moltype, saveFigures):
     from scipy.spatial import distance_matrix as scipydm
     
-    def get_cube(limits=None):
-        """get the vertices, edges, and faces of a cuboid defined by its limits
-
-        limits = np.array([[x_min, x_max],
-                       [y_min, y_max],
-                       [z_min, z_max]])
-        """
-        v = np.array([[0, 0, 0], [0, 0, 1],
-                      [0, 1, 0], [0, 1, 1],
-                      [1, 0, 0], [1, 0, 1],
-                      [1, 1, 0]], dtype=int)
-
-        if limits is not None:
-            v = limits[np.arange(3)[np.newaxis, :].repeat(7, axis=0), v]
-
-        e = np.array([[0, 1], [0, 2], [0, 4],
-                      [1, 3], [1, 5],
-                      [2, 3], [2, 6],
-                      [4, 5], [4, 6]], dtype=int)
-
-        f = np.array([[0, 2, 3, 1],
-                      [0, 4, 5, 1],
-                      [0, 4, 6, 2],
-                      [1, 5, 7, 3],
-                      [2, 6, 7, 3],
-                      [4, 6, 7, 5]], dtype=int)
-
-        return v, e, f
-    
-    def set_axes_equal(ax):
-
-        x_limits = ax.get_xlim3d()
-        y_limits = ax.get_ylim3d()
-        z_limits = ax.get_zlim3d()
-
-        x_range = abs(x_limits[1] - x_limits[0])
-        x_middle = np.mean(x_limits)
-        y_range = abs(y_limits[1] - y_limits[0])
-        y_middle = np.mean(y_limits)
-        z_range = abs(z_limits[1] - z_limits[0])
-        z_middle = np.mean(z_limits)
-
-        # The plot bounding box is a sphere in the sense of the infinity
-        # norm, hence I call half the max range the plot radius.
-        plot_radius = 0.5*max([x_range, y_range, z_range])
-
-        ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
-        ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
-        ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
-    
-    fig_name=f"{uniname}_traj_A_vib_center_3D_{moltype}.png"
+    fig_name=f"traj_A_vib_center_3D_{moltype}_{uniname}.png"
     
     box = 0.5
     radial = np.empty((peaks.shape[0],1))
@@ -2154,6 +2061,54 @@ def draw_quench_properties(Lobj,Tobj,Mobj,uniname,saveFigures):
     plt.show()    
 
 
+def get_cube(limits=None):
+    """get the vertices, edges, and faces of a cuboid defined by its limits
 
+    limits = np.array([[x_min, x_max],
+                   [y_min, y_max],
+                   [z_min, z_max]])
+    """
+    v = np.array([[0, 0, 0], [0, 0, 1],
+                  [0, 1, 0], [0, 1, 1],
+                  [1, 0, 0], [1, 0, 1],
+                  [1, 1, 0]], dtype=int)
+
+    if limits is not None:
+        v = limits[np.arange(3)[np.newaxis, :].repeat(7, axis=0), v]
+
+    e = np.array([[0, 1], [0, 2], [0, 4],
+                  [1, 3], [1, 5],
+                  [2, 3], [2, 6],
+                  [4, 5], [4, 6]], dtype=int)
+
+    f = np.array([[0, 2, 3, 1],
+                  [0, 4, 5, 1],
+                  [0, 4, 6, 2],
+                  [1, 5, 7, 3],
+                  [2, 6, 7, 3],
+                  [4, 6, 7, 5]], dtype=int)
+
+    return v, e, f
+
+def set_axes_equal(ax):
+
+    x_limits = ax.get_xlim3d()
+    y_limits = ax.get_ylim3d()
+    z_limits = ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    x_middle = np.mean(x_limits)
+    y_range = abs(y_limits[1] - y_limits[0])
+    y_middle = np.mean(y_limits)
+    z_range = abs(z_limits[1] - z_limits[0])
+    z_middle = np.mean(z_limits)
+
+    # The plot bounding box is a sphere in the sense of the infinity
+    # norm, hence I call half the max range the plot radius.
+    plot_radius = 0.5*max([x_range, y_range, z_range])
+
+    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 

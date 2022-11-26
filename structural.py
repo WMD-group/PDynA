@@ -4,11 +4,17 @@ import json
 import sys
 from joblib import Parallel, delayed
 from tqdm import tqdm
-import pymatgen.io.cif
 import pymatgen.analysis.molecule_matcher
 from pymatgen.core.periodic_table import Element
 from scipy.spatial.transform import Rotation as sstr
 
+filename_basis = os.path.join(os.path.dirname(__file__),'basis\\octahedron_basis.json')
+try:
+    with open(filename_basis, 'r') as f:
+        dict_basis = json.load(f)
+except IOError:
+    sys.stderr.write('IOError: failed reading from {}.'.format(filename_basis))
+    sys.exit(1)
 
 def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_list,ref_with_initial_structure,Rmat_ref,orthogonal_frame):
     
@@ -251,6 +257,7 @@ def pseudocubic_lat(traj,  # the main class instance
 
 
 def structure_time_average(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None):
+    import pymatgen.io.cif
     # current problem: can't average lattice parameters and angles; can't deal with organic A-site
     M_len = traj.nframe
     
@@ -402,16 +409,6 @@ def calc_distortions_from_bond_vectors(bx,force_unique=False):
                     [0,  1,  0],
                     [1,  0,  0]]
 
-    filename_basis = ('.\\basis\\octahedron_basis.json')
-
-    # read json
-    try:
-        with open(filename_basis, 'r') as f:
-            dict_basis = json.load(f)
-    except IOError:
-        sys.stderr.write('IOError: failed reading from {}.'
-                         .format(filename_basis))
-        sys.exit(1)
     irrep_distortions = []
     for irrep in dict_basis.keys():
         for elem in dict_basis[irrep]:
