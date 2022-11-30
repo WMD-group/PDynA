@@ -343,12 +343,17 @@ class Trajectory:
         
         if read_mode == 2:
             allow_equil = 0
-            
-        if self.natom < 200 or self._flag_cubic_cell == False:
-            MO_corr_NN12 = False 
-            tilt_corr_spatial = False 
+        
+        if orthogonal_frame and self._flag_cubic_cell == False:
+            print("!Warning: detected non-cubic cell but orthogonal octahedral reference is used! ")
+        
+        if self._flag_cubic_cell == False:
             lat_method = 1
             tilt_corr_NN1 = False
+        
+        if self.natom < 200:
+            MO_corr_NN12 = False 
+            tilt_corr_spatial = False 
             
         if read_every == 0:
             if self.natom < 400:
