@@ -16,10 +16,10 @@ except IOError:
     sys.stderr.write('IOError: failed reading from {}.'.format(filename_basis))
     sys.exit(1)
 
-def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_list,ref_with_initial_structure,Rmat_ref,orthogonal_frame):
+def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,neigh_list,orthogonal_frame,ref_initial=None):
     
     def frame_wise(fr):
-        mybox=lattice[fr,:]
+        mymat=latmat[fr,:]
         
         #R[i,:] = distance_array(Bpos[i,:],Xpos[i,:],mybox)
         disto = np.empty((0,4))
@@ -28,10 +28,13 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
         for B_site in range(Bcount): # for each B-site atom
                 
             raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
-            bx = octahedra_coords_into_bond_vectors(raw,mybox)
-            if ref_with_initial_structure:
-                bx = np.matmul(bx,Rmat_ref[B_site,:])        
-            dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,orthogonal_frame)
+            bx = octahedra_coords_into_bond_vectors(raw,mymat)
+      
+            if orthogonal_frame:
+                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+            else:
+                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,ref_initial[B_site,:])
+                
             Rmat[B_site,:] = rotmat
             Rmsd[B_site] = rmsd
             disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
@@ -55,6 +58,7 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
         for subfr in tqdm(range(len(readfr))):
             fr = readfr[subfr]
             mybox=lattice[fr,:]
+            mymat=latmat[fr,:]
             
             #R[i,:] = distance_array(Bpos[i,:],Xpos[i,:],mybox)
             disto = np.empty((0,4))
@@ -63,42 +67,30 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
             for B_site in range(Bcount): # for each B-site atom
 
                 raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
-                bx = octahedra_coords_into_bond_vectors(raw,mybox)
-
-                if ref_with_initial_structure:
-                    bx = np.matmul(bx,Rmat_ref[B_site,:])        
-                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,orthogonal_frame)
+                bx = octahedra_coords_into_bond_vectors(raw,mymat)
+     
+                if orthogonal_frame:
+                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+                else:
+                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,ref_initial[B_site,:])
+                    
                 Rmat[B_site,:] = rotmat
                 Rmsd[B_site] = rmsd
                 disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
             
             if enable_refit and fr > 0 and max(np.amax(disto)) > 0.8: # re-fit neigh_list if large distortion value is found
-                from MDAnalysis.analysis.distances import distance_array    
                 disto_prev = np.mean(disto,axis=0)
                 neigh_list_prev = neigh_list
- 
-                r=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
                 
-                max_BX_distance = 4.2
-                neigh_list = np.zeros((Bpos.shape[1],6))
-                for B_site, X_list in enumerate(r): # for each B-site atom
-                    X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
-                    if len(X_idx) != 6:
-                        raise ValueError(f"The number of X site atoms connected to B site atom no.{B_site} is not 6 but {len(X_idx)}. \n")
-                    
-                    if orthogonal_frame:
-                        bx_raw = Xpos[fr,:][X_idx,:] - Bpos[fr,:][B_site,:]
-                        order1 = match_bx(bx_raw,mybox) 
-                        neigh_list[B_site,:] = np.array(X_idx)[order1]
-                    else:     
-                        neigh_list[B_site,:] = np.array(X_idx)
-                    
-                neigh_list = neigh_list.astype(int)
-                
-                if neigh_list.shape != (Bcount, 6):
-                    raise ValueError(f"refit of neighbour list at frame no.{fr} is unsuccessful, check neigh_list. ")
-                
+                Bpos_frame = Bpos[fr,:]
+                Xpos_frame = Xpos[fr,:]
+                if orthogonal_frame:
+                    neigh_list = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame)
+                else:
+                    neigh_list, ref_initial = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame)
+
                 mybox=lattice[fr,:]
+                mymat=latmat[fr,:]
                 
                 # re-calculate distortion values
                 disto = np.empty((0,4))
@@ -107,10 +99,13 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
                 for B_site in range(Bcount): # for each B-site atom
                         
                     raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
-                    bx = octahedra_coords_into_bond_vectors(raw,mybox)
-                    if ref_with_initial_structure:
-                        bx = np.matmul(bx,Rmat_ref[B_site,:])
-                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,orthogonal_frame)
+                    bx = octahedra_coords_into_bond_vectors(raw,mymat)
+                    
+                    if orthogonal_frame:
+                        dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+                    else:
+                        dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,ref_initial[B_site,:])
+                        
                     Rmat[B_site,:] = rotmat
                     Rmsd[B_site] = rmsd
                     disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
@@ -145,6 +140,37 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_l
         
     
     return Di, T, refits
+
+
+def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame):
+    from MDAnalysis.analysis.distances import distance_array
+
+    r=distance_array(Bpos_frame,Xpos_frame,mybox)
+    
+    max_BX_distance = 4.2
+    neigh_list = np.zeros((Bpos_frame.shape[0],6))
+    ref_initial = np.zeros((Bpos_frame.shape[0],6,3))
+    for B_site, X_list in enumerate(r): # for each B-site atom
+        X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
+        if len(X_idx) != 6:
+            raise ValueError(f"The number of X site atoms connected to B site atom no.{B_site} is not 6 but {len(X_idx)}. \n")
+        
+        bx_raw = Xpos_frame[X_idx,:] - Bpos_frame[B_site,:]
+        bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
+        
+        if orthogonal_frame:
+            order1 = match_bx_orthogonal(bx,mymat) 
+            neigh_list[B_site,:] = np.array(X_idx)[order1]
+        else:   
+            order1, ref1 = match_bx_arbitrary(bx,mymat) 
+            neigh_list[B_site,:] = np.array(X_idx)[order1]
+            ref_initial[B_site,:] = ref1
+    
+    neigh_list = neigh_list.astype(int)
+    if orthogonal_frame:
+        return neigh_list
+    else:
+        return neigh_list, ref_initial
 
 
 def pseudocubic_lat(traj,  # the main class instance
@@ -364,7 +390,7 @@ def simply_calc_distortion(traj):
     Bpos = struct.cart_coords[traj.Bindex,:]
     Xpos = struct.cart_coords[traj.Xindex,:]
     
-    mybox=np.array([struct.lattice.abc,struct.lattice.angles]).reshape(6,)
+    mymat = struct.lattice.matrix
     
     disto = np.empty((0,4))
     Rmat = np.zeros((len(traj.Bindex),3,3))
@@ -372,8 +398,8 @@ def simply_calc_distortion(traj):
     for B_site in range(len(traj.Bindex)): # for each B-site atom
     
         raw = Xpos[neigh_list[B_site,:],:] - Bpos[B_site,:]
-        bx = octahedra_coords_into_bond_vectors(raw,mybox)
-        dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,True)
+        bx = octahedra_coords_into_bond_vectors(raw,mymat)
+        dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
         Rmat[B_site,:] = rotmat
         Rmsd[B_site] = rmsd
         disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
@@ -390,24 +416,22 @@ def simply_calc_distortion(traj):
     
     return temp_dist, temp_std
 
-def octahedra_coords_into_bond_vectors(raw,mybox):
-    mybox = mybox[:3]
-    imybox = 1/mybox
-    
-    s = np.multiply(imybox,raw)
-    bx1 = np.multiply(mybox[:3],s-np.round(s))
-            
+def octahedra_coords_into_bond_vectors(raw,mymat):
+    bx1 = apply_pbc_cart_vecs(raw, mymat) 
     bx = bx1/np.mean(np.linalg.norm(bx1,axis=1))
     return bx
 
-def calc_distortions_from_bond_vectors(bx,force_unique=False):
+def calc_distortions_from_bond_vectors(bx,defined_frame=None):
     # constants
-    ideal_coords = [[-1, 0,  0],
-                    [0, -1,  0],
-                    [0,  0, -1],
-                    [0,  0,  1],
-                    [0,  1,  0],
-                    [1,  0,  0]]
+    if defined_frame is None:
+        ideal_coords = [[-1, 0,  0],
+                        [0, -1,  0],
+                        [0,  0, -1],
+                        [0,  0,  1],
+                        [0,  1,  0],
+                        [1,  0,  0]]
+    else:
+        ideal_coords = defined_frame
 
     irrep_distortions = []
     for irrep in dict_basis.keys():
@@ -415,15 +439,10 @@ def calc_distortions_from_bond_vectors(bx,force_unique=False):
             irrep_distortions.append(elem)
 
     # define "molecules"
-    if force_unique: # force one-one correspondance, should only be enabled when orthogonal_frame is on. 
-        pymatgen_molecule = pymatgen.core.structure.Molecule(
-            species=[Element("Pb"),Element("H"),Element("He"),Element("Li"),Element("Be"),Element("B"),Element("I")],
-            coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
-    else:
-        pymatgen_molecule = pymatgen.core.structure.Molecule(
-            species=[Element("Pb"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I")],
-            coords=np.concatenate((np.zeros((1, 3)), bx), axis=0)) 
-    
+    pymatgen_molecule = pymatgen.core.structure.Molecule(
+        species=[Element("Pb"),Element("H"),Element("He"),Element("Li"),Element("Be"),Element("B"),Element("I")],
+        coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
+
     pymatgen_molecule_ideal = pymatgen.core.structure.Molecule(
         species=pymatgen_molecule.species,
         coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
@@ -450,17 +469,45 @@ def calc_distortions_from_bond_vectors(bx,force_unique=False):
     return distortion_amplitudes,rotmat,rmsd
 
 
-def match_bx(bx_raw,mybox):
+def quick_match_octahedron(bx):
+    # constants
+    ideal_coords = [[-1, 0,  0],
+                    [0, -1,  0],
+                    [0,  0, -1],
+                    [0,  0,  1],
+                    [0,  1,  0],
+                    [1,  0,  0]]
+
+    irrep_distortions = []
+    for irrep in dict_basis.keys():
+        for elem in dict_basis[irrep]:
+            irrep_distortions.append(elem)
+
+    # define "molecules"
+    pymatgen_molecule = pymatgen.core.structure.Molecule(
+        species=[Element("Pb"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I")],
+        coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
+
+    pymatgen_molecule_ideal = pymatgen.core.structure.Molecule(
+        species=pymatgen_molecule.species,
+        coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
+
+    # transform
+    pymatgen_molecule,rotmat,rmsd = match_molecules_extra(
+        pymatgen_molecule_ideal, pymatgen_molecule)
+    
+    new_coords = np.matmul(ideal_coords,rotmat)
+    
+    return new_coords
+
+
+def match_bx_orthogonal(bx,mymat):
     ideal_coords = np.array([[-1, 0,  0],
                              [0, -1,  0],
                              [0,  0, -1],
                              [0,  0,  1],
                              [0,  1,  0],
                              [1,  0,  0]])
-    imybox=1/mybox[:3]
-    s = np.multiply(imybox,bx_raw)
-    bx = np.multiply(mybox[:3],s-np.round(s))
-    bx = bx/np.mean(np.linalg.norm(bx,axis=1))
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
@@ -470,6 +517,20 @@ def match_bx(bx_raw,mybox):
         order.append(np.argmax(fits))
     assert len(set(order)) == 6 # double-check sanity
     return order
+
+
+def match_bx_arbitrary(bx,mymat):
+    ideal_coords = quick_match_octahedron(bx)
+    order = []
+    for ix in range(6):
+        fits = np.dot(bx,ideal_coords[ix,:])
+        if not (fits[fits.argsort()[-1]] > 0.8 and fits[fits.argsort()[-2]] < 0.2):
+            print(bx,fits)
+            raise ValueError("The fitting of initial octahedron config to rotated reference is not successful. This may happen if the initial configuration is too distorted. ")
+        order.append(np.argmax(fits))
+    assert len(set(order)) == 6 # double-check sanity
+    return order, ideal_coords
+
 
 def match_molecules_extra(molecule_transform, molecule_reference):
     # match molecules
@@ -673,10 +734,7 @@ def organic_A_site_env(struct,nc):
     return [nc,sorted(Nlist),sorted(Hlist)], mol_type
 
 
-def centmass_organic(st0pos,mybox,env):
-    
-    mybox = mybox[:3]
-    imybox = 1/mybox
+def centmass_organic(st0pos,latmat,env):
     
     c = env[0]
     n = env[1]
@@ -688,13 +746,11 @@ def centmass_organic(st0pos,mybox,env):
     
     Nvec = st0pos[n,:]-ccc
     Hvec = st0pos[h,:]-ccc
-
-    s = np.multiply(np.expand_dims(imybox, axis=0),Nvec)
-    cn = np.multiply(np.expand_dims(mybox, axis=0),s-np.round(s))
+    
+    cn = apply_pbc_cart_vecs(Nvec,latmat)
     mass = mass + np.sum(ccc + cn,axis=0)*14
     
-    s = np.multiply(np.expand_dims(imybox, axis=0),Hvec)
-    ch = np.multiply(np.expand_dims(mybox, axis=0),s-np.round(s))
+    ch = cn = apply_pbc_cart_vecs(Hvec,latmat)
     mass = mass + np.sum(ccc + ch,axis=0)*1
     
     mass = mass/(12+14*len(n)+1*len(h))
@@ -702,10 +758,7 @@ def centmass_organic(st0pos,mybox,env):
     return mass
 
 
-def centmass_organic_vec(pos,mybox,env):
-    
-    mybox = mybox[:,:3]
-    imybox = 1/mybox
+def centmass_organic_vec(pos,latmat,env):
     
     c = env[0]
     n = env[1]
@@ -718,12 +771,10 @@ def centmass_organic_vec(pos,mybox,env):
     Nvec = pos[:,n,:]-np.expand_dims(ccc, axis=1)
     Hvec = pos[:,h,:]-np.expand_dims(ccc, axis=1)
 
-    s = np.multiply(np.expand_dims(imybox, axis=1),Nvec)
-    cn = np.multiply(np.expand_dims(mybox, axis=1),s-np.round(s))
+    cn = apply_pbc_cart_vecs(Nvec,latmat)
     mass = mass + np.sum(np.expand_dims(ccc, axis=1) + cn,axis=1)*14
     
-    s = np.multiply(np.expand_dims(imybox, axis=1),Hvec)
-    ch = np.multiply(np.expand_dims(mybox, axis=1),s-np.round(s))
+    ch = apply_pbc_cart_vecs(Hvec,latmat)
     mass = mass + np.sum(np.expand_dims(ccc, axis=1) + ch,axis=1)*1
     
     mass = mass/(12+14*len(n)+1*len(h))
@@ -731,17 +782,12 @@ def centmass_organic_vec(pos,mybox,env):
     return mass
 
 
-
-def find_B_cage_and_disp(pos,mybox,cent,Bs):
-    
-    mybox = mybox[:,:3]
-    imybox = 1/mybox
+def find_B_cage_and_disp(pos,mymat,cent,Bs):
     
     B8pos = pos[:,Bs,:]
     BX = B8pos - np.expand_dims(cent, axis=1)
     
-    s = np.multiply(np.expand_dims(imybox, axis=1),BX)
-    BX = np.multiply(np.expand_dims(mybox, axis=1),s-np.round(s))
+    BX = apply_pbc_cart_vecs(BX, mymat)
     
     Bs = BX + np.expand_dims(cent, axis=1)
     Xcent = np.mean(Bs, axis=1)
@@ -752,6 +798,42 @@ def find_B_cage_and_disp(pos,mybox,cent,Bs):
     #return np.expand_dims(disp, axis=1)
 
 
+def get_cart_from_frac(frac,latmat):
+    if frac.ndim != latmat.ndim:
+        raise ValueError("The dimension of the input arrays do not match. ")
+    if frac.shape[-1] != 3 or latmat.shape[-2:] != (3,3):
+        raise TypeError("Must be 3D vectors. ")
+    if frac.ndim == 2:
+        pass
+    elif frac.ndim == 3:
+        if frac.shape[0] != latmat.shape[0]:
+            raise ValueError("The frame number of input arrays do not match. ")
+    else:
+        raise TypeError("Can only deal with 2 or 3D arrays. ")
+            
+    return np.matmul(frac,latmat)
+
+
+def get_frac_from_cart(cart,latmat):
+    if cart.ndim != latmat.ndim:
+        raise ValueError("The dimension of the input arrays do not match. ")
+    if cart.shape[-1] != 3 or latmat.shape[-2:] != (3,3):
+        raise TypeError("Must be 3D vectors. ")
+    if cart.ndim == 2:
+        pass
+    elif cart.ndim == 3:
+        if cart.shape[0] != latmat.shape[0]:
+            raise ValueError("The frame number of input arrays do not match. ")
+    else:
+        raise TypeError("Can only deal with 2 or 3D arrays. ")
+            
+    return np.matmul(cart,np.linalg.inv(latmat))
+
+
+def apply_pbc_cart_vecs(vecs, mymat):
+    vecs_frac = get_frac_from_cart(vecs, mymat)
+    vecs_pbc = get_cart_from_frac(vecs_frac-np.round(vecs_frac), mymat)
+    return vecs_pbc
 
 
 

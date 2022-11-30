@@ -53,6 +53,10 @@ class Trajectory:
             
             # read POSCAR and XDATCAR files
             st0 = vi.Poscar.from_file(poscar_path,check_for_POTCAR=False).structure # initial configuration
+            known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs")
+            for elem in st0.symbol_set:
+                if not elem in known_elem:
+                    raise ValueError(f"An unexpected element {elem} is found. ")
             self.st0 = st0
             self.natom = len(st0)
             self.species_set = st0.symbol_set
@@ -114,6 +118,10 @@ class Trajectory:
                     frames.append(pia.AseAtomsAdaptor.get_structure(i))
 
             st0 = frames[0]
+            known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs")
+            for elem in st0.symbol_set:
+                if not elem in known_elem:
+                    raise ValueError(f"An unexpected element {elem} is found. ")
             del frames[0]
             
             self.st0 = st0
@@ -253,10 +261,9 @@ class Trajectory:
                  
                  # octahedral tilting and distortion
                  multi_thread = 1, # if >1, enable multi-threading in this calculation, since not vectorized
+                 orthogonal_frame = True, # only enable in 3C polytype to force orthogonal direction fiting                 
                  tilt_corr_NN1 = True, # enable first NN correlation of tilting, reflecting the Glazer notation
                  tilt_corr_spatial = False, # enable spatial correlation beyond NN1
-                 orthogonal_frame = True, # only enable in 3C polytype to force orthogonal direction fiting
-                 ref_with_initial_structure = False, # calculate tilting wrt. the initial configuration instead of orthogonal directions
                  octa_locality = False, # compute differentiated properties within mixed-halide sample
                  enable_refit = False, # refit the octahedral network in case of change of geometry
                  symm_8_fold = False, # tilting range, False: [-45,45], True: [0,45]
@@ -327,12 +334,21 @@ class Trajectory:
             if allow_equil > 0.95:
                 raise TypeError(f"The trajectory is shorter than the equilibration time given ({auto_equil} ps). ")
         
+        angles = self.st0.lattice.angles
+        sides = self.st0.lattice.abc
+        if (max(angles) < 95 and min(angles) > 85) and (max(sides)-min(sides))/6 < 0.8:
+            self._flag_cubic_cell = True
+        else:
+            self._flag_cubic_cell = False
+        
         if read_mode == 2:
             allow_equil = 0
-        
-        if self.natom < 200:
+            
+        if self.natom < 200 or self._flag_cubic_cell == False:
             MO_corr_NN12 = False 
             tilt_corr_spatial = False 
+            lat_method = 1
+            tilt_corr_NN1 = False
             
         if read_every == 0:
             if self.natom < 400:
@@ -350,46 +366,26 @@ class Trajectory:
         
         # label the constituent octahedra
         if toggle_tavg or toggle_tilt_distort: 
-            from MDAnalysis.analysis.distances import distance_array
-            from pdyna.structural import match_bx
+            from pdyna.structural import fit_octahedral_network
             
             st0Bpos = self.st0.cart_coords[self.Bindex,:]
             st0Xpos = self.st0.cart_coords[self.Xindex,:]
+            mybox = np.array([self.st0.lattice.abc,self.st0.lattice.angles]).reshape(6,)
+            mymat = self.st0.lattice.matrix
             
-            mybox=np.array([self.st0.lattice.abc,self.st0.lattice.angles]).reshape(6,)
-            
-            #avgrange = round(self.nframe*0.2)
-            #r=distance_array(np.average(self.Allpos[:avgrange,self.Bindex,:], axis=0),
-            #                 np.average(self.Allpos[:avgrange,self.Xindex,:], axis=0),mybox)
-            
-            r=distance_array(st0Bpos,st0Xpos,mybox)
-            
-            max_BX_distance = 4.2
-            neigh_list = np.zeros((len(self.Bindex),6))
-            for B_site, X_list in enumerate(r): # for each B-site atom
-                X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
-                if len(X_idx) != 6:
-                    raise ValueError(f"The number of X site atoms connected to B site atom no.{B_site} is not 6 but {len(X_idx)}. \n")
-                
-                if orthogonal_frame:
-                    bx_raw = st0Xpos[X_idx,:] - st0Bpos[B_site,:]
-                    order1 = match_bx(bx_raw,mybox) 
-                    neigh_list[B_site,:] = np.array(X_idx)[order1]
-                else:     
-                    neigh_list[B_site,:] = np.array(X_idx)
-                
-            self.octahedra = neigh_list.astype(int)
+            if orthogonal_frame:
+                neigh_list = fit_octahedral_network(st0Bpos,st0Xpos,mybox,mymat,orthogonal_frame)
+                self.octahedra = neigh_list
+            else:
+                neigh_list, ref_initial = fit_octahedral_network(st0Bpos,st0Xpos,mybox,mymat,orthogonal_frame)
+                self.octahedra = neigh_list
+                self.octahedra_ref = ref_initial
         
         # label the constituent A-sites
         if toggle_MO or toggle_A_disp:
             from MDAnalysis.analysis.distances import distance_array
             
-            known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs")
             st0 = self.st0
-            
-            for elem in st0.symbol_set:
-                if not elem in known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. ")
             
             Nindex = self.Nindex
             Cindex = self.Cindex
@@ -454,7 +450,7 @@ class Trajectory:
         
         if toggle_tilt_distort:
             print("Computing octahedral tilting and distortion...")
-            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,ref_with_initial_structure=ref_with_initial_structure,octa_locality=octa_locality,enable_refit=enable_refit, symm_8_fold=symm_8_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame)
+            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,octa_locality=octa_locality,enable_refit=enable_refit, symm_8_fold=symm_8_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame)
             print("dynamic distortion:",np.round(self.prop_lib["distortion"][0],4))
             print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
             if 'tilt_corr_polarity' in self.prop_lib:
@@ -543,12 +539,11 @@ class Trajectory:
             elif std_param.index(min(std_param)) == 0:
                 Lat = self.lattice[round(self.nframe*allow_equil):,:3]
             
-            if np.std(np.array(np.mean(Lat,axis=0))/np.linalg.norm(np.mean(Lat,axis=0))) < 0.03: # if cubic cell
+            if self._flag_cubic_cell: # if cubic cell
                 Lat_scale = round(np.mean(Lat[0,:3])/6)
                 Lat = Lat/Lat_scale
-                
             else:
-                print("lattice_parameter: detected non-cubic geometry. ")
+                print("!lattice_parameter: detected non-cubic geometry, use direct cell dimension as output. ")
             
             self.Lat = Lat
               
@@ -568,8 +563,11 @@ class Trajectory:
         if read_mode == 1:
             if self.Tgrad == 0: # constant-T MD
                 from pdyna.analysis import draw_lattice_density
-                Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop,screen = [5,8], title=title) 
-
+                if self._flag_cubic_cell:
+                    Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop,screen = [5,8], title=title) 
+                else:
+                    Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
+                    
             else: # changing-T MD
                 if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
                     print("Lattice: Incomplete run detected! \n")
@@ -601,16 +599,17 @@ class Trajectory:
         
 
 
-    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,ref_with_initial_structure,octa_locality,enable_refit, symm_8_fold,saveFigures,smoother,title,orthogonal_frame):
+    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,octa_locality,enable_refit, symm_8_fold,saveFigures,smoother,title,orthogonal_frame):
         
         """
         Octhedral tilting and distribution analysis.
 
         Parameters
         ----------
+        multi_thread : number of multi-threading for this calculation, input 1 to disable
+        orthogonal_frame : use True only for 3C polytype with octahedral coordination number of 6
         tilt_corr_NN1 : enable first NN correlation of tilting, reflecting the Glazer notation
         tilt_corr_spatial : enable spatial correlation beyond NN1
-        ref_with_initial_structure: use initial structure as tilting reference instead of orthogonal directions
         octa_locality : compute differentiated properties within mixed-halide sample
             - configuration of each octahedron, giving 10 types according to halide geometry
             - quantify Br- and I-rich regions with concentration
@@ -621,13 +620,14 @@ class Trajectory:
         """
         
         from MDAnalysis.analysis.distances import distance_array
-        from pdyna.structural import resolve_octahedra, calc_distortions_from_bond_vectors
+        from pdyna.structural import resolve_octahedra, octahedra_coords_into_bond_vectors
         from pdyna.analysis import compute_tilt_density
         
         et0 = time.time()
         
         st0 = self.st0
         lattice = self.lattice
+        latmat = self.latmat
         Bindex = self.Bindex
         Xindex = self.Xindex
         Bpos = self.Allpos[:,self.Bindex,:]
@@ -635,7 +635,7 @@ class Trajectory:
         neigh_list = self.octahedra
         
         mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
-        imybox=1/mybox[:3]
+        mymat=st0.lattice.matrix
         
         if octa_locality:
             from pdyna.structural import match_mixed_halide_octa
@@ -667,23 +667,14 @@ class Trajectory:
             
             octa_halide_code = [] # resolve the halides of a octahedron, key output
             octa_halide_code_single = []
-            for B_site, X_list in enumerate(r): # for each B-site atom
-                    
-                #bx_ea = np.zeros((6,3))
-                bx = np.zeros((6,3))
+            for B_site, X_list in enumerate(r): # for each B-site atom  
+                
+                raw = x0[neigh_list[B_site,:],:] - b0[B_site,:]
+                bx = octahedra_coords_into_bond_vectors(raw,mymat)
+                
                 hals = []
                 for j in range(6):
-                    temp = b0[B_site,:] - x0[int(neigh_list[B_site,j]),:]
                     hals.append(Xspec[int(neigh_list[B_site,j])])
-                    
-                    # Filthily hack in some orthorhombic (only) PBCs as I can't see how MDanalysis does this properly
-                    for dim in 0,1,2:
-                        s=imybox[dim] * temp[dim] # Minimum image convention, algo from MDAnalysis calc_distances.h
-                        temp[dim]=mybox[dim]*(s-round(s)) 
-                        
-                    temp=temp/np.linalg.norm(temp)
-                    
-                    bx[j,:] = temp
                 
                 form_factor, ff_single = match_mixed_halide_octa(bx,hals)
                 octa_halide_code.append(form_factor) # determine each octa as one of the 10 configs, key output
@@ -716,34 +707,6 @@ class Trajectory:
         
             syscode = np.average(syscode,axis=0) # label each B atom with its neighbouring halide density in one-hot manner, key output
         
-        Rmat_ref = None
-        if ref_with_initial_structure:
-            
-            b0 = st0.cart_coords[Bindex,:]
-            x0 = st0.cart_coords[Xindex,:]
-            
-            r=distance_array(b0,x0,mybox)
-            
-            Rmat_ref = np.zeros((b0.shape[0],3,3))
-            for B_site, X_list in enumerate(r): # for each B-site atom
-                    
-                #bx_ea = np.zeros((6,3))
-                bx = np.zeros((6,3))
-                for j in range(6):
-                    temp = b0[B_site,:] - x0[int(neigh_list[B_site,j]),:]
-                    
-                    # Filthily hack in some orthorhombic (only) PBCs as I can't see how MDanalysis does this properly
-                    for dim in 0,1,2:
-                        s=imybox[dim] * temp[dim] # Minimum image convention, algo from MDAnalysis calc_distances.h
-                        temp[dim]=mybox[dim]*(s-round(s)) 
-                        
-                    temp=temp/np.linalg.norm(temp)
-                    
-                    bx[j,:] = temp
-                        
-                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
-                Rmat_ref[B_site,:] = rotmat
-
         
         # tilting and distortion calculations
         ranger = self.nframe
@@ -759,8 +722,13 @@ class Trajectory:
             if read_every != 1 and fr%read_every != 0:
                 continue
             readfr.append(fr)
+    
+        if orthogonal_frame:
+            ref_initial = None
+        else:
+            ref_initial = self.octahedra_ref 
         
-        Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,neigh_list,ref_with_initial_structure,Rmat_ref,orthogonal_frame)        
+        Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,neigh_list,orthogonal_frame,ref_initial)        
         
         if np.amax(Di) > 1:
             print(f"!Distortion: detected some distortion values ({np.amax(Di)}) larger than 1.")
@@ -782,7 +750,7 @@ class Trajectory:
             assert timeline.shape[0] == T.shape[0]
         
         if np.sum(refits[:,1]) > 0:
-            print(f"Warning: There are {int(refits.shape[0])} re-fits in the run, and some of them detected changed coordination system. \n")
+            print(f"!Refit: There are {int(refits.shape[0])} re-fits in the run, and some of them detected changed coordination system. \n")
             print(refits)
 
         self.TDtimeline = timeline
@@ -986,8 +954,6 @@ class Trajectory:
 
             cc = st0.cart_coords[Bindex,:]
             cell_lat = st0.lattice.abc
-            if (max(cell_lat)-min(cell_lat))/min(cell_lat) > 0.05: # check cubic supercell
-                raise TypeError("The supercell is not in cubic shape. \n")
             
             supercell_size = round(np.mean(cell_lat)/default_BB_dist)
             
@@ -1070,6 +1036,7 @@ class Trajectory:
         
         from MDAnalysis.analysis.distances import distance_array
         from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay, orientation_density_3D
+        from pdyna.structural import apply_pbc_cart_vecs
         
         Afa = self.A_sites["FA"]
         Ama = self.A_sites["MA"]
@@ -1079,9 +1046,7 @@ class Trajectory:
         Npos = self.Allpos[:,self.Nindex,:]
         
         trajnum = list(range(round(self.nframe*allow_equil),self.nframe))
-        
-        Mybox=lattice[trajnum,:3]
-        iMybox=np.reciprocal(Mybox)
+        latmat = self.latmat[trajnum,:]
         
         CNdiff = np.amax(np.abs(distance_array(Cpos[0,:],Npos[0,:],lattice[0,:])-distance_array(Cpos[-1,:],Npos[-1,:],lattice[-1,:])))
         
@@ -1096,10 +1061,8 @@ class Trajectory:
             Npos = self.Allpos[trajnum,:][:,Nlist,:]
             
             cn = Cpos-Npos
-            s = np.multiply(np.expand_dims(iMybox, axis=1),cn)
-            CN = np.multiply(np.expand_dims(Mybox, axis=1),s-np.round(s))
-            
-            CN = np.divide(CN,np.expand_dims(np.linalg.norm(CN,axis=2),axis=2))
+            cn = apply_pbc_cart_vecs(cn,latmat)
+            CN = np.divide(cn,np.expand_dims(np.linalg.norm(cn,axis=2),axis=2))
             
             self.MA_MOvec = CN
             
@@ -1121,17 +1084,14 @@ class Trajectory:
             
             cn1 = Cpos-N1pos
             cn2 = Cpos-N2pos
-            s = np.multiply(np.expand_dims(iMybox, axis=1),cn1)
-            CN1 = np.multiply(np.expand_dims(Mybox, axis=1),s-np.round(s))
-            s = np.multiply(np.expand_dims(iMybox, axis=1),cn2)
-            CN2 = np.multiply(np.expand_dims(Mybox, axis=1),s-np.round(s))
+            CN1 = apply_pbc_cart_vecs(cn1,latmat)
+            CN2 = apply_pbc_cart_vecs(cn2,latmat)
             
             CN = CN1+CN2
             CN = np.divide(CN,np.expand_dims(np.linalg.norm(CN,axis=2),axis=2))
             
             nn = N1pos-N2pos
-            s = np.multiply(np.expand_dims(iMybox, axis=1),nn)
-            NN = np.multiply(np.expand_dims(Mybox, axis=1),s-np.round(s))
+            NN = apply_pbc_cart_vecs(nn,latmat)
             NN = np.divide(NN,np.expand_dims(np.linalg.norm(NN,axis=2),axis=2))
             
             self.FA_MOvec1 = CN
@@ -1170,8 +1130,6 @@ class Trajectory:
             dm = st0.distance_matrix[Clist][:,Nlist]
 
             cell_lat = st0.lattice.abc
-            if (max(cell_lat)-min(cell_lat))/min(cell_lat) > 0.05: # check cubic supercell
-                raise TypeError("The supercell is not in cubic shape. \n")
             
             supercell_size = round(len(self.Bindex)**(1/3))
             
@@ -1407,6 +1365,7 @@ class Trajectory:
         st0pos = self.st0.cart_coords
         Allpos = self.Allpos
         lattice = self.lattice
+        latmat = self.latmat
         
         Bindex = self.Bindex
         Hindex = self.Hindex
@@ -1432,7 +1391,7 @@ class Trajectory:
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_fa.append(env+[Hs])
                 
-                cent = centmass_organic(st0pos,mybox,env+[Hs])
+                cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
                 ri=distance_array(cent,st0Bpos,mybox) 
                 Bs = []
                 for j in range(ri.shape[1]):
@@ -1441,8 +1400,8 @@ class Trajectory:
                 try:
                     assert len(Bs) == 8
                     B8envs[env[0]] = Bs
-                except AssertionError:
-                    cent = centmass_organic_vec(Allpos,lattice,env+[Hs])
+                except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
+                    cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
                         ri[fr,:,]=distance_array(cent[fr,:],Allpos[fr,Bindex,:],lattice[fr,:]) 
@@ -1461,7 +1420,7 @@ class Trajectory:
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_ma.append(env+[Hs])
                 
-                cent = centmass_organic(st0pos,mybox,env+[Hs])
+                cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
                 ri=distance_array(cent,st0Bpos,mybox) 
                 
                 Bs = []
@@ -1471,8 +1430,8 @@ class Trajectory:
                 try:
                     assert len(Bs) == 8
                     B8envs[env[0]] = Bs
-                except AssertionError:
-                    cent = centmass_organic_vec(Allpos,lattice,env+[Hs])
+                except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
+                    cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
                         ri[fr,:,]=distance_array(cent[fr,:],Allpos[fr,Bindex,:],lattice[fr,:]) 
@@ -1502,15 +1461,15 @@ class Trajectory:
         ranger0 = round(ranger*allow_equil)
         
         Allposfr = Allpos[ranger0:,:,:]
-        latticefr = lattice[ranger0:,:]
+        latmatfr = latmat[ranger0:,:]
         
         readTimestep = self.MDTimestep #*read_every
 
         if len(Aindex_ma) > 0:
             disp_ma = np.empty((Allposfr.shape[0],len(Aindex_ma),3))
             for ai, envs in enumerate(Aindex_ma):
-                cent = centmass_organic_vec(Allposfr,latticefr,envs)
-                disp_ma[:,ai,:] = find_B_cage_and_disp(Allposfr,latticefr,cent,B8envs[envs[0]])
+                cent = centmass_organic_vec(Allposfr,latmatfr,envs)
+                disp_ma[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0]])
             
             self.disp_ma = disp_ma
             dispvec_ma = disp_ma.reshape(-1,3)
@@ -1523,8 +1482,8 @@ class Trajectory:
         if len(Aindex_fa) > 0:
             disp_fa = np.empty((Allposfr.shape[0],len(Aindex_fa),3))
             for ai, envs in enumerate(Aindex_fa):
-                cent = centmass_organic_vec(Allposfr,latticefr,envs)
-                disp_fa[:,ai,:] = find_B_cage_and_disp(Allposfr,latticefr,cent,B8envs[envs[0]])
+                cent = centmass_organic_vec(Allposfr,latmatfr,envs)
+                disp_fa[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0]])
             
             self.disp_fa = disp_fa
             dispvec_fa = disp_fa.reshape(-1,3)    
@@ -1538,7 +1497,7 @@ class Trajectory:
             disp_cs = np.empty((Allposfr.shape[0],len(Aindex_cs),3))
             for ai, ind in enumerate(Aindex_cs):
                 cent = Allposfr[:,ind,:]
-                disp_cs[:,ai,:] = find_B_cage_and_disp(Allposfr,latticefr,cent,B8envs[ind])
+                disp_cs[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[ind])
             
             self.disp_cs = disp_cs
             dispvec_cs = disp_cs.reshape(-1,3)
