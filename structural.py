@@ -173,6 +173,56 @@ def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame):
         return neigh_list, ref_initial
 
 
+def find_polytype_network(Bpos_frame,mybox,neigh_list):
+    from MDAnalysis.analysis.distances import distance_array
+
+    BBsearch = 8.0
+    r = distance_array(Bpos_frame, Bpos_frame, mybox)
+    connectivity = []
+    conntypeStr = []
+    #plt.hist(dm.reshape(-1,),bins=100,range=[0,15])
+    for B0, B1_list in enumerate(r): # for each B-site atom
+        B1 = [i for i in range(len(B1_list)) if (B1_list[i] < BBsearch and i != B0)]
+        if len(B1) == 0:
+            raise ValueError(f"Can't find any other B-site around B-site number {B0}. ")
+            
+        conn = np.empty((0,2))
+        for b1 in B1:
+            intersect = len(list(set(neigh_list[B0,:]).intersection(neigh_list[b1,:])))
+            if intersect > 0:
+                conn = np.concatenate((conn,np.array([[b1,intersect]]))).astype(int)
+                
+        if conn.shape[0] == 0:
+            raise TypeError("Found completely isolated B-site, number {B0}. ")
+            
+        conntype = set(list(conn[:,1]))
+        if len(conntype-{1,2,3}) != 0:
+            raise TypeError(f"Found an unexpected connectivity type {conntype}. ")
+        
+        if len(conntype) == 1: # having only one connectivity type
+            if conntype == {1}:
+                conntypeStr.append("corner")
+            elif conntype == {2}:
+                conntypeStr.append("edge")
+            elif conntype == {3}:
+                conntypeStr.append("face")
+        else:
+            strt = []
+            for ct in conntype:
+                if ct == 1:
+                    strt.append("corner")
+                elif ct == 2:
+                    strt.append("edge")
+                elif ct == 3:
+                    strt.append("face")
+            strt = "+".join(strt)
+            conntypeStr.append(strt)
+            
+        connectivity.append(conn)
+        
+    return conntypeStr, connectivity
+        
+
 def pseudocubic_lat(traj,  # the main class instance
                     allow_equil = 0, #take the first x fraction of the trajectory as equilibration
                     zdrc = 2,  # zdrc: the z direction for pseudo-cubic lattice paramter reading. a,b,c = 0,1,2

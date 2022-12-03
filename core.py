@@ -371,7 +371,7 @@ class Trajectory:
         
         # label the constituent octahedra
         if toggle_tavg or toggle_tilt_distort: 
-            from pdyna.structural import fit_octahedral_network
+            from pdyna.structural import fit_octahedral_network, find_polytype_network
             
             st0Bpos = self.st0.cart_coords[self.Bindex,:]
             st0Xpos = self.st0.cart_coords[self.Xindex,:]
@@ -385,6 +385,14 @@ class Trajectory:
                 neigh_list, ref_initial = fit_octahedral_network(st0Bpos,st0Xpos,mybox,mymat,orthogonal_frame)
                 self.octahedra = neigh_list
                 self.octahedra_ref = ref_initial
+            
+            # determine polytype (experimental)
+            conntypeStr, connectivity = find_polytype_network(st0Bpos,mybox,neigh_list)
+            if len(set(conntypeStr)) == 1:
+                print(f"Octahedral connectivity: {list(set(conntypeStr))[0]}-sharing")
+            else:
+                print("Octahedral connectivity: mixed")
+            
         
         # label the constituent A-sites
         if toggle_MO or toggle_A_disp:
@@ -1326,10 +1334,10 @@ class Trajectory:
             BXda = np.empty((0,))
             for i,fr in enumerate(trajnum):
                 mybox=self.lattice[fr,:]
-                if i == 0:
-                    BXr1=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
-                if i == len(trajnum)-1:
-                    BXr2=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
+                #if i == 0:
+                #    BXr1=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
+                #if i == len(trajnum)-1:
+                #    BXr2=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
                     
                 BXr=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
                 

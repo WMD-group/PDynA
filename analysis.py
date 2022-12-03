@@ -312,7 +312,7 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = F
         Lc = savitzky_golay(Lc,window_size=Nwindows)
     
     w, h = figaspect(0.8/1.6)
-    fig = plt.subplots(figsize=(w,h))
+    plt.subplots(figsize=(w,h))
     ax = plt.gca()
     plt.plot(steps,La,label = 'a',linewidth=2)
     plt.plot(steps,Lb,label = 'b',linewidth=2)
@@ -368,7 +368,7 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y
         Tc = Tline[:,2]
     
     w, h = figaspect(0.8/1.6)
-    fig = plt.subplots(figsize=(w,h))
+    plt.subplots(figsize=(w,h))
     ax = plt.gca()
     
     #for i in range(T.shape[0]):
@@ -1149,7 +1149,6 @@ def draw_tilt_spacial_corr(C, uniname, saveFigures, n_bins = 100):
     
     fig, axs = plt.subplots(nrows=3, ncols=num_lens, sharex=False, sharey=True)
     labels = ["a","b","c"]
-    colors = ['g','b','r','c','m','y','k']
     for i in range(3):
         for j in range(num_lens):
             axs[i,j].hist(C[j][i],bins=n_bins,range=[-45,45],orientation='horizontal')
@@ -1363,7 +1362,7 @@ def orientation_density(cnsn,SaveFigures,uniname,title=None):
 # =============================================================================
 
     fig=plt.figure()
-    ax=fig.add_subplot(111)
+    fig.add_subplot(111)
 
     plt.hexbin(phisOh,thetasOh,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
     cbar = plt.colorbar()
@@ -1578,7 +1577,6 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
         #return sum(np.minimum(hs1,hs2))/(sum(hs1)+sum(hs2)-sum(np.minimum(hs1,hs2)))
         
     plotobj = []
-    nn = C.shape[0]
     tlen = round(C.shape[2]/20)
     if tlen%2==0: tlen+=1
     #Cline = np.empty((0,2,3))
@@ -1600,7 +1598,7 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
         y10,binEdges = np.histogram(temp10,bins=n_bins,range=[-1,1]) 
         y11,binEdges = np.histogram(temp11,bins=n_bins,range=[-1,1]) 
         y12,binEdges = np.histogram(temp12,bins=n_bins,range=[-1,1]) 
-        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+        #bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
 
         sim0 = (hist_diff(y00,y01)+hist_diff(y00,y02))/2
         sim1 = (hist_diff(y01,y00)+hist_diff(y01,y02))/2
@@ -1616,7 +1614,7 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
     lwid = 2.2
     
     w, h = figaspect(0.8/1.2)
-    fig = plt.subplots(figsize=(w,h))
+    plt.subplots(figsize=(w,h))
     ax = plt.gca()
     
     plotobj.append(steps[:(len(steps)-aw+1)])
@@ -1665,8 +1663,6 @@ def draw_MO_spacial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
     else:
         raise TypeError("The dimension of C matrix is not correct. ")
         
-    num_lens = C.shape[0]
-    
     w, h = figaspect(1.2/1.5)
     fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, sharey=False,figsize=(w,h))
     labels = ["a","b","c"]
@@ -1717,7 +1713,7 @@ def draw_MO_spacial_corr(C, uniname, saveFigures, n_bins = 50):
     
     fig, axs = plt.subplots(nrows=3, ncols=num_lens, sharex=False, sharey=True)
     labels = ["a","b","c"]
-    colors = ['g','b','r','c','m', 'y', 'k']
+    #colors = ['g','b','r','c','m', 'y', 'k']
     for i in range(3):
         for j in range(num_lens):
             axs[i,j].hist(C[j][i],bins=n_bins,range=[-1,1],orientation='horizontal')
