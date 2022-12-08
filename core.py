@@ -261,7 +261,7 @@ class Trajectory:
                  
                  # octahedral tilting and distortion
                  multi_thread = 1, # if >1, enable multi-threading in this calculation, since not vectorized
-                 orthogonal_frame = True, # only enable in 3C polytype to force orthogonal direction fiting                 
+                 structure_type = 2, # 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference     
                  tilt_corr_NN1 = True, # enable first NN correlation of tilting, reflecting the Glazer notation
                  tilt_corr_spatial = False, # enable spatial correlation beyond NN1
                  octa_locality = False, # compute differentiated properties within mixed-halide sample
@@ -344,8 +344,20 @@ class Trajectory:
         if read_mode == 2:
             allow_equil = 0
         
-        if orthogonal_frame and self._flag_cubic_cell == False:
-            print("!Warning: detected non-cubic cell but orthogonal octahedral reference is used! ")
+        if structure_type in (2,3):
+            tilt_corr_NN1 = False
+            tilt_corr_spatial = False
+            MO_corr_NN12 = False
+        
+        if structure_type in (1,2):
+            orthogonal_frame = True
+        elif structure_type == 3:
+            orthogonal_frame = False
+        else:
+            raise TypeError("The parameter structure_type must be 1, 2 or 3. ")
+        
+        #if orthogonal_frame and self._flag_cubic_cell == False:
+        #    print("!Warning: detected non-cubic cell but orthogonal octahedral reference is used! ")
         
         if self._flag_cubic_cell == False:
             lat_method = 1
@@ -379,19 +391,15 @@ class Trajectory:
             mymat = self.st0.lattice.matrix
             
             if orthogonal_frame:
-                neigh_list = fit_octahedral_network(st0Bpos,st0Xpos,mybox,mymat,orthogonal_frame)
+                neigh_list = fit_octahedral_network(st0Bpos,st0Xpos,mybox,mymat,structure_type)
                 self.octahedra = neigh_list
             else:
-                neigh_list, ref_initial = fit_octahedral_network(st0Bpos,st0Xpos,mybox,mymat,orthogonal_frame)
+                neigh_list, ref_initial = fit_octahedral_network(st0Bpos,st0Xpos,mybox,mymat,structure_type)
                 self.octahedra = neigh_list
                 self.octahedra_ref = ref_initial
             
             # determine polytype (experimental)
-            conntypeStr, connectivity = find_polytype_network(st0Bpos,mybox,neigh_list)
-            if len(set(conntypeStr)) == 1:
-                print(f"Octahedral connectivity: {list(set(conntypeStr))[0]}-sharing")
-            else:
-                print("Octahedral connectivity: mixed")
+            conntypeStr, connectivity = find_polytype_network(st0Bpos,st0Xpos,mybox,mymat,neigh_list)
             
         
         # label the constituent A-sites
@@ -463,7 +471,7 @@ class Trajectory:
         
         if toggle_tilt_distort:
             print("Computing octahedral tilting and distortion...")
-            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,octa_locality=octa_locality,enable_refit=enable_refit, symm_8_fold=symm_8_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame)
+            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,octa_locality=octa_locality,enable_refit=enable_refit, symm_8_fold=symm_8_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame,structure_type=structure_type)
             print("dynamic distortion:",np.round(self.prop_lib["distortion"][0],4))
             print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
             if 'tilt_corr_polarity' in self.prop_lib:
@@ -612,7 +620,7 @@ class Trajectory:
         
 
 
-    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,octa_locality,enable_refit, symm_8_fold,saveFigures,smoother,title,orthogonal_frame):
+    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,octa_locality,enable_refit, symm_8_fold,saveFigures,smoother,title,orthogonal_frame,structure_type):
         
         """
         Octhedral tilting and distribution analysis.
@@ -741,7 +749,7 @@ class Trajectory:
         else:
             ref_initial = self.octahedra_ref 
         
-        Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,neigh_list,orthogonal_frame,ref_initial)        
+        Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,neigh_list,orthogonal_frame,structure_type,ref_initial)        
         
         if np.amax(Di) > 1:
             print(f"!Distortion: detected some distortion values ({np.amax(Di)}) larger than 1.")

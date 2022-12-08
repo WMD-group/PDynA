@@ -16,7 +16,7 @@ except IOError:
     sys.stderr.write('IOError: failed reading from {}.'.format(filename_basis))
     sys.exit(1)
 
-def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,neigh_list,orthogonal_frame,ref_initial=None):
+def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,neigh_list,orthogonal_frame,structure_type,ref_initial=None):
     
     def frame_wise(fr):
         mymat=latmat[fr,:]
@@ -29,11 +29,10 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                 
             raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
             bx = octahedra_coords_into_bond_vectors(raw,mymat)
+            if not orthogonal_frame:
+                bx = np.matmul(bx,ref_initial[B_site,:])
       
-            if orthogonal_frame:
-                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
-            else:
-                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,ref_initial[B_site,:])
+            dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
                 
             Rmat[B_site,:] = rotmat
             Rmsd[B_site] = rmsd
@@ -68,12 +67,11 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
 
                 raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
                 bx = octahedra_coords_into_bond_vectors(raw,mymat)
+                if not orthogonal_frame:
+                    bx = np.matmul(bx,ref_initial[B_site,:])
      
-                if orthogonal_frame:
-                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
-                else:
-                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,ref_initial[B_site,:])
-                    
+                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+
                 Rmat[B_site,:] = rotmat
                 Rmsd[B_site] = rmsd
                 disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
@@ -85,9 +83,9 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                 Bpos_frame = Bpos[fr,:]
                 Xpos_frame = Xpos[fr,:]
                 if orthogonal_frame:
-                    neigh_list = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame)
+                    neigh_list = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type)
                 else:
-                    neigh_list, ref_initial = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame)
+                    neigh_list, ref_initial = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type)
 
                 mybox=lattice[fr,:]
                 mymat=latmat[fr,:]
@@ -100,11 +98,10 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                         
                     raw = Xpos[fr,neigh_list[B_site,:],:] - Bpos[fr,B_site,:]
                     bx = octahedra_coords_into_bond_vectors(raw,mymat)
+                    if not orthogonal_frame:
+                        bx = np.matmul(bx,ref_initial[B_site,:])
                     
-                    if orthogonal_frame:
-                        dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
-                    else:
-                        dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx,ref_initial[B_site,:])
+                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
                         
                     Rmat[B_site,:] = rotmat
                     Rmsd[B_site] = rmsd
@@ -142,14 +139,14 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
     return Di, T, refits
 
 
-def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame):
+def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
     from MDAnalysis.analysis.distances import distance_array
 
     r=distance_array(Bpos_frame,Xpos_frame,mybox)
     
     max_BX_distance = 4.2
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
-    ref_initial = np.zeros((Bpos_frame.shape[0],6,3))
+    ref_initial = np.zeros((Bpos_frame.shape[0],3,3))
     for B_site, X_list in enumerate(r): # for each B-site atom
         X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
         if len(X_idx) != 6:
@@ -158,67 +155,94 @@ def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,orthogonal_frame):
         bx_raw = Xpos_frame[X_idx,:] - Bpos_frame[B_site,:]
         bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
         
-        if orthogonal_frame:
+        if structure_type == 1:
             order1 = match_bx_orthogonal(bx,mymat) 
             neigh_list[B_site,:] = np.array(X_idx)[order1]
-        else:   
+        elif structure_type == 2:
+            order1, _ = match_bx_arbitrary(bx,mymat) 
+            neigh_list[B_site,:] = np.array(X_idx)[order1]
+        elif structure_type == 3:   
             order1, ref1 = match_bx_arbitrary(bx,mymat) 
             neigh_list[B_site,:] = np.array(X_idx)[order1]
             ref_initial[B_site,:] = ref1
     
     neigh_list = neigh_list.astype(int)
-    if orthogonal_frame:
+    if structure_type in (1,2):
         return neigh_list
     else:
         return neigh_list, ref_initial
 
 
-def find_polytype_network(Bpos_frame,mybox,neigh_list):
+def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
     from MDAnalysis.analysis.distances import distance_array
 
-    BBsearch = 8.0
+    BBsearch = 10.0  # 8.0
     r = distance_array(Bpos_frame, Bpos_frame, mybox)
     connectivity = []
     conntypeStr = []
+    conntypeStrAll = []
     #plt.hist(dm.reshape(-1,),bins=100,range=[0,15])
     for B0, B1_list in enumerate(r): # for each B-site atom
         B1 = [i for i in range(len(B1_list)) if (B1_list[i] < BBsearch and i != B0)]
         if len(B1) == 0:
-            raise ValueError(f"Can't find any other B-site around B-site number {B0}. ")
+            raise ValueError(f"Can't find any other B-site around B-site number {B0} within a search radius of {BBsearch} angstrom. ")
             
         conn = np.empty((0,2))
         for b1 in B1:
-            intersect = len(list(set(neigh_list[B0,:]).intersection(neigh_list[b1,:])))
-            if intersect > 0:
-                conn = np.concatenate((conn,np.array([[b1,intersect]]))).astype(int)
+            intersect = list(set(neigh_list[B0,:]).intersection(neigh_list[b1,:]))
+            if len(intersect) > 0:
+                if len(intersect) == 2: #consider special case PBC effect for case 'intersect 2'
+                    bond_raw = Xpos_frame[intersect,:] - Bpos_frame[B0,:]
+                    bond0 = apply_pbc_cart_vecs(bond_raw, mymat)
+                    bond_raw = Xpos_frame[intersect,:] - Bpos_frame[b1,:]
+                    bond1 = apply_pbc_cart_vecs(bond_raw, mymat)
+                    dots = np.sum((bond0/np.linalg.norm(bond0,axis=1).reshape(2,1))*(bond1/np.linalg.norm(bond1,axis=1).reshape(2,1)), axis=1)
+                    if np.amax(dots) < -0.8: # effectively cornor-sharing
+                        intersect = [intersect[0]]
+                conn = np.concatenate((conn,np.array([[b1,len(intersect)]]))).astype(int)
                 
         if conn.shape[0] == 0:
-            raise TypeError("Found completely isolated B-site, number {B0}. ")
+            conntypeStr.append("isolated")
+            conntypeStrAll.append("isolated")
+            connectivity.append(conn)
             
-        conntype = set(list(conn[:,1]))
-        if len(conntype-{1,2,3}) != 0:
-            raise TypeError(f"Found an unexpected connectivity type {conntype}. ")
-        
-        if len(conntype) == 1: # having only one connectivity type
-            if conntype == {1}:
-                conntypeStr.append("corner")
-            elif conntype == {2}:
-                conntypeStr.append("edge")
-            elif conntype == {3}:
-                conntypeStr.append("face")
         else:
-            strt = []
-            for ct in conntype:
-                if ct == 1:
-                    strt.append("corner")
-                elif ct == 2:
-                    strt.append("edge")
-                elif ct == 3:
-                    strt.append("face")
-            strt = "+".join(strt)
-            conntypeStr.append(strt)
+            conntype = set(list(conn[:,1]))
+            if len(conntype-{1,2,3}) != 0:
+                raise TypeError(f"Found an unexpected connectivity type {conntype}. ")
             
-        connectivity.append(conn)
+            if len(conntype) == 1: # having only one connectivity type
+                if conntype == {1}:
+                    conntypeStr.append("corner")
+                    conntypeStrAll.append("corner")
+                elif conntype == {2}:
+                    conntypeStr.append("edge")
+                    conntypeStrAll.append("edge")
+                elif conntype == {3}:
+                    conntypeStr.append("face")
+                    conntypeStrAll.append("face")
+            else:
+                strt = []
+                for ct in conntype:
+                    if ct == 1:
+                        strt.append("corner")
+                        conntypeStrAll.append("corner")
+                    elif ct == 2:
+                        strt.append("edge")
+                        conntypeStrAll.append("edge")
+                    elif ct == 3:
+                        strt.append("face")
+                        conntypeStrAll.append("face")
+                strt = "+".join(strt)
+                conntypeStr.append(strt)
+                
+            connectivity.append(conn)
+        
+    if len(set(conntypeStr)) == 1:
+        print(f"Octahedral connectivity: {list(set(conntypeStr))[0]}-sharing")
+    else:
+        conntypestr = "+".join(list(set(conntypeStrAll)))
+        print(f"Octahedral connectivity: mixed - {conntypestr}")    
         
     return conntypeStr, connectivity
         
@@ -466,22 +490,21 @@ def simply_calc_distortion(traj):
     
     return temp_dist, temp_std
 
+
 def octahedra_coords_into_bond_vectors(raw,mymat):
     bx1 = apply_pbc_cart_vecs(raw, mymat) 
     bx = bx1/np.mean(np.linalg.norm(bx1,axis=1))
     return bx
 
-def calc_distortions_from_bond_vectors(bx,defined_frame=None):
+
+def calc_distortions_from_bond_vectors(bx):
     # constants
-    if defined_frame is None:
-        ideal_coords = [[-1, 0,  0],
-                        [0, -1,  0],
-                        [0,  0, -1],
-                        [0,  0,  1],
-                        [0,  1,  0],
-                        [1,  0,  0]]
-    else:
-        ideal_coords = defined_frame
+    ideal_coords = [[-1, 0,  0],
+                    [0, -1,  0],
+                    [0,  0, -1],
+                    [0,  0,  1],
+                    [0,  1,  0],
+                    [1,  0,  0]]
 
     irrep_distortions = []
     for irrep in dict_basis.keys():
@@ -543,12 +566,12 @@ def quick_match_octahedron(bx):
         coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
 
     # transform
-    pymatgen_molecule,rotmat,rmsd = match_molecules_extra(
-        pymatgen_molecule_ideal, pymatgen_molecule)
-    
+    new_molecule,rotmat,rmsd = match_molecules_extra(pymatgen_molecule_ideal, pymatgen_molecule)
+        
     new_coords = np.matmul(ideal_coords,rotmat)
+    #new_coords = new_molecule.cart_coords[1:,:]
     
-    return new_coords
+    return np.linalg.inv(rotmat), new_coords
 
 
 def match_bx_orthogonal(bx,mymat):
@@ -570,16 +593,17 @@ def match_bx_orthogonal(bx,mymat):
 
 
 def match_bx_arbitrary(bx,mymat):
-    ideal_coords = quick_match_octahedron(bx)
+    ref_rot, ideal_coords = quick_match_octahedron(bx)
+    confidence_bound = [0.8,0.2]
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]] > 0.8 and fits[fits.argsort()[-2]] < 0.2):
+        if not (fits[fits.argsort()[-1]] > confidence_bound[0] and fits[fits.argsort()[-2]] < confidence_bound[1]):
             print(bx,fits)
             raise ValueError("The fitting of initial octahedron config to rotated reference is not successful. This may happen if the initial configuration is too distorted. ")
         order.append(np.argmax(fits))
     assert len(set(order)) == 6 # double-check sanity
-    return order, ideal_coords
+    return order, ref_rot
 
 
 def match_molecules_extra(molecule_transform, molecule_reference):
@@ -846,6 +870,17 @@ def find_B_cage_and_disp(pos,mymat,cent,Bs):
     
     return disp
     #return np.expand_dims(disp, axis=1)
+
+
+def periodicity_fold(arrin):
+    from copy import deepcopy
+    
+    arr = deepcopy(arrin)
+    arr[arr<-45] = arr[arr<-45]+90
+    arr[arr<-45] = arr[arr<-45]+90
+    arr[arr>45] = arr[arr>45]-90
+    arr[arr>45] = arr[arr>45]-90
+    return arr
 
 
 def get_cart_from_frac(frac,latmat):
