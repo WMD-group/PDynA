@@ -231,8 +231,8 @@ class Trajectory:
     
     def dynamics(self,
                  # general parameters
-                 uniname: str, # A unique user-defined name for this trajectory, will be used in printing and figure saving
                  read_mode: int, # key parameter, 1: equilibration mode, 2: quench/anneal mode
+                 uniname = "test", # A unique user-defined name for this trajectory, will be used in printing and figure saving
                  allow_equil = 0.5, # take the first x fraction of the trajectory as equilibration, this part will not be computed
                  read_every = 0, # read only every n steps, default is 0 which the code will decide an appropriate value according to the system size
                  saveFigures = False, # whether to save produced figures
@@ -260,17 +260,18 @@ class Trajectory:
                  tavg_save_dir = ".\\", # directory for saving the time-averaging structures
                  
                  # octahedral tilting and distortion
+                 structure_type = 1, # 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference     
                  multi_thread = 1, # if >1, enable multi-threading in this calculation, since not vectorized
-                 structure_type = 2, # 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference     
                  tilt_corr_NN1 = True, # enable first NN correlation of tilting, reflecting the Glazer notation
                  tilt_corr_spatial = False, # enable spatial correlation beyond NN1
                  octa_locality = False, # compute differentiated properties within mixed-halide sample
                  enable_refit = False, # refit the octahedral network in case of change of geometry
-                 symm_8_fold = False, # tilting range, False: [-45,45], True: [0,45]
+                 symm_n_fold = 0, # tilting range, 0: auto, 2: [-90,90], 4: [-45,45], 8: [0,45]
                  
                  # molecular orientation (MO)
                  MOautoCorr = False, # compute MO reorientation time constant
                  MO_corr_NN12 = False, # enable first and second NN correlation function of MO
+                 draw_MO_anime = False, # plot the MO in 3D animation, will take a few minutes
                  ):
         
         # pre-definitions
@@ -344,6 +345,12 @@ class Trajectory:
         if read_mode == 2:
             allow_equil = 0
         
+        if symm_n_fold == 0:
+            if structure_type == 2:
+                symm_n_fold = 2
+            else:
+                symm_n_fold = 4
+        
         if structure_type in (2,3):
             tilt_corr_NN1 = False
             tilt_corr_spatial = False
@@ -399,8 +406,8 @@ class Trajectory:
                 self.octahedra_ref = ref_initial
             
             # determine polytype (experimental)
-            conntypeStr, connectivity = find_polytype_network(st0Bpos,st0Xpos,mybox,mymat,neigh_list)
-            
+            conntypeStr, connectivity, conn_category = find_polytype_network(st0Bpos,st0Xpos,mybox,mymat,neigh_list)
+            self.octahedral_connectivity = conn_category
         
         # label the constituent A-sites
         if toggle_MO or toggle_A_disp:
@@ -471,15 +478,17 @@ class Trajectory:
         
         if toggle_tilt_distort:
             print("Computing octahedral tilting and distortion...")
-            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,octa_locality=octa_locality,enable_refit=enable_refit, symm_8_fold=symm_8_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame,structure_type=structure_type)
-            print("dynamic distortion:",np.round(self.prop_lib["distortion"][0],4))
-            print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
-            if 'tilt_corr_polarity' in self.prop_lib:
+            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,octa_locality=octa_locality,enable_refit=enable_refit, symm_n_fold=symm_n_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame,structure_type=structure_type)
+            if read_mode == 1:
+                print("dynamic distortion:",np.round(self.prop_lib["distortion"][0],4))
+            if structure_type in (1,3) and read_mode == 1:
+                print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
+            if 'tilt_corr_polarity' in self.prop_lib and read_mode == 1:
                 print("tilting correlation:",np.round(np.array(self.prop_lib['tilt_corr_polarity']).reshape(3,),3))
             print(" ")
             
         if toggle_MO:
-            self.molecular_orientation(uniname=uniname,read_mode=read_mode,allow_equil=allow_equil,MOautoCorr=MOautoCorr, MO_corr_NN12=MO_corr_NN12, title=title,saveFigures=saveFigures,smoother=smoother)    
+            self.molecular_orientation(uniname=uniname,read_mode=read_mode,allow_equil=allow_equil,MOautoCorr=MOautoCorr, MO_corr_NN12=MO_corr_NN12, title=title,saveFigures=saveFigures,smoother=smoother,draw_MO_anime=draw_MO_anime)    
         
         if toggle_RDF:
             self.radial_distribution(allow_equil=allow_equil,uniname=uniname,saveFigures=saveFigures)
@@ -487,9 +496,9 @@ class Trajectory:
         if toggle_A_disp:
             self.A_site_displacement(allow_equil=allow_equil,uniname=uniname,saveFigures=saveFigures)
         
-        if read_mode == 2 and MO_corr_NN12:
-            from pdyna.analysis import draw_quench_properties
-            draw_quench_properties(self.Lobj, self.Tobj, self.Mobj, uniname, saveFigures)
+        if read_mode == 2 and tilt_corr_NN1 and MO_corr_NN12:
+            from pdyna.analysis import draw_transient_properties
+            draw_transient_properties(self.Lobj, self.Tobj, self.Cobj, self.Mobj, uniname, saveFigures)
         
         if lib_saver and read_mode == 1:
             import pickle
@@ -571,7 +580,7 @@ class Trajectory:
         elif lat_method == 2:
             
             from pdyna.structural import pseudocubic_lat
-            Lat = pseudocubic_lat(self, allow_equil, zdrc=zdir, lattice_tilt=lattice_rot,orthor_filter=False)
+            Lat = pseudocubic_lat(self, allow_equil, zdrc=zdir, lattice_tilt=lattice_rot,orthor_filter=True)
             self.Lat = Lat
         
         else:
@@ -611,7 +620,7 @@ class Trajectory:
             self.Ltimeline = timeline
             
             from pdyna.analysis import draw_lattice_evolution_time
-            self.Lobj = draw_lattice_evolution_time(Lat, timeline, self.MDsetting["Ti"],uniname = uniname, saveFigures = saveFigures, smoother = smoother) 
+            self.Lobj = draw_lattice_evolution_time(Lat, timeline, self.MDsetting["Ti"],uniname = uniname, saveFigures = False, smoother = smoother) 
             
         
         
@@ -620,7 +629,7 @@ class Trajectory:
         
 
 
-    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,octa_locality,enable_refit, symm_8_fold,saveFigures,smoother,title,orthogonal_frame,structure_type):
+    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,octa_locality,enable_refit, symm_n_fold,saveFigures,smoother,title,orthogonal_frame,structure_type):
         
         """
         Octhedral tilting and distribution analysis.
@@ -636,7 +645,7 @@ class Trajectory:
             - quantify Br- and I-rich regions with concentration
         enable_refit : refit octahedral network when abnormal distortion values are detected (indicating change of network)
             - only turn on when rearrangement is observed
-        symm_8_fold: enable to fold the negative axis of tilting status leaving angle in [0,45] degree
+        symm_n_fold: enable to fold the negative axis of tilting status leaving angle in [0,45] degree
 
         """
         
@@ -779,12 +788,12 @@ class Trajectory:
         self.Tilting = T
         
         
+        
         # data visualization
         if read_mode == 2:
-            from pdyna.analysis import draw_tilt_evolution_time
-            self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures, smoother=smoother )
-
-        
+            from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time
+            self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures=False, smoother=smoother )
+            
         elif self.Tgrad != 0: # read_mode 1 and changing-T MD
             from pdyna.analysis import draw_distortion_evolution_sca, draw_tilt_evolution_sca
         
@@ -803,11 +812,19 @@ class Trajectory:
             draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
 
         else: # read_mode 1, constant-T MD (equilibration)
-            from pdyna.analysis import draw_dist_density, draw_tilt_density
+            from pdyna.analysis import draw_dist_density, draw_tilt_density, draw_conntype_tilt_density
             Dmu,Dstd = draw_dist_density(Di, uniname, saveFigures, n_bins = 100, title=None)
             if not tilt_corr_NN1:
-                draw_tilt_density(T, uniname, saveFigures,symm_8_fold=symm_8_fold,title=title)
-                
+                if structure_type == 1:
+                    draw_tilt_density(T, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
+                elif structure_type in (2,3):
+                    oc = self.octahedral_connectivity
+                    if len(oc) == 1:
+                        title = list(oc.keys())[0]+", "+title
+                        draw_tilt_density(T, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
+                    else:
+                        title = "mixed, "+title
+                        draw_conntype_tilt_density(T, oc, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
         
         if octa_locality:
             from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density
@@ -961,8 +978,12 @@ class Trajectory:
                 
             self.Tilting_Corr = Corr
             
+            if read_mode == 2:
+                self.Cobj = draw_tilt_corr_density_time(T, self.Tilting_Corr, timeline, uniname, saveFigures=False, smoother=smoother)
+            
             if self.Tgrad != 0:
                 draw_tilt_corr_evolution_sca(Corr, steps, uniname, saveFigures, xaxis_type = 'T') 
+                
             else:
                 polarity = draw_tilt_and_corr_density_shade(T,Corr, uniname, saveFigures,title=title)
                 self.prop_lib["tilt_corr_polarity"] = polarity
@@ -1042,7 +1063,7 @@ class Trajectory:
         self.timing["tilt_distort"] = et1-et0
         
     
-    def molecular_orientation(self,uniname,read_mode,allow_equil,MOautoCorr,MO_corr_NN12,title,saveFigures,smoother):
+    def molecular_orientation(self,uniname,read_mode,allow_equil,MOautoCorr,MO_corr_NN12,title,saveFigures,smoother,draw_MO_anime):
         """
         A-site molecular orientation (MO) analysis.
 
@@ -1056,7 +1077,7 @@ class Trajectory:
         et0 = time.time()
         
         from MDAnalysis.analysis.distances import distance_array
-        from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay, orientation_density_3D
+        from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay, orientation_density_3D_sphere
         from pdyna.structural import apply_pbc_cart_vecs
         
         Afa = self.A_sites["FA"]
@@ -1088,7 +1109,8 @@ class Trajectory:
             self.MA_MOvec = CN
             
             orientation_density(CN,saveFigures,uniname,title=title)
-            #orientation_density_3D(CN,"MA",saveFigures,uniname)
+            if draw_MO_anime and saveFigures:
+                orientation_density_3D_sphere(CN,"MA",saveFigures,uniname)
             
             
         if len(Afa) > 0:
@@ -1119,24 +1141,45 @@ class Trajectory:
             self.FA_MOvec2 = NN
             
             orientation_density_2pan(CN,NN,saveFigures,uniname,title=title)
-            #orientation_density_3D(CN,"FA1",saveFigures,uniname)
-            #orientation_density_3D(NN,"FA2",saveFigures,uniname)
+            if draw_MO_anime and saveFigures:
+                orientation_density_3D_sphere(CN,"FA1",saveFigures,uniname)
+                orientation_density_3D_sphere(NN,"FA2",saveFigures,uniname)
             
 
         if MOautoCorr is True:
+            tconst = {}
             if len(Afa) > 0 and len(Ama) > 0:
                 raise TypeError("Need to write code for both species here")
             #sys.stdout.flush()
-            corrtime, autocorr = MO_correlation(CN,self.MDTimestep,False,uniname)
-            self.MO_autocorr = np.concatenate((corrtime,autocorr),axis=0)
-            tconst = fit_exp_decay(corrtime, autocorr)
-
-            print("MO decorrelation time: "+str(round(tconst,4))+' ps')
-            if tconst < 0:
-                print("!MO: Negative decorrelation time constant is found, please check if the trajectory is too short or system size too small. ")
-            print(" ")
+            
+            if len(Ama) > 0:
+                corrtime, autocorr = MO_correlation(self.MA_MOvec,self.MDTimestep,False,uniname)
+                self.MO_MA_autocorr = np.concatenate((corrtime,autocorr),axis=0)
+                tconst_MA = fit_exp_decay(corrtime, autocorr)
+                print("MO: MA decorrelation time: "+str(round(tconst,4))+' ps')
+                if tconst_MA < 0:
+                    print("!MO: Negative decorrelation MA time constant is found, please check if the trajectory is too short or system size too small. ")
+                tconst["MA"] = tconst_MA
+                
+            if len(Afa) > 0:
+                corrtime, autocorr = MO_correlation(self.FA_MOvec1,self.MDTimestep,False,uniname)
+                self.MO_FA1_autocorr = np.concatenate((corrtime,autocorr),axis=0)
+                tconst_FA1 = fit_exp_decay(corrtime, autocorr)
+                print("MO: FA1 decorrelation time: "+str(round(tconst,4))+' ps')
+                if tconst_FA1 < 0:
+                    print("!MO: Negative decorrelation FA1 time constant is found, please check if the trajectory is too short or system size too small. ")
+                    
+                corrtime, autocorr = MO_correlation(self.FA_MOvec2,self.MDTimestep,False,uniname)
+                self.MO_FA2_autocorr = np.concatenate((corrtime,autocorr),axis=0)
+                tconst_FA2 = fit_exp_decay(corrtime, autocorr)
+                print("MO: FA2 decorrelation time: "+str(round(tconst,4))+' ps')
+                if tconst_FA2 < 0:
+                    print("!MO: Negative decorrelation FA2 time constant is found, please check if the trajectory is too short or system size too small. ")
+                    
+                tconst["FA"] = [tconst_FA1,tconst_FA2]
             
             self.prop_lib['reorientation'] = tconst
+            print(" ")
        
         
         if MO_corr_NN12 and not (len(Afa) > 0 and len(Ama) > 0):
@@ -1243,7 +1286,7 @@ class Trajectory:
             self.MOCorr = MOCorr
             
             if read_mode == 2:
-                Mobj = draw_MO_spacial_corr_time(MOCorr, self.Ltimeline, uniname, saveFigures, smoother=smoother)
+                Mobj = draw_MO_spacial_corr_time(MOCorr, self.Ltimeline, uniname, saveFigures=False, smoother=smoother)
                 self.Mobj = Mobj
                 
             elif read_mode == 1:

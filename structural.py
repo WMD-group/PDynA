@@ -175,12 +175,19 @@ def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
 
 def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
     from MDAnalysis.analysis.distances import distance_array
+    
+    def category_register(cat,typestr,b):
+        if not typestr in cat:
+            cat[typestr] = []
+        cat[typestr].append(b)
+        return cat
 
     BBsearch = 10.0  # 8.0
     r = distance_array(Bpos_frame, Bpos_frame, mybox)
     connectivity = []
     conntypeStr = []
     conntypeStrAll = []
+    conn_category = {}
     #plt.hist(dm.reshape(-1,),bins=100,range=[0,15])
     for B0, B1_list in enumerate(r): # for each B-site atom
         B1 = [i for i in range(len(B1_list)) if (B1_list[i] < BBsearch and i != B0)]
@@ -205,6 +212,7 @@ def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
             conntypeStr.append("isolated")
             conntypeStrAll.append("isolated")
             connectivity.append(conn)
+            conn_category = category_register(conn_category, "isolated", B0)
             
         else:
             conntype = set(list(conn[:,1]))
@@ -215,12 +223,15 @@ def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
                 if conntype == {1}:
                     conntypeStr.append("corner")
                     conntypeStrAll.append("corner")
+                    conn_category = category_register(conn_category, "corner", B0)
                 elif conntype == {2}:
                     conntypeStr.append("edge")
                     conntypeStrAll.append("edge")
+                    conn_category = category_register(conn_category, "edge", B0)
                 elif conntype == {3}:
                     conntypeStr.append("face")
                     conntypeStrAll.append("face")
+                    conn_category = category_register(conn_category, "face", B0)
             else:
                 strt = []
                 for ct in conntype:
@@ -235,6 +246,7 @@ def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
                         conntypeStrAll.append("face")
                 strt = "+".join(strt)
                 conntypeStr.append(strt)
+                conn_category = category_register(conn_category, strt, B0)
                 
             connectivity.append(conn)
         
@@ -244,7 +256,7 @@ def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
         conntypestr = "+".join(list(set(conntypeStrAll)))
         print(f"Octahedral connectivity: mixed - {conntypestr}")    
         
-    return conntypeStr, connectivity
+    return conntypeStr, connectivity, conn_category
         
 
 def pseudocubic_lat(traj,  # the main class instance
@@ -872,14 +884,23 @@ def find_B_cage_and_disp(pos,mymat,cent,Bs):
     #return np.expand_dims(disp, axis=1)
 
 
-def periodicity_fold(arrin):
+def periodicity_fold(arrin,n_fold=4):
     from copy import deepcopy
-    
     arr = deepcopy(arrin)
-    arr[arr<-45] = arr[arr<-45]+90
-    arr[arr<-45] = arr[arr<-45]+90
-    arr[arr>45] = arr[arr>45]-90
-    arr[arr>45] = arr[arr>45]-90
+    if n_fold == 4:
+        arr[arr<-45] = arr[arr<-45]+90
+        arr[arr<-45] = arr[arr<-45]+90
+        arr[arr>45] = arr[arr>45]-90
+        arr[arr>45] = arr[arr>45]-90
+    elif n_fold == 2:
+        arr[arr<-90] = arr[arr<-90]+180
+        arr[arr>90] = arr[arr>90]-180
+    elif n_fold == 8:
+        arr[arr<-45] = arr[arr<-45]+90
+        arr[arr<-45] = arr[arr<-45]+90
+        arr[arr>45] = arr[arr>45]-90
+        arr[arr>45] = arr[arr>45]-90
+        arr = np.abs(arr)
     return arr
 
 

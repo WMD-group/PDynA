@@ -5,6 +5,7 @@ from math import factorial
 from scipy.stats import norm
 from matplotlib.figure import figaspect
 import matplotlib.pyplot as plt
+from pdyna.structural import periodicity_fold
 
 if os.path.exists("style.mplstyle"):
     plt.style.use("style.mplstyle")
@@ -235,7 +236,7 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoot
         La, Lb, Lc = dm[:,0], dm[:,1], dm[:,2]
     
     if smoother:
-        Nwindows = round(dm.shape[0]*0.05)
+        Nwindows = round(dm.shape[0]*0.04)
         if Nwindows%2 == 0:
             Nwindows+=1
         La = savitzky_golay(La,window_size=Nwindows)
@@ -304,14 +305,14 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = F
         La, Lb, Lc = dm[:,0], dm[:,1], dm[:,2]
     
     if smoother:
-        Nwindows = round(dm.shape[0]*0.3)
+        Nwindows = round(dm.shape[0]*0.15)
         if Nwindows%2 == 0:
             Nwindows+=1
         La = savitzky_golay(La,window_size=Nwindows)
         Lb = savitzky_golay(Lb,window_size=Nwindows)
         Lc = savitzky_golay(Lc,window_size=Nwindows)
     
-    w, h = figaspect(0.8/1.6)
+    w, h = figaspect(0.8/1.45)
     plt.subplots(figsize=(w,h))
     ax = plt.gca()
     plt.plot(steps,La,label = 'a',linewidth=2)
@@ -356,7 +357,7 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y
         fitted = np.array(compute_tilt_density(temp)).reshape((1,3))
         Tline = np.concatenate((Tline,fitted),axis=0)
     
-    sgs = round(len(steps)/5)
+    sgs = round(len(steps)/9)
     if sgs%2==0: sgs+=1
     if smoother:
         Ta = savitzky_golay(Tline[:,0],window_size=sgs)
@@ -367,7 +368,7 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y
         Tb = Tline[:,1]
         Tc = Tline[:,2]
     
-    w, h = figaspect(0.8/1.6)
+    w, h = figaspect(0.8/1.45)
     plt.subplots(figsize=(w,h))
     ax = plt.gca()
     
@@ -467,7 +468,7 @@ def draw_distortion_evolution_sca(D, steps, uniname, saveFigures, xaxis_type = '
     plt.show()
 
 
-def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, fig_name = None, xaxis_type = 't', scasize = 2.5, y_lim = None):
+def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', scasize = 2.5, y_lim = None):
     
     fig_name = f"traj_tilt_sca_{uniname}.png"
     
@@ -562,31 +563,32 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
         return Mu, Std
 
 
-def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_8_fold = False, title = None):
+def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, title = None):
     
     fig_name=f"traj_tilt_density_{uniname}.png"
+    
+    T = periodicity_fold(T,n_fold=symm_n_fold)
+    
+    if symm_n_fold == 2:
+        hrange = [-90,90]
+        tlabel = [-90,-60,-30,0,30,60,90]
+    elif symm_n_fold == 4:
+        hrange = [-45,45]
+        tlabel = [-45,-30,-15,0,15,30,45]
+    elif symm_n_fold == 8:
+        hrange = [0,45]
+        tlabel = [0,15,30,45]
     
     T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
     T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
     T_c = T[:,:,2].reshape((T.shape[0]*T.shape[1]))
     tup_T = (T_a,T_b,T_c)
-    assert len(tup_T) == 3
-    
-    T = []
-    if symm_8_fold:
-        for temp in tup_T:
-            temp = np.abs(temp)
-            T.append(temp)
-        tup_T = (T[0],T[1],T[2])
     
     figs, axs = plt.subplots(3, 1)
     labels = ["a","b","c"]
     colors = ['g','b','r','c','m', 'y', 'k']
     for i in range(3):
-        if symm_8_fold:
-            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[0,45])
-        else:
-            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
+        y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
         axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth=2)
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
@@ -594,12 +596,8 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_8_fold = False
     for ax in axs.flat:
         #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
         ax.tick_params(axis='both', which='major', labelsize=14)
-        if symm_8_fold:
-            ax.set_xlim([0,45])
-            ax.set_xticks([0,15,30,45])
-        else:
-            ax.set_xlim([-45,45])
-            ax.set_xticks([-45,-30,-15,0,15,30,45])
+        ax.set_xlim(hrange)
+        ax.set_xticks(tlabel)
         ax.set_yticks([])
     
     axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
@@ -624,9 +622,91 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_8_fold = False
     plt.show()
 
 
-def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins = 100, symm_8_fold = False):
+def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, title = None):
+    
+    fig_name=f"traj_tilt_density_{uniname}.png"
+    
+    T = periodicity_fold(T,n_fold=symm_n_fold)
+    
+    if symm_n_fold == 2:
+        hrange = [-90,90]
+        tlabel = [-90,-60,-30,0,30,60,90]
+    elif symm_n_fold == 4:
+        hrange = [-45,45]
+        tlabel = [-45,-30,-15,0,15,30,45]
+    elif symm_n_fold == 8:
+        hrange = [0,45]
+        tlabel = [0,15,30,45]
+    
+    types = []
+    Ts = []
+    for ent in oc:
+        types.append(ent)
+        T_a = T[:,oc[ent],0].reshape(-1,)
+        T_b = T[:,oc[ent],1].reshape(-1,)
+        T_c = T[:,oc[ent],2].reshape(-1,)
+        Ts.append((T_a,T_b,T_c))
+    
+    figs, axs = plt.subplots(3, 1)
+    labels = ["a","b","c"]
+    colors = ['g','b','r','c','m', 'y', 'k']
+    lstyle = ["solid", "dashed", "dotted", "dashdot"]
+    if len(types) > len(lstyle): 
+        raise TypeError("The connectivity types are more than available line styles. ")
+    for j,t in enumerate(types):
+        for i in range(3):
+            y,binEdges=np.histogram(Ts[j][i],bins=n_bins,range=hrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            if i == 0:
+                axs[i].plot(bincenters,y,label = t,color = colors[i],linewidth=2,linestyle=lstyle[j])
+            else:
+                axs[i].plot(bincenters,y,color = colors[i],linewidth=2,linestyle=lstyle[j])
+            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
+            
+    for ax in axs.flat:
+        #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_xlim(hrange)
+        ax.set_xticks(tlabel)
+        ax.set_yticks([])
+    
+    axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
+    axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
+    
+    axs[0].legend(prop={'size': 12},frameon=True)
+    
+    axs[0].xaxis.set_ticklabels([])
+    axs[1].xaxis.set_ticklabels([])
+    axs[0].yaxis.set_ticklabels([])
+    axs[1].yaxis.set_ticklabels([])
+    axs[2].yaxis.set_ticklabels([])
+    axs[0].set_xlabel("")
+    axs[0].set_ylabel("")
+    axs[1].set_xlabel("")
+    axs[2].set_ylabel("")
+    
+    if not title is None:
+        axs[0].set_title(title,fontsize=16)
+        
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        
+    plt.show()
+
+
+def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins = 100, symm_n_fold = 4):
     
     fig_name=f"tilt_octatype_density_{uniname}.png"
+    
+    if symm_n_fold == 2:
+        hrange = [-90,90]
+        tlabel = [-90,-60,-30,0,30,60,90]
+    elif symm_n_fold == 4:
+        hrange = [-45,45]
+        tlabel = [-45,-30,-15,0,15,30,45]
+    elif symm_n_fold == 8:
+        hrange = [0,45]
+        tlabel = [0,15,30,45]
     
     typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
                  "I3 Br3: planar","I2 Br4: right-angle","I2 Br4: linear","I1 Br5","I0 Br6"]
@@ -639,27 +719,19 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
     maxs = np.empty((0,3))
     for ti, T in enumerate(Ttype):
         
+        T = periodicity_fold(T,n_fold=symm_n_fold)
+        
         T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
         T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
         T_c = T[:,:,2].reshape((T.shape[0]*T.shape[1]))
         tup_T = (T_a,T_b,T_c)
         assert len(tup_T) == 3
         
-        Ttemp = []
-        if symm_8_fold:
-            for temp in tup_T:
-                temp = np.abs(temp)
-                Ttemp.append(temp)
-            tup_T = (T[0],T[1],T[2])
-        
         figs, axs = plt.subplots(3, 1)
         labels = ["a","b","c"]
         colors = ['g','b','r','c','m', 'y', 'k']
         for i in range(3):
-            if symm_8_fold:
-                y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[0,45])
-            else:
-                y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
+            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
             axs[i].plot(bincenters,y,label = labels[i],color = colors[i])
             axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
@@ -667,12 +739,8 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
         for ax in axs.flat:
             #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
             ax.tick_params(axis='both', which='major', labelsize=14)
-            if symm_8_fold:
-                ax.set_xlim([0,45])
-                ax.set_xticks([0,15,30,45])
-            else:
-                ax.set_xlim([-45,45])
-                ax.set_xticks([-45,-30,-15,0,15,30,45])
+            ax.set_xlim(hrange)
+            ax.set_xticks(tlabel)
             ax.set_yticks([])
         
         axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
@@ -823,34 +891,35 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
     return Dgauss, Dgaussstd
 
 
-def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 100, symm_8_fold = False):
+def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 100, symm_n_fold = 4):
     
     fig_name=f"tilt_halideconc_density_{uniname}.png"
     
+    if symm_n_fold == 2:
+        hrange = [-90,90]
+        tlabel = [-90,-60,-30,0,30,60,90]
+    elif symm_n_fold == 4:
+        hrange = [-45,45]
+        tlabel = [-45,-30,-15,0,15,30,45]
+    elif symm_n_fold == 8:
+        hrange = [0,45]
+        tlabel = [0,15,30,45]
+    
     maxs = np.empty((0,3))
     for ti, T in enumerate(Tconc):
+        
+        T = periodicity_fold(T,n_fold=symm_n_fold)
         
         T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
         T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
         T_c = T[:,:,2].reshape((T.shape[0]*T.shape[1]))
         tup_T = (T_a,T_b,T_c)
-        assert len(tup_T) == 3
-        
-        Ttemp = []
-        if symm_8_fold:
-            for temp in tup_T:
-                temp = np.abs(temp)
-                Ttemp.append(temp)
-            tup_T = (T[0],T[1],T[2])
         
         figs, axs = plt.subplots(3, 1)
         labels = ["a","b","c"]
         colors = ['g','b','r','c','m', 'y', 'k']
         for i in range(3):
-            if symm_8_fold:
-                y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[0,45])
-            else:
-                y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
+            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
             axs[i].plot(bincenters,y,label = labels[i],color = colors[i])
             axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
@@ -858,12 +927,8 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
         for ax in axs.flat:
             #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
             ax.tick_params(axis='both', which='major', labelsize=14)
-            if symm_8_fold:
-                ax.set_xlim([0,45])
-                ax.set_xticks([0,15,30,45])
-            else:
-                ax.set_xlim([-45,45])
-                ax.set_xticks([-45,-30,-15,0,15,30,45])
+            ax.set_xlim(hrange)
+            ax.set_xticks(tlabel)
             ax.set_yticks([])
         
         axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
@@ -1141,6 +1206,73 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
     return por
 
 
+def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother, n_bins = 50):
+    
+    fig_name = f"traj_tilt_corr_time_{uniname}.png"
+    
+    Cline = np.empty((0,3))
+    aw = 5
+    corr_power = 2.5
+    
+    for i in range(T.shape[0]-aw+1):
+        t1 = T[list(range(i,i+aw)),:,:]
+        c1 = Corr[list(range(i,i+aw)),:,:]
+        
+        por = [0,0,0]
+        for i in range(3):
+            
+            y,binEdges=np.histogram(t1[:,:,i].reshape(-1,),bins=n_bins,range=[-45,45])
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yt=y/max(y)
+
+            y,binEdges=np.histogram(c1[:,:,list(range(i*2,i*2+2))],bins=n_bins,range=[-45,45]) 
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yc=y/max(y)
+            
+            yy=yt*yc
+            
+            parneg = np.sum(np.power(yy,corr_power)[bincenters<0])
+            parpos = np.sum(np.power(yy,corr_power)[bincenters>0])
+            por[i] = (-parneg+parpos)/(parneg+parpos)
+        
+        Cline = np.concatenate((Cline,np.array(por).reshape(1,3)),axis=0)
+    
+    sgs = round(len(steps)/9)
+    if sgs%2==0: sgs+=1
+    if smoother:
+        Ca = savitzky_golay(Cline[:,0],window_size=sgs)
+        Cb = savitzky_golay(Cline[:,1],window_size=sgs)
+        Cc = savitzky_golay(Cline[:,2],window_size=sgs)
+    else:
+        Ca = Cline[:,0]
+        Cb = Cline[:,1]
+        Cc = Cline[:,2]
+    
+    w, h = figaspect(0.8/1.45)
+    plt.subplots(figsize=(w,h))
+    ax = plt.gca()
+    
+    plt.plot(steps[:(len(steps)-aw+1)],Ca,label = 'a',linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Cb,label = 'b',linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Cc,label = 'c',linewidth=2.5)    
+
+    #ax.set_ylim([-45,45])
+    #ax.set_yticks([-45,-30,-15,0,15,30,45])
+    
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('time (ps)', fontsize=14)
+    plt.ylabel('Tilting correlation polarity (a.u.)', fontsize=14)
+    plt.xlabel('Time (ps)', fontsize=14)
+    plt.ylabel('Tilting (deg)', fontsize=14)
+    plt.legend(prop={'size': 13})
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return (steps[:(len(steps)-aw+1)],Ca,Cb,Cc)
+
+
 def draw_tilt_spacial_corr(C, uniname, saveFigures, n_bins = 100):
     
     fig_name = f"traj_tilt_spacial_corr_{uniname}.png"
@@ -1227,7 +1359,7 @@ def MO_correlation(cnsn,MDTimestep,SaveFigures,uniname):
     return x, y
 
 
-def orientation_density_3D(cnsn,moltype,SaveFigures,uniname,title=None):
+def orientation_density_3D_dots(cnsn,moltype,SaveFigures,uniname,title=None):
     
     def fibonacci_sphere(samples):
 
@@ -1298,10 +1430,63 @@ def orientation_density_3D(cnsn,moltype,SaveFigures,uniname,title=None):
 
     plt.show()
     if (SaveFigures):
-        fig.savefig(f"{uniname}_MO_{moltype}_orientation_density_3D.png",bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig(f"MO_{moltype}_orientation_density_3D_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
 
+def orientation_density_3D_sphere(cnsn,moltype,SaveFigures,uniname,title=None):
+    from matplotlib.animation import FuncAnimation, PillowWriter
+    from matplotlib import cm
+    
+    def sphere_mesh(res = 80):
+        u = np.linspace(0, 2*np.pi, 2*res)
+        v = np.linspace(0, np.pi, res )
+        # create the sphere surface
+        xmesh = np.outer(np.cos(u), np.sin(v))
+        ymesh = np.outer(np.sin(u), np.sin(v))
+        zmesh = np.outer(np.ones(np.size(u)), np.cos(v))
+        points = np.concatenate((xmesh[:,:,np.newaxis],ymesh[:,:,np.newaxis],zmesh[:,:,np.newaxis]),axis=2)
+        return xmesh, ymesh, zmesh, points
 
+    def init():
+        #v = np.array([[1, 1, 1], [1, 1, -1],
+        #              [1, -1, 1], [-1, 1, 1],
+        #              [-1, -1, 1], [-1, 1, -1],
+        #              [1, -1, -1], [-1, -1, -1]], dtype=int)
+        #ax.scatter(*v.T, color='k', s=100, alpha=0.25) #, depthshade=False
+        ax.plot_surface(xmesh, ymesh, zmesh, alpha=0.8, cstride=1, rstride=1, facecolors=cm.plasma(myheatmap))
+        return fig,
+
+    def animate(i):
+        ax.view_init(elev=20, azim=i)
+        #ax.set_title(moltype,fontsize=14,animated=True)
+        return fig,
+    
+    xmesh, ymesh, zmesh, points = sphere_mesh(80)
+    s = list(points.shape[:2])
+    counting = np.zeros((s[0],s[1]))
+    cnsn = cnsn.reshape(-1,3)
+    for i in range(cnsn.shape[0]):
+        dots = np.dot(points,cnsn[i,:])
+        maxx = np.where(dots > 0.98)
+        counting[list(maxx[0]),list(maxx[1])] += 1
+    myheatmap = counting / np.amax(counting)
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.grid(True)
+    #ax.set_axis_off()
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax.set_xlim([-1.05,1.05])
+    ax.set_ylim([-1.05,1.05])
+    ax.set_zlim([-1.05,1.05])
+    anim = FuncAnimation(fig, animate, init_func=init, frames=list(np.linspace(0,360,91)), interval=30, blit=True)
+    writer = PillowWriter(fps=25)
+    anim.save(f"MO_{moltype}_orientation_density_3D_{uniname}.gif", writer=writer)
+    #anim.save("link-anim.gif", writer=writer)
+    plt.show()
+    
 
 def orientation_density(cnsn,SaveFigures,uniname,title=None):
     
@@ -1328,7 +1513,7 @@ def orientation_density(cnsn,SaveFigures,uniname,title=None):
     w, h = figaspect(1/1.2)
     fig, ax = plt.subplots(figsize=(w,h))
 
-    plt.hexbin(phis,thetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
+    plt.hexbin(phis,thetas,gridsize=46,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
     plt.title(title, fontsize = 16)
     #cbar = plt.colorbar()
     #cbar.set_ticks([])
@@ -1343,7 +1528,7 @@ def orientation_density(cnsn,SaveFigures,uniname,title=None):
     
     plt.show()
     if (SaveFigures):
-        fig.savefig("%s_MO_MA_orientation_density_nosymm.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig("MO_MA_orientation_density_nosymm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
     
     # 2D density plot of the theta/phi information - MOLLWEIDE projection
 # =============================================================================
@@ -1379,7 +1564,7 @@ def orientation_density(cnsn,SaveFigures,uniname,title=None):
     
     plt.show()
     if (SaveFigures):
-        fig.savefig("%s_MO_MA_orientation_density_Oh_symm.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig("MO_MA_orientation_density_Oh_symm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
 
 
 def orientation_density_2pan(cnsn,nnsn,SaveFigures,uniname,title=None):
@@ -1452,7 +1637,7 @@ def orientation_density_2pan(cnsn,nnsn,SaveFigures,uniname,title=None):
     
     plt.show()
     if (SaveFigures):
-        fig.savefig("%s_MO_FA_orientation_density_nosymm.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig("MO_FA_orientation_density_nosymm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
 
     
     w, h = figaspect(2/1.2)
@@ -1485,7 +1670,7 @@ def orientation_density_2pan(cnsn,nnsn,SaveFigures,uniname,title=None):
 
     plt.show()
     if (SaveFigures):
-        fig.savefig("%s_MO_FA_orientation_density_Oh_symm.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig("MO_FA_orientation_density_Oh_symm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
 
 
 
@@ -1577,7 +1762,7 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
         #return sum(np.minimum(hs1,hs2))/(sum(hs1)+sum(hs2)-sum(np.minimum(hs1,hs2)))
         
     plotobj = []
-    tlen = round(C.shape[2]/20)
+    tlen = round(C.shape[2]/25)
     if tlen%2==0: tlen+=1
     #Cline = np.empty((0,2,3))
     Cline = np.empty((0,4))
@@ -1613,7 +1798,7 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
     labels = ['a', 'b', 'c']
     lwid = 2.2
     
-    w, h = figaspect(0.8/1.2)
+    w, h = figaspect(0.8/1.45)
     plt.subplots(figsize=(w,h))
     ax = plt.gca()
     
@@ -1995,13 +2180,13 @@ def peaks_3D_scatter(peaks, uniname, moltype, saveFigures):
     plt.show()
 
 
-def draw_quench_properties(Lobj,Tobj,Mobj,uniname,saveFigures):
+def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     
     lwid = 2
-    xlimmax = min(max(Lobj[0]),max(Tobj[0]),max(Mobj[0]))*0.9
+    xlimmax = min(max(Lobj[0]),max(Tobj[0]),max(Cobj[0]),max(Mobj[0]))*0.9
     
-    fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, sharey=False)
-    fig.set_size_inches(5.5,5.5)
+    fig, axs = plt.subplots(nrows=4, ncols=1, sharex=True, sharey=False)
+    fig.set_size_inches(6.5,5.5)
 
     axs[0].plot(Lobj[0],Lobj[1],label = 'a',linewidth=lwid)
     axs[0].plot(Lobj[0],Lobj[2],label = 'b',linewidth=lwid)
@@ -2021,7 +2206,7 @@ def draw_quench_properties(Lobj,Tobj,Mobj,uniname,saveFigures):
     axs[1].plot(Tobj[0],Tobj[2],label = 'b',linewidth=lwid)
     axs[1].plot(Tobj[0],Tobj[3],label = 'c',linewidth=lwid)   
     axs[1].set_xlim([0,xlimmax])
-    axs[1].set_ylim([0,16])
+    axs[1].set_ylim([0,17])
     axs[1].set_yticks([0,5,10,15])
     axs[1].tick_params(axis='both', which='major', labelsize=12.5)
     axs[1].set_ylabel('Tilting (deg)', fontsize = 14) # Y label
@@ -2030,11 +2215,21 @@ def draw_quench_properties(Lobj,Tobj,Mobj,uniname,saveFigures):
     #axs[1].legend(prop={'size': 10},ncol=3)
     
     
-    colors = ["C0","C1","C2","C3"]   
-    axs[2].plot(Mobj[0], Mobj[1], label = 'a' ,color =colors[0], linewidth=lwid) 
-    axs[2].plot(Mobj[0], Mobj[2], label = 'b' ,color =colors[1], linewidth=lwid) 
-    axs[2].plot(Mobj[0], Mobj[3], label = 'c' ,color =colors[2], linewidth=lwid) 
-    axs[2].plot(Mobj[0], Mobj[4], label = 'CF' ,color ='k', linewidth=lwid, linestyle='dashed') 
+    axs[2].plot(Cobj[0],Cobj[1],label = 'a',linewidth=lwid)
+    axs[2].plot(Cobj[0],Cobj[2],label = 'b',linewidth=lwid)
+    axs[2].plot(Cobj[0],Cobj[3],label = 'c',linewidth=lwid)   
+    axs[2].set_xlim([0,xlimmax])
+    axs[2].set_ylim([-1.1,1.2])
+    axs[2].set_yticks([-1,0,1])
+    axs[2].tick_params(axis='both', which='major', labelsize=12.5)
+    axs[2].set_ylabel('TCP (a.u.)', fontsize = 14) # Y label
+    
+    
+    #colors = ["C0","C1","C2","C3"]   
+    axs[3].plot(Mobj[0], Mobj[1], label = 'a' , linewidth=lwid) 
+    axs[3].plot(Mobj[0], Mobj[2], label = 'b' , linewidth=lwid) 
+    axs[3].plot(Mobj[0], Mobj[3], label = 'c' , linewidth=lwid) 
+    axs[3].plot(Mobj[0], Mobj[4], label = 'CF' ,color ='k', linewidth=lwid, linestyle='dashed') 
     #axs[2].plot(Mobj[0], Mobj[1], label = 'a-NN1' ,color =colors[0], linewidth=lwid) 
     #axs[2].plot(Mobj[0], Mobj[2], label = 'b-NN1' ,color =colors[1], linewidth=lwid) 
     #axs[2].plot(Mobj[0], Mobj[3], label = 'c-NN1' ,color =colors[2], linewidth=lwid) 
@@ -2042,18 +2237,19 @@ def draw_quench_properties(Lobj,Tobj,Mobj,uniname,saveFigures):
     #axs[2].plot(Mobj[0], Mobj[5], label = 'b-NN2' ,color =colors[1], linestyle = 'dashed', linewidth=lwid) 
     #axs[2].plot(Mobj[0], Mobj[6], label = 'c-NN2' ,color =colors[2], linestyle = 'dashed', linewidth=lwid) 
     
-    axs[2].set_xlim([0,xlimmax])
-    axs[2].tick_params(axis='both', which='major', labelsize=12.5)
-    axs[2].set_ylim([0,1.1])
-    axs[2].set_ylabel('MO order', fontsize = 15) # Y label
-    axs[2].set_xlabel("time (ps)", fontsize = 14) # X label
-    axs[2].legend(prop={'size': 12.2},ncol=4,loc=0)
+    axs[3].set_xlim([0,xlimmax])
+    axs[3].tick_params(axis='both', which='major', labelsize=12.5)
+    axs[3].set_ylim([0,1.1])
+    axs[3].set_yticks([0,0.5,1])
+    axs[3].set_ylabel('MO order', fontsize = 15) # Y label
+    axs[3].set_xlabel("time (ps)", fontsize = 14) # X label
+    axs[3].legend(prop={'size': 12.2},ncol=4,loc=0)
     #axs[2].legend(prop={'size': 10},ncol=3)
 
     fig.subplots_adjust(hspace = 0,left=0.12,right=0.90)
 
     if saveFigures:
-        plt.savefig(f"{uniname}_quench_trimetric.png", dpi=350,bbox_inches='tight')
+        plt.savefig(f"quench_trimetric_{uniname}.png", dpi=350,bbox_inches='tight')
     plt.show()    
 
 
@@ -2085,6 +2281,7 @@ def get_cube(limits=None):
                   [4, 6, 7, 5]], dtype=int)
 
     return v, e, f
+
 
 def set_axes_equal(ax):
 
