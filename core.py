@@ -1,4 +1,4 @@
-"""Core objects of PDyna."""
+"""Core object of PDyna."""
 
 from __future__ import annotations
 
@@ -253,7 +253,7 @@ class Trajectory:
                  zdir = 2, # specified z-direction in case of lat_method 2
                  lattice_rot = [0,0,0], # the rotation of system before lattice calculation in case of lat_method 2
                  smoother = True, # whether to use S-G smoothing on outputs 
-                 leading_crop = 0.02, # remove the first x fraction of the trajectory on plotting 
+                 leading_crop = 0.01, # remove the first x fraction of the trajectory on plotting 
                  
                  # time averaged structure
                  start_ratio = 0.5, # time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory
@@ -267,6 +267,7 @@ class Trajectory:
                  octa_locality = False, # compute differentiated properties within mixed-halide sample
                  enable_refit = False, # refit the octahedral network in case of change of geometry
                  symm_n_fold = 0, # tilting range, 0: auto, 2: [-90,90], 4: [-45,45], 8: [0,45]
+                 tilt_domain = False, # compute the time constant of tilt correlation domain formation
                  
                  # molecular orientation (MO)
                  MOautoCorr = False, # compute MO reorientation time constant
@@ -337,7 +338,7 @@ class Trajectory:
         
         angles = self.st0.lattice.angles
         sides = self.st0.lattice.abc
-        if (max(angles) < 95 and min(angles) > 85) and (max(sides)-min(sides))/6 < 0.8:
+        if (max(angles) < 100 and min(angles) > 80) and (max(sides)-min(sides))/6 < 0.8:
             self._flag_cubic_cell = True
         else:
             self._flag_cubic_cell = False
@@ -369,10 +370,12 @@ class Trajectory:
         if self._flag_cubic_cell == False:
             lat_method = 1
             tilt_corr_NN1 = False
+            tilt_domain = False
         
         if self.natom < 200:
             MO_corr_NN12 = False 
             tilt_corr_spatial = False 
+            tilt_domain = False
             
         if read_every == 0:
             if self.natom < 400:
@@ -385,8 +388,13 @@ class Trajectory:
                 if read_every < 1:
                     read_every = 1
         
-        self.Timestep = self.MDTimestep*read_every # timestep with read_every parameter skipping some steps regularly
+        if not tilt_corr_NN1: 
+            tilt_domain = False
         
+        # end of parameter checking
+        self.timespan = self.nframe*self.MDTimestep
+        self.read_every = read_every
+        self.Timestep = self.MDTimestep*read_every # timestep with read_every parameter skipping some steps regularly
         
         # label the constituent octahedra
         if toggle_tavg or toggle_tilt_distort: 
@@ -412,40 +420,55 @@ class Trajectory:
         # label the constituent A-sites
         if toggle_MO or toggle_A_disp:
             from MDAnalysis.analysis.distances import distance_array
+            from pdyna.io import display_A_sites
             
             st0 = self.st0
             
             Nindex = self.Nindex
             Cindex = self.Cindex
             
+            # recognise all organic molecules
             Aindex_fa = []
             Aindex_ma = []
+            Aindex_azr = []
             
             mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
             dm = distance_array(st0.cart_coords[Cindex,:], st0.cart_coords[Nindex,:], mybox)   
+            dm1 = distance_array(st0.cart_coords[Cindex,:], st0.cart_coords[Cindex,:], mybox)   
             
             CN_max_distance = 2.5
             
+            # search all A-site cations and their constituent atoms (if organic)
+            Cpass = []
             for i in range(dm.shape[0]):
+                if i in Cpass: continue # repetitive C atom in case of Azr
+                
                 Ns = []
                 temp = np.argwhere(dm[i,:] < CN_max_distance).reshape(-1)
                 for j in temp:
                     Ns.append(Nindex[j])
-                if len(temp) == 1:
-                    Aindex_ma.append([Cindex[i],Ns])
-                elif len(temp) == 2:
-                    Aindex_fa.append([Cindex[i],Ns])
+                moreC = np.argwhere(np.logical_and(dm1[i,:]<CN_max_distance,dm1[i,:]>0.01)).reshape(-1)
+                if len(moreC) == 1: # aziridinium
+                    Aindex_azr.append([[Cindex[i],Cindex[moreC[0]]],Ns])
+                    Cpass.append(moreC[0])
+                elif len(moreC) == 0:
+                    if len(temp) == 1:
+                        Aindex_ma.append([[Cindex[i]],Ns])
+                    elif len(temp) == 2:
+                        Aindex_fa.append([[Cindex[i]],Ns])
+                    else:
+                        raise ValueError(f"There are {len(temp)} N atom connected to C atom number {i}")
                 else:
-                    raise ValueError(f"There are {len(temp)} N atom connected to C atom number {i}")
+                    raise ValueError(f"There are {len(moreC)+1} C atom connected to C atom number {i}")
                     
             Aindex_cs = []
             
-            # search all A-site cations and their constituent atoms (if organic)
             for i,site in enumerate(st0.sites):
                  if site.species_string == 'Cs':
                      Aindex_cs.append(i)  
             
-            self.A_sites = {"FA": Aindex_fa, "MA": Aindex_ma, "Cs": Aindex_cs }
+            self.A_sites = {"FA": Aindex_fa, "MA": Aindex_ma, "Cs": Aindex_cs, "Azr": Aindex_azr }
+            display_A_sites(self.A_sites)
         
         et1 = time.time()
         self.timing["env_resolve"] = et1-et0
@@ -478,7 +501,7 @@ class Trajectory:
         
         if toggle_tilt_distort:
             print("Computing octahedral tilting and distortion...")
-            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,octa_locality=octa_locality,enable_refit=enable_refit, symm_n_fold=symm_n_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame,structure_type=structure_type)
+            self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,octa_locality=octa_locality,enable_refit=enable_refit, symm_n_fold=symm_n_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame,structure_type=structure_type,tilt_domain=tilt_domain)
             if read_mode == 1:
                 print("dynamic distortion:",np.round(self.prop_lib["distortion"][0],4))
             if structure_type in (1,3) and read_mode == 1:
@@ -580,7 +603,7 @@ class Trajectory:
         elif lat_method == 2:
             
             from pdyna.structural import pseudocubic_lat
-            Lat = pseudocubic_lat(self, allow_equil, zdrc=zdir, lattice_tilt=lattice_rot,orthor_filter=True)
+            Lat = pseudocubic_lat(self, allow_equil, zdrc=zdir, lattice_tilt=lattice_rot)
             self.Lat = Lat
         
         else:
@@ -629,7 +652,7 @@ class Trajectory:
         
 
 
-    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,octa_locality,enable_refit, symm_n_fold,saveFigures,smoother,title,orthogonal_frame,structure_type):
+    def tilting_and_distortion(self,uniname,multi_thread,read_mode,read_every,allow_equil,tilt_corr_NN1,tilt_corr_spatial,octa_locality,enable_refit, symm_n_fold,saveFigures,smoother,title,orthogonal_frame,structure_type,tilt_domain):
         
         """
         Octhedral tilting and distribution analysis.
@@ -788,7 +811,6 @@ class Trajectory:
         self.Tilting = T
         
         
-        
         # data visualization
         if read_mode == 2:
             from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time
@@ -881,19 +903,22 @@ class Trajectory:
         # NN1 correlation function of tilting (Glazer notation)
         if tilt_corr_NN1:
             from pdyna.analysis import abs_sqrt, draw_tilt_corr_evolution_sca, draw_tilt_and_corr_density_shade
+            from pdyna.structural import find_population_gap
             
             default_BB_dist = 6.2
             
+            box0=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
+            r0=distance_array(st0.cart_coords[Bindex,:],st0.cart_coords[Bindex,:],box0)
             ri=distance_array(Bpos[0,:],Bpos[0,:],self.lattice[0,:])
             rf=distance_array(Bpos[-1,:],Bpos[-1,:],self.lattice[-1,:])
 
             if np.amax(np.abs(ri-rf)) > 3: # confirm that no change in the Pb framework
                 print("!Tilt-spatial: The difference between the initial and final distance matrix is above threshold ({}), check ri and rf. \n".format(round(np.amax(np.abs(ri-rf)),3)))
             
-            search_NN1 = 7.1
+            search_NN1 = find_population_gap(r0, [3,9.6], [6,8.8])
             
             Benv = []
-            for B1, B2_list in enumerate(ri): # find the nearest Pb within a cutoff
+            for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
                 Benv.append([i for i,B2 in enumerate(B2_list) if (B2 > 0.1 and B2 < search_NN1)])
             Benv = np.array(Benv)
             
@@ -987,7 +1012,10 @@ class Trajectory:
             else:
                 polarity = draw_tilt_and_corr_density_shade(T,Corr, uniname, saveFigures,title=title)
                 self.prop_lib["tilt_corr_polarity"] = polarity
-
+        
+        if tilt_domain:
+            from pdyna.analysis import compute_tilt_domain
+            compute_tilt_domain(Corr, self.Timestep, uniname, saveFigures)
         
         if tilt_corr_spatial:
             import math
@@ -1082,6 +1110,7 @@ class Trajectory:
         
         Afa = self.A_sites["FA"]
         Ama = self.A_sites["MA"]
+        Aazr = self.A_sites["Azr"]
         
         lattice = self.lattice
         Cpos = self.Allpos[:,self.Cindex,:]
@@ -1096,7 +1125,7 @@ class Trajectory:
             print(f"!MO: A change of C-N connectivity is detected (ref value {CNdiff}).")
 
         if len(Ama) > 0:
-            Clist = [i[0] for i in Ama]
+            Clist = [i[0][0] for i in Ama]
             Nlist = [i[1][0] for i in Ama]
             
             Cpos = self.Allpos[trajnum,:][:,Clist,:]
@@ -1115,7 +1144,7 @@ class Trajectory:
             
         if len(Afa) > 0:
             
-            Clist = [i[0] for i in Afa]
+            Clist = [i[0][0] for i in Afa]
             N1list = [i[1][0] for i in Afa]
             N2list = [i[1][1] for i in Afa]
             
@@ -1144,7 +1173,40 @@ class Trajectory:
             if draw_MO_anime and saveFigures:
                 orientation_density_3D_sphere(CN,"FA1",saveFigures,uniname)
                 orientation_density_3D_sphere(NN,"FA2",saveFigures,uniname)
+        
             
+        if len(Aazr) > 0:
+            
+            C1list = [i[0][0] for i in Aazr]
+            C2list = [i[0][1] for i in Aazr]
+            Nlist = [i[1][0] for i in Aazr]
+            
+            Clist = C1list+C2list
+            
+            C1pos = self.Allpos[trajnum,:][:,C1list,:]
+            C2pos = self.Allpos[trajnum,:][:,C2list,:]
+            Npos = self.Allpos[trajnum,:][:,Nlist,:]
+            
+            cn1 = C1pos-Npos
+            cn2 = C2pos-Npos
+            CN1 = apply_pbc_cart_vecs(cn1,latmat)
+            CN2 = apply_pbc_cart_vecs(cn2,latmat)
+            
+            CN = CN1+CN2
+            CN = np.divide(CN,np.expand_dims(np.linalg.norm(CN,axis=2),axis=2))
+            
+            nn = C1pos-C2pos
+            NN = apply_pbc_cart_vecs(nn,latmat)
+            NN = np.divide(NN,np.expand_dims(np.linalg.norm(NN,axis=2),axis=2))
+            
+            self.Azr_MOvec1 = CN
+            self.Azr_MOvec2 = NN
+            
+            orientation_density_2pan(CN,NN,saveFigures,uniname,title=title)
+            if draw_MO_anime and saveFigures:
+                orientation_density_3D_sphere(CN,"FA1",saveFigures,uniname)
+                orientation_density_3D_sphere(NN,"FA2",saveFigures,uniname)
+        
 
         if MOautoCorr is True:
             tconst = {}
@@ -1156,7 +1218,7 @@ class Trajectory:
                 corrtime, autocorr = MO_correlation(self.MA_MOvec,self.MDTimestep,False,uniname)
                 self.MO_MA_autocorr = np.concatenate((corrtime,autocorr),axis=0)
                 tconst_MA = fit_exp_decay(corrtime, autocorr)
-                print("MO: MA decorrelation time: "+str(round(tconst,4))+' ps')
+                print("MO: MA decorrelation time: "+str(round(tconst_MA,4))+' ps')
                 if tconst_MA < 0:
                     print("!MO: Negative decorrelation MA time constant is found, please check if the trajectory is too short or system size too small. ")
                 tconst["MA"] = tconst_MA
@@ -1165,14 +1227,14 @@ class Trajectory:
                 corrtime, autocorr = MO_correlation(self.FA_MOvec1,self.MDTimestep,False,uniname)
                 self.MO_FA1_autocorr = np.concatenate((corrtime,autocorr),axis=0)
                 tconst_FA1 = fit_exp_decay(corrtime, autocorr)
-                print("MO: FA1 decorrelation time: "+str(round(tconst,4))+' ps')
+                print("MO: FA1 decorrelation time: "+str(round(tconst_FA1,4))+' ps')
                 if tconst_FA1 < 0:
                     print("!MO: Negative decorrelation FA1 time constant is found, please check if the trajectory is too short or system size too small. ")
                     
                 corrtime, autocorr = MO_correlation(self.FA_MOvec2,self.MDTimestep,False,uniname)
                 self.MO_FA2_autocorr = np.concatenate((corrtime,autocorr),axis=0)
                 tconst_FA2 = fit_exp_decay(corrtime, autocorr)
-                print("MO: FA2 decorrelation time: "+str(round(tconst,4))+' ps')
+                print("MO: FA2 decorrelation time: "+str(round(tconst_FA2,4))+' ps')
                 if tconst_FA2 < 0:
                     print("!MO: Negative decorrelation FA2 time constant is found, please check if the trajectory is too short or system size too small. ")
                     
@@ -1184,7 +1246,7 @@ class Trajectory:
         
         if MO_corr_NN12 and not (len(Afa) > 0 and len(Ama) > 0):
             import math
-            from pdyna.analysis import draw_MO_spacial_corr_time, draw_MO_spacial_corr_NN12, draw_MO_spacial_corr
+            from pdyna.analysis import draw_MO_order_time, draw_MO_spacial_corr_NN12, draw_MO_spacial_corr
             
             st0 = self.st0
             cc = st0.cart_coords[Clist,:]
@@ -1286,7 +1348,7 @@ class Trajectory:
             self.MOCorr = MOCorr
             
             if read_mode == 2:
-                Mobj = draw_MO_spacial_corr_time(MOCorr, self.Ltimeline, uniname, saveFigures=False, smoother=smoother)
+                Mobj = draw_MO_order_time(MOCorr, self.Ltimeline, uniname, saveFigures=False, smoother=smoother)
                 self.Mobj = Mobj
                 
             elif read_mode == 1:
@@ -1436,6 +1498,7 @@ class Trajectory:
         
         Afa = self.A_sites["FA"]
         Ama = self.A_sites["MA"]
+        Aazr = self.A_sites["Azr"]
         Aindex_cs = self.A_sites["Cs"]
         
         ABsep = 8.2
@@ -1446,12 +1509,13 @@ class Trajectory:
         
         Aindex_fa = []
         Aindex_ma = []
+        Aindex_azr = []
         
         B8envs = {}
         
         if len(Afa) > 0:
             for i,env in enumerate(Afa):
-                dm = distance_array(st0pos[[env[0]]+env[1],:], st0pos[Hindex,:],mybox)
+                dm = distance_array(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mybox)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_fa.append(env+[Hs])
                 
@@ -1463,7 +1527,7 @@ class Trajectory:
                         Bs.append(Bindex[j])
                 try:
                     assert len(Bs) == 8
-                    B8envs[env[0]] = Bs
+                    B8envs[env[0][0]] = Bs
                 except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
@@ -1476,11 +1540,11 @@ class Trajectory:
                         if ri[0,j] < ABsep:
                             Bs.append(Bindex[j])
                     assert len(Bs) == 8
-                    B8envs[env[0]] = Bs
+                    B8envs[env[0][0]] = Bs
         
         if len(Ama) > 0:
             for i,env in enumerate(Ama):
-                dm = distance_array(st0pos[[env[0]]+env[1],:], st0pos[Hindex,:],mybox)
+                dm = distance_array(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mybox)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_ma.append(env+[Hs])
                 
@@ -1493,7 +1557,7 @@ class Trajectory:
                         Bs.append(Bindex[j])
                 try:
                     assert len(Bs) == 8
-                    B8envs[env[0]] = Bs
+                    B8envs[env[0][0]] = Bs
                 except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
@@ -1506,8 +1570,38 @@ class Trajectory:
                         if ri[0,j] < ABsep:
                             Bs.append(Bindex[j])
                     assert len(Bs) == 8
-                    B8envs[env[0]] = Bs
+                    B8envs[env[0][0]] = Bs
+        
+        if len(Aazr) > 0:
+            for i,env in enumerate(Aazr):
+                dm = distance_array(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mybox)
+                Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
+                Aindex_azr.append(env+[Hs])
                 
+                cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
+                ri=distance_array(cent,st0Bpos,mybox) 
+                
+                Bs = []
+                for j in range(ri.shape[1]):
+                    if ri[0,j] < ABsep:
+                        Bs.append(Bindex[j])
+                try:
+                    assert len(Bs) == 8
+                    B8envs[env[0][0]] = Bs
+                except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
+                    cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
+                    ri = np.empty((Allpos.shape[0],len(Bindex)))
+                    for fr in range(Allpos.shape[0]):
+                        ri[fr,:,]=distance_array(cent[fr,:],Allpos[fr,Bindex,:],lattice[fr,:]) 
+                    ri = np.expand_dims(np.average(ri,axis=0),axis=0)
+                    
+                    Bs = []
+                    for j in range(ri.shape[1]):
+                        if ri[0,j] < ABsep:
+                            Bs.append(Bindex[j])
+                    assert len(Bs) == 8
+                    B8envs[env[0]] = Bs        
+        
                 
         if len(Aindex_cs) > 0:
             for i,env in enumerate(Aindex_cs):
@@ -1533,7 +1627,7 @@ class Trajectory:
             disp_ma = np.empty((Allposfr.shape[0],len(Aindex_ma),3))
             for ai, envs in enumerate(Aindex_ma):
                 cent = centmass_organic_vec(Allposfr,latmatfr,envs)
-                disp_ma[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0]])
+                disp_ma[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
             
             self.disp_ma = disp_ma
             dispvec_ma = disp_ma.reshape(-1,3)
@@ -1543,11 +1637,25 @@ class Trajectory:
             fit_3D_disp_total(dispvec_ma,uniname,moltype,saveFigures,title=moltype)
             peaks_3D_scatter(peaks_ma,uniname,moltype,saveFigures)
             
+        if len(Aindex_azr) > 0:
+            disp_azr = np.empty((Allposfr.shape[0],len(Aindex_azr),3))
+            for ai, envs in enumerate(Aindex_azr):
+                cent = centmass_organic_vec(Allposfr,latmatfr,envs)
+                disp_azr[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
+            
+            self.disp_azr = disp_azr
+            dispvec_azr = disp_azr.reshape(-1,3)
+            
+            moltype = "Azr"
+            peaks_azr = fit_3D_disp_atomwise(disp_azr,readTimestep,uniname,moltype,saveFigures,title=moltype)
+            fit_3D_disp_total(dispvec_azr,uniname,moltype,saveFigures,title=moltype)
+            peaks_3D_scatter(peaks_azr,uniname,moltype,saveFigures)
+            
         if len(Aindex_fa) > 0:
             disp_fa = np.empty((Allposfr.shape[0],len(Aindex_fa),3))
             for ai, envs in enumerate(Aindex_fa):
                 cent = centmass_organic_vec(Allposfr,latmatfr,envs)
-                disp_fa[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0]])
+                disp_fa[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
             
             self.disp_fa = disp_fa
             dispvec_fa = disp_fa.reshape(-1,3)    

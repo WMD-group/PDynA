@@ -143,8 +143,8 @@ def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
     from MDAnalysis.analysis.distances import distance_array
 
     r=distance_array(Bpos_frame,Xpos_frame,mybox)
+    max_BX_distance = find_population_gap(r, [0.1,8], [3,6.8])
     
-    max_BX_distance = 4.2
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
     ref_initial = np.zeros((Bpos_frame.shape[0],3,3))
     for B_site, X_list in enumerate(r): # for each B-site atom
@@ -262,10 +262,11 @@ def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
 def pseudocubic_lat(traj,  # the main class instance
                     allow_equil = 0, #take the first x fraction of the trajectory as equilibration
                     zdrc = 2,  # zdrc: the z direction for pseudo-cubic lattice paramter reading. a,b,c = 0,1,2
-                    lattice_tilt = [0,0,0], # if primary B-B bond is not along orthogonal directions, in degrees
-                    orthor_filter = True):  # Apply a filter to Lat values to distinguish orthor phase a/b lattice parameters, disable if see double peak in both a and b axis
-    
+                    lattice_tilt = [0,0,0] # if primary B-B bond is not along orthogonal directions, in degrees
+                    ): 
+                    
     #from MDAnalysis.analysis.distances import distance_array
+    from scipy.stats import norm
 
     match_tol = 1.5 # tolerance of the coordinate difference is set to 1.5 angstroms    
 
@@ -332,8 +333,6 @@ def pseudocubic_lat(traj,  # the main class instance
         raise TypeError("Some of the neightbours are not found (still nan). Increase match_tol")
     Bnet = Bnet.astype(int)
     
-
-    Lati = np.zeros((len(range(round(traj.nframe*allow_equil),traj.nframe)),Bfc.shape[0],3))
     
     # find the correct a and b vectors
     #code = np.remainder(np.sum(grided,axis=1),2)
@@ -341,6 +340,9 @@ def pseudocubic_lat(traj,  # the main class instance
     
     Bfrac = traj.Allfrac[:,traj.Bindex,:]
     lats = traj.latmat
+    
+    # filtering direction 1
+    Lati_off = np.zeros((len(range(round(traj.nframe*allow_equil),traj.nframe)),Bfc.shape[0],3))
     for ite, fr in enumerate(range(round(traj.nframe*allow_equil),traj.nframe)):
         Bfc = Bfrac[fr,:,:]
         templat = np.empty((Bfc.shape[0],3))
@@ -350,22 +352,50 @@ def pseudocubic_lat(traj,  # the main class instance
                     templat[B1,i] = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/2
                 else: # x- and y-axis
                     temp = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/np.sqrt(2)
-                    if orthor_filter:
-                        if code[B1] == 1:
-                            i = (i+1)%2
+                    if code[B1] == 1:
+                        i = (i+1)%2
                     templat[B1,i] = temp
-        Lati[ite,:] = templat
+        Lati_off[ite,:] = templat
     
     if zdrc != 2:
-        l0 = np.expand_dims(Lati[:,:,0], axis=2)
-        l1 = np.expand_dims(Lati[:,:,1], axis=2)
-        l2 = np.expand_dims(Lati[:,:,2], axis=2)
+        l0 = np.expand_dims(Lati_off[:,:,0], axis=2)
+        l1 = np.expand_dims(Lati_off[:,:,1], axis=2)
+        l2 = np.expand_dims(Lati_off[:,:,2], axis=2)
         if zdrc == 0:
-            Lati = np.concatenate((l2,l1,l0),axis=2)
+            Lati_off = np.concatenate((l2,l1,l0),axis=2)
         if zdrc == 1:
-            Lati = np.concatenate((l0,l2,l1),axis=2)
+            Lati_off = np.concatenate((l0,l2,l1),axis=2)
     
-    return Lati
+    # filtering direction 2
+    Lati_on = np.zeros((len(range(round(traj.nframe*allow_equil),traj.nframe)),Bfc.shape[0],3))
+    for ite, fr in enumerate(range(round(traj.nframe*allow_equil),traj.nframe)):
+        Bfc = Bfrac[fr,:,:]
+        templat = np.empty((Bfc.shape[0],3))
+        for B1 in range(Bfc.shape[0]):
+            for i in range(3):
+                if i == 2: # identified z-axis
+                    templat[B1,i] = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/2
+                else: # x- and y-axis
+                    temp = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/np.sqrt(2)
+                    templat[B1,i] = temp
+        Lati_on[ite,:] = templat
+    
+    if zdrc != 2:
+        l0 = np.expand_dims(Lati_on[:,:,0], axis=2)
+        l1 = np.expand_dims(Lati_on[:,:,1], axis=2)
+        l2 = np.expand_dims(Lati_on[:,:,2], axis=2)
+        if zdrc == 0:
+            Lati_on = np.concatenate((l2,l1,l0),axis=2)
+        if zdrc == 1:
+            Lati_on = np.concatenate((l0,l2,l1),axis=2)
+    
+    std_off = norm.fit(Lati_off.reshape(-1,3)[:,0])[1]+norm.fit(Lati_off.reshape(-1,3)[:,1])[1]
+    std_on = norm.fit(Lati_on.reshape(-1,3)[:,0])[1]+norm.fit(Lati_on.reshape(-1,3)[:,1])[1]
+    
+    if std_off > std_on:
+        return Lati_on
+    else:
+        return Lati_off
 
 
 def structure_time_average(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None):
@@ -596,7 +626,7 @@ def match_bx_orthogonal(bx,mymat):
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]] > 0.8 and fits[fits.argsort()[-2]] < 0.6):
+        if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-2]] < 0.5):
             print(bx,fits)
             raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
         order.append(np.argmax(fits))
@@ -826,20 +856,12 @@ def centmass_organic(st0pos,latmat,env):
     n = env[1]
     h = env[2]
     
-    mass = np.zeros((1,3))
-    ccc = st0pos[c,:]
-    mass = mass + ccc*12
+    refc = st0pos[[c[0]],:]
+    cs = apply_pbc_cart_vecs(st0pos[c,:] - refc,latmat)
+    ns = apply_pbc_cart_vecs(st0pos[n,:] - refc,latmat)
+    hs = apply_pbc_cart_vecs(st0pos[h,:] - refc,latmat)
     
-    Nvec = st0pos[n,:]-ccc
-    Hvec = st0pos[h,:]-ccc
-    
-    cn = apply_pbc_cart_vecs(Nvec,latmat)
-    mass = mass + np.sum(ccc + cn,axis=0)*14
-    
-    ch = cn = apply_pbc_cart_vecs(Hvec,latmat)
-    mass = mass + np.sum(ccc + ch,axis=0)*1
-    
-    mass = mass/(12+14*len(n)+1*len(h))
+    mass = refc+(np.sum(cs,axis=0)*12+np.sum(ns,axis=0)*14+np.sum(hs,axis=0)*0)/(12*len(c)+14*len(n)+1*len(h))
 
     return mass
 
@@ -850,20 +872,12 @@ def centmass_organic_vec(pos,latmat,env):
     n = env[1]
     h = env[2]
     
-    mass = np.zeros((pos.shape[0],3))
-    ccc = pos[:,c,:]
-    mass = mass + ccc*12
+    refc = pos[:,[c[0]],:]
+    cs = apply_pbc_cart_vecs(pos[:,c,:] - refc,latmat)
+    ns = apply_pbc_cart_vecs(pos[:,n,:] - refc,latmat)
+    hs = apply_pbc_cart_vecs(pos[:,h,:] - refc,latmat)
     
-    Nvec = pos[:,n,:]-np.expand_dims(ccc, axis=1)
-    Hvec = pos[:,h,:]-np.expand_dims(ccc, axis=1)
-
-    cn = apply_pbc_cart_vecs(Nvec,latmat)
-    mass = mass + np.sum(np.expand_dims(ccc, axis=1) + cn,axis=1)*14
-    
-    ch = apply_pbc_cart_vecs(Hvec,latmat)
-    mass = mass + np.sum(np.expand_dims(ccc, axis=1) + ch,axis=1)*1
-    
-    mass = mass/(12+14*len(n)+1*len(h))
+    mass = refc[:,0,:]+(np.sum(cs,axis=1)*12+np.sum(ns,axis=1)*14+np.sum(hs,axis=1)*1)/(12*len(c)+14*len(n)+1*len(h))
 
     return mass
 
@@ -941,5 +955,21 @@ def apply_pbc_cart_vecs(vecs, mymat):
     vecs_pbc = get_cart_from_frac(vecs_frac-np.round(vecs_frac), mymat)
     return vecs_pbc
 
+
+def find_population_gap(r,find_range,init):
+    from scipy.cluster.vq import kmeans
+    
+    scan = r.reshape(-1,)
+    scan = scan[np.logical_and(scan<find_range[1],scan>find_range[0])]
+    centers = kmeans(scan, k_or_guess=init, iter=20, thresh=1e-05)[0]
+    p = np.mean(centers) 
+
+    y,binEdges=np.histogram(scan,bins=50)
+    bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+    
+    if y[(np.abs(bincenters - p)).argmin()] != 0:
+        raise ValueError("!Structure resolving: Can't separate the different neighbours, check if initial structure is defected or too distorted. ")
+
+    return p
 
 

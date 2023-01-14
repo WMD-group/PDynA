@@ -316,8 +316,14 @@ def print_time(times):
     print("Total:                 {}".format(time_format(times['total'])))
     
     
-
-    
+def display_A_sites(A_sites):
+    prstr = []
+    for key in A_sites:
+        sites = len(A_sites[key])
+        if sites > 0:
+            prstr.append(key+": "+str(sites))
+    print("A-sites are ->",", ".join(prstr))
+            
     
     
     

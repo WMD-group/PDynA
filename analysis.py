@@ -98,15 +98,16 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
     if screen is None:
         histranges = np.zeros((3,2))
         for i in range(3):
-            histranges[i,:] = [np.quantile(Lat[:,i], 0.1),np.quantile(Lat[:,i], 0.9)]
+            histranges[i,:] = [np.quantile(Lat[:,i], 0.02),np.quantile(Lat[:,i], 0.98)]
             
         histrange = np.zeros((2,))
-        histrange[0] = np.amin(histranges[:,0])-0.15
-        histrange[1] = np.amax(histranges[:,1])+0.15
+        ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
+        histrange[0] = np.amin(histranges[:,0])-ra*0.2
+        histrange[1] = np.amax(histranges[:,1])+ra*0.2
         
         figs, axs = plt.subplots(3, 1)
         labels = ["a","b","c"]
-        colors = ['g','b','r','c','m', 'y', 'k']
+        colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(Lat[:,i],bins=n_bins,range = histrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -165,20 +166,19 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
                 print(f"!pseudo_cubic_lat: screening gets - a:{len(Lat1)}/{Lat.shape[0]}, b:{len(Lat2)}/{Lat.shape[0]}, c:{len(Lat3)}/{Lat.shape[0]}")
         
         histranges = np.zeros((3,2))
-        
-        histranges[0,:] = [np.quantile(Lat1, 0.1),np.quantile(Lat1, 0.9)]
-        histranges[1,:] = [np.quantile(Lat2, 0.1),np.quantile(Lat2, 0.9)]
-        histranges[2,:] = [np.quantile(Lat3, 0.1),np.quantile(Lat3, 0.9)]
+        for i in range(3):
+            histranges[i,:] = [np.quantile(Lat[:,i], 0.02),np.quantile(Lat[:,i], 0.98)]
             
         histrange = np.zeros((2,))
-        histrange[0] = np.amin(histranges[:,0])-0.15
-        histrange[1] = np.amax(histranges[:,1])+0.15
+        ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
+        histrange[0] = np.amin(histranges[:,0])-ra*0.2
+        histrange[1] = np.amax(histranges[:,1])+ra*0.2
         
         Lats = (Lat1,Lat2,Lat3)
         
         figs, axs = plt.subplots(3, 1)
         labels = ["a","b","c"]
-        colors = ['g','b','r','c','m', 'y', 'k']
+        colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(Lats[i],bins=n_bins,range = histrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -511,7 +511,7 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
     
     figs, axs = plt.subplots(4, 1)
     labels = ["Eg","T2g","T1u","T2u"]
-    colors = ["C0","C1","C2","C3"]
+    colors = ["C3","C4","C5","C6"]
     for i in range(4):
         y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -586,7 +586,7 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, ti
     
     figs, axs = plt.subplots(3, 1)
     labels = ["a","b","c"]
-    colors = ['g','b','r','c','m', 'y', 'k']
+    colors = ["C0","C1","C2"]
     for i in range(3):
         y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -649,7 +649,7 @@ def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n
     
     figs, axs = plt.subplots(3, 1)
     labels = ["a","b","c"]
-    colors = ['g','b','r','c','m', 'y', 'k']
+    colors = ["C0","C1","C2"]
     lstyle = ["solid", "dashed", "dotted", "dashdot"]
     if len(types) > len(lstyle): 
         raise TypeError("The connectivity types are more than available line styles. ")
@@ -729,7 +729,7 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
         
         figs, axs = plt.subplots(3, 1)
         labels = ["a","b","c"]
-        colors = ['g','b','r','c','m', 'y', 'k']
+        colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -811,7 +811,7 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
         
         figs, axs = plt.subplots(4, 1)
         labels = ["Eg","T2g","T1u","T2u"]
-        colors = ["C0","C1","C2","C3"]
+        colors = ["C3","C4","C5","C6"]
         for i in range(4):
             y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -917,7 +917,7 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
         
         figs, axs = plt.subplots(3, 1)
         labels = ["a","b","c"]
-        colors = ['g','b','r','c','m', 'y', 'k']
+        colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -987,7 +987,7 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
         
         figs, axs = plt.subplots(4, 1)
         labels = ["Eg","T2g","T1u","T2u"]
-        colors = ["C0","C1","C2","C3"]
+        colors = ["C3","C4","C5","C6"]
         for i in range(4):
             y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -1148,15 +1148,15 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
 
     figs, axs = plt.subplots(3, 1)
     labels = ["a","b","c"]
-    colors = ['g','b','r','c','m', 'y', 'k']
-    rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
+    colors = ["C0", "C1", "C2"]
+    #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
     por = [0,0,0]
     for i in range(3):
         
         y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
         yt=y/max(y)
-        axs[i].plot(bincenters,yt,label = labels[i],color = colors[i],linewidth = 2.4)
+        axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
 
 
@@ -1166,7 +1166,8 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
         
         yy=yt*yc
 
-        axs[i].fill_between(bincenters, yy, 0,facecolor=tuple(rgbcode[i,:]), interpolate=True)
+        #axs[i].fill_between(bincenters, yy, 0,facecolor=tuple(rgbcode[i,:]), interpolate=True)
+        axs[i].fill_between(bincenters, yy, 0, facecolor = colors[i], alpha=fill_alpha, interpolate=True)
         #axs[i].fill_between(bincenters, yt, 0, where = yc>0.05,facecolor=tuple(rgbcode[i,:]), interpolate=True)
         #axs[i].fill_between(bincenters, yc, 0, where = np.logical_or(yt>yc,yt>0.2),facecolor=tuple(rgbcode[i,:]), interpolate=True)
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
@@ -1300,11 +1301,152 @@ def draw_tilt_spacial_corr(C, uniname, saveFigures, n_bins = 100):
 
     if saveFigures:
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
-        
+                
     plt.show()
 
 
+def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, smoother=True):
+    
+    fig_name = f"traj_tilt_domain_time_{uniname}.png"
+    
+    time_window = 5 # picosecond
+    sgw = round(time_window/timestep)
+    if sgw%2==0: sgw+=1
+    
+# =============================================================================
+#     fig,ax = plt.subplots()
+#     plt.plot(np.array(list(range(Corr.shape[0])))*timestep,Corr[:,100,5])
+#     plt.plot(np.array(list(range(Corr.shape[0])))*timestep,savitzky_golay(Corr[:,100,5],window_size=sgw))
+#     ax.set_xlabel("time (ps)")
+#     ax.set_ylabel("TCP")
+#     plt.axhline(y=0,linestyle="dashed",color="k")
+# =============================================================================
+    
+    dom = [[],[],[],[],[],[]] # [a+,b+,c+,a-,b-,c-]
+    for i in range(6):
+        for j in range(Corr.shape[1]):
+            tcline = Corr[:,j,i]
+            if smoother: 
+                tcline = savitzky_golay(tcline,window_size=sgw)
+            crosszero = np.diff(np.sign(tcline+tol))
+            neg2pos = np.where(crosszero==2)[0]
+            pos2neg = np.where(crosszero==-2)[0]
+            if len(neg2pos) == 0 or len(pos2neg) == 0:
+                if tol != 0:
+                    raise ValueError("Tilt_domain: No zero crossing is found, lower 'tol' value. ")
+                else:
+                    neg = []
+            else:
+                if neg2pos[0] > pos2neg[0]:
+                    t1 = neg2pos
+                    t2 = pos2neg
+                    ts = min(t1.shape[0],t2.shape[0])
+                    neg = t1[:ts] - t2[:ts]
+                else:
+                    t1 = neg2pos[1:]
+                    t2 = pos2neg
+                    ts = min(t1.shape[0],t2.shape[0])
+                    neg = t1[:ts] - t2[:ts]
+                
+            crosszero = np.diff(np.sign(tcline-tol))
+            neg2pos = np.where(crosszero==2)[0]
+            pos2neg = np.where(crosszero==-2)[0]
+            if len(neg2pos) == 0 or len(pos2neg) == 0:
+                if tol != 0:
+                    raise ValueError("Tilt_domain: No zero crossing is found, lower 'tol' value. ")
+                else:
+                    pos = []
+            else:
+                if neg2pos[0] > pos2neg[0]:
+                    t1 = pos2neg[1:]
+                    t2 = neg2pos
+                    ts = min(t1.shape[0],t2.shape[0])
+                    pos = t1[:ts] - t2[:ts]
+                else:
+                    t1 = pos2neg
+                    t2 = neg2pos
+                    ts = min(t1.shape[0],t2.shape[0])
+                    pos = t1[:ts] - t2[:ts]
+            
+            if i in (0,1):
+                if len(pos) != 0:
+                    dom[0].extend(list(pos*timestep))
+                if len(neg) != 0:
+                    dom[3].extend(list(neg*timestep))
+            elif i in (2,3):
+                if len(pos) != 0:
+                    dom[1].extend(list(pos*timestep))
+                if len(neg) != 0:
+                    dom[4].extend(list(neg*timestep))
+            elif i in (4,5):
+                if len(pos) != 0:
+                    dom[2].extend(list(pos*timestep))
+                if len(neg) != 0:
+                    dom[5].extend(list(neg*timestep))
+    
+    hist_filt = 0            
+    
+    legs = ["$a^{+}$","$b^{+}$","$c^{+}$","$a^{-}$","$b^{-}$","$c^{-}$"]
+    colors = ["C0","C1","C2"]
+    maxis = []
+    for i in range(6):
+        maxis.append(max(dom[i]))
+    m = max(maxis)*1.1
+    
+# =============================================================================
+#     plt.subplots(1,1)
+#     ax = plt.gca()
+#     for i in range(6):
+#         temp,binEdges = np.histogram(dom[i],bins=n_bins,range=[hist_filt,m])
+#         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+#         if i in (0,1,2):
+#             ax.plot(bincenters,temp,label=legs[i],linewidth=2,color=colors[i%3],linestyle="solid")
+#         else:
+#             ax.plot(bincenters,temp,label=legs[i],linewidth=2,color=colors[i%3],linestyle="dotted")
+#     
+#     ax.tick_params(axis='both', which='major', labelsize=12)
+#     #ax.set_xlim([0,m])
+#     plt.xlabel('time (ps)', fontsize=14)
+#     plt.ylabel('Count (a.u.)', fontsize=14)
+#     #plt.legend(prop={'size': 11})
+#     legend = plt.legend(prop={'size': 11},frameon = True, loc="upper right", ncol=2)
+#     legend.get_frame().set_alpha(0.8)
+# =============================================================================
+    
+    cpower = 1
+    
+    w, h = figaspect(1.2/1.5)
+    fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, sharey=False,figsize=(w,h))
+    labels = ["a","b","c"]
+    colors = ["C0","C1","C2"]
+    for i in range(3):
+        #axs[i].hist(dom[i],bins=n_bins,range=[hist_filt,m], color=colors[0], label="positive", alpha=0.5)
+        #axs[i].hist(dom[i+3],bins=n_bins,range=[hist_filt,m], color=colors[1], label="negative", alpha=0.5)
+        temp1,binEdges = np.histogram(dom[i],bins=n_bins,range=[hist_filt,m])
+        temp2,binEdges = np.histogram(dom[i+3],bins=n_bins,range=[hist_filt,m])
+        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+        temp1 = np.multiply(temp1,np.power(bincenters,cpower))
+        temp2 = np.multiply(temp2,np.power(bincenters,cpower))
+        axs[i].fill_between(bincenters, temp1, 0, facecolor=colors[0], interpolate=True, alpha = 0.4, label="positive")
+        axs[i].fill_between(bincenters, temp2, 0, facecolor=colors[1], interpolate=True, alpha = 0.4, label="negative")
+        #axs[i].plot(bincenters, temp1, linewidth = 1.8, linestyle = 'solid', color=colors[0], label="positive")
+        #axs[i].plot(bincenters, temp2, linewidth = 1.8, linestyle = 'solid', color=colors[1], label="negative")
+        axs[i].text(0.04, 0.84, labels[i], horizontalalignment='center', fontsize=16, verticalalignment='center', transform=axs[i].transAxes)
 
+    for ax in axs.flat:
+        ax.set_ylim(ymin=0)
+        ax.tick_params(axis='both', which='major', labelsize=13)
+        ax.set_xlim([hist_filt,m])
+        ax.set_yticks([])
+    
+    axs[0].legend(prop={'size': 10}, loc="upper right")
+    fig.text(0.5, 0.01, 'time (ps)', ha='center', fontsize=14)
+    fig.text(0.07, 0.5, 'Counts (a.u.)', va='center', rotation='vertical', fontsize=14)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
 
 def spherical_coordinates(cn):
 #    cn=sorted(abs(cn),reverse=True) #This forces symmetry exploitation. Used for figuring out what [x,y,z] corresponds to which point in the figure
@@ -1837,6 +1979,103 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
     return tuple(plotobj)
 
 
+def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = False, n_bins = 50):
+    
+    fig_name = f"traj_MO_order_time_{uniname}.png"
+    
+    def polar_param(y,bc,power=2):
+        #parneg = sum(np.power(y,power)[bc<-0.5])+sum(np.power(y,power)[bc<0])
+        #parpos = sum(np.power(y,power)[bc>0.5])+sum(np.power(y,power)[bc>0])
+        parneg = sum(np.multiply(np.power(y,power)[bc<0],np.abs(bc[bc<0])))
+        parpos = sum(np.multiply(np.power(y,power)[bc>0],np.abs(bc[bc>0])))
+        return (-parneg+parpos)/(parneg+parpos)
+    
+    def contrast_corr(y00,y01,y02,y10,y11,y12,power=1.5):
+        y00 = np.power(y00,power)
+        y01 = np.power(y01,power)
+        y02 = np.power(y02,power)
+        y10 = np.power(y10,power)
+        y11 = np.power(y11,power)
+        y12 = np.power(y12,power)
+        val = (sum(np.minimum(y00,y10))/sum(y00)+sum(np.minimum(y01,y11))/sum(y01)+sum(np.minimum(y02,y12))/sum(y02))/3
+        return (val-0.5)*2
+    
+    plotobj = []
+    tlen = round(C.shape[2]/18)
+    if tlen%2==0: tlen+=1
+    #Cline = np.empty((0,2,3))
+    Cline = np.empty((0,4))
+
+    aw = 11 # careful when tuning this
+       
+    for i in range(C.shape[2]-aw+1):
+        temp00 = C[0,0,list(range(i,i+aw)),:].reshape(-1,)
+        temp01 = C[0,1,list(range(i,i+aw)),:].reshape(-1,)
+        temp02 = C[0,2,list(range(i,i+aw)),:].reshape(-1,)
+        temp10 = C[1,0,list(range(i,i+aw)),:].reshape(-1,)
+        temp11 = C[1,1,list(range(i,i+aw)),:].reshape(-1,)
+        temp12 = C[1,2,list(range(i,i+aw)),:].reshape(-1,)
+
+        y00,binEdges = np.histogram(temp00,bins=n_bins,range=[-1,1]) 
+        y01,binEdges = np.histogram(temp01,bins=n_bins,range=[-1,1]) 
+        y02,binEdges = np.histogram(temp02,bins=n_bins,range=[-1,1]) 
+        y10,binEdges = np.histogram(temp10,bins=n_bins,range=[-1,1]) 
+        y11,binEdges = np.histogram(temp11,bins=n_bins,range=[-1,1]) 
+        y12,binEdges = np.histogram(temp12,bins=n_bins,range=[-1,1]) 
+        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+
+        sim0 = polar_param(y00,bincenters)
+        sim1 = polar_param(y01,bincenters)
+        sim2 = polar_param(y02,bincenters)
+        invfac = contrast_corr(y00,y01,y02,y10,y11,y12)
+        
+        #moavg = np.array([[central_map(sim0),central_map(sim1),central_map(sim2),invfac]])
+        moavg = np.array([[sim0,sim1,sim2,invfac]])
+ 
+        Cline = np.concatenate((Cline,moavg),axis=0)
+    
+    colors = ["C0","C1","C2","C3"]   
+    labels = ['a', 'b', 'c']
+    lwid = 2.2
+    
+    w, h = figaspect(0.8/1.45)
+    plt.subplots(figsize=(w,h))
+    ax = plt.gca()
+    
+    plotobj.append(steps[:(len(steps)-aw+1)])
+    for i in range(3):
+        if smoother:
+            temp = savitzky_golay(Cline[:,i],window_size=tlen)
+        else:
+            temp = Cline[:,i]
+        plt.plot(steps[:(len(steps)-aw+1)], temp, label = labels[i] ,color =colors[i], linewidth=lwid) 
+        plotobj.append(temp)
+        
+    if smoother:
+        temp = savitzky_golay(Cline[:,3],window_size=tlen)
+    else:
+        temp = Cline[:,3]
+    plt.plot(steps[:(len(steps)-aw+1)], temp, label = 'CF' ,color ='k',linestyle='dashed', linewidth=lwid) 
+    plotobj.append(temp)
+
+    ax.set_xlim([0,np.amax(steps)])
+    ax.set_ylim([-1,1])
+    
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    plt.xlabel('Time (ps)', fontsize=15)
+    plt.ylabel('MO order (a.u.)', fontsize=15)
+    legend = plt.legend(prop={'size': 13},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.8)
+    
+    #print(np.mean(Cline[:,0]),np.mean(Cline[:,1]),np.mean(Cline[:,2]),np.mean(Cline[:,3]))
+        
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return tuple(plotobj)
+
+
 def draw_MO_spacial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
     
     fig_name = f"traj_MO_spacial_corr_NN12_{uniname}.png"
@@ -1851,7 +2090,7 @@ def draw_MO_spacial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
     w, h = figaspect(1.2/1.5)
     fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, sharey=False,figsize=(w,h))
     labels = ["a","b","c"]
-    colors = ['g','b','r','c','m', 'y', 'k']
+    colors = ["C0","C1","C2","C3"]
     for i in range(3):
         temp1,binEdges = np.histogram(C[0][i],bins=n_bins,range=[-1,1])
         temp2,binEdges = np.histogram(C[1][i],bins=n_bins,range=[-1,1])
@@ -1898,7 +2137,7 @@ def draw_MO_spacial_corr(C, uniname, saveFigures, n_bins = 50):
     
     fig, axs = plt.subplots(nrows=3, ncols=num_lens, sharex=False, sharey=True)
     labels = ["a","b","c"]
-    #colors = ['g','b','r','c','m', 'y', 'k']
+    colors = ["C0","C1","C2","C3"]
     for i in range(3):
         for j in range(num_lens):
             axs[i,j].hist(C[j][i],bins=n_bins,range=[-1,1],orientation='horizontal')
@@ -2183,14 +2422,15 @@ def peaks_3D_scatter(peaks, uniname, moltype, saveFigures):
 def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     
     lwid = 2
+    colors = ["C0","C1","C2","C3","C4","C5","C6"]
     xlimmax = min(max(Lobj[0]),max(Tobj[0]),max(Cobj[0]),max(Mobj[0]))*0.9
     
     fig, axs = plt.subplots(nrows=4, ncols=1, sharex=True, sharey=False)
     fig.set_size_inches(6.5,5.5)
 
-    axs[0].plot(Lobj[0],Lobj[1],label = 'a',linewidth=lwid)
-    axs[0].plot(Lobj[0],Lobj[2],label = 'b',linewidth=lwid)
-    axs[0].plot(Lobj[0],Lobj[3],label = 'c',linewidth=lwid)
+    axs[0].plot(Lobj[0],Lobj[1],label = 'a',linewidth=lwid,color=colors[0])
+    axs[0].plot(Lobj[0],Lobj[2],label = 'b',linewidth=lwid,color=colors[1])
+    axs[0].plot(Lobj[0],Lobj[3],label = 'c',linewidth=lwid,color=colors[2])
     #ax.text(0.2, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
     pmax = max(max(Lobj[1]),max(Lobj[2]),max(Lobj[3]))
     pmin = min(min(Lobj[1]),min(Lobj[2]),min(Lobj[3]))
@@ -2202,9 +2442,9 @@ def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     #axs[0].set_xticklabels([])
     
     
-    axs[1].plot(Tobj[0],Tobj[1],label = 'a',linewidth=lwid)
-    axs[1].plot(Tobj[0],Tobj[2],label = 'b',linewidth=lwid)
-    axs[1].plot(Tobj[0],Tobj[3],label = 'c',linewidth=lwid)   
+    axs[1].plot(Tobj[0],Tobj[1],label = 'a',linewidth=lwid,color=colors[0])
+    axs[1].plot(Tobj[0],Tobj[2],label = 'b',linewidth=lwid,color=colors[1])
+    axs[1].plot(Tobj[0],Tobj[3],label = 'c',linewidth=lwid,color=colors[2])   
     axs[1].set_xlim([0,xlimmax])
     axs[1].set_ylim([0,17])
     axs[1].set_yticks([0,5,10,15])
@@ -2215,9 +2455,9 @@ def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     #axs[1].legend(prop={'size': 10},ncol=3)
     
     
-    axs[2].plot(Cobj[0],Cobj[1],label = 'a',linewidth=lwid)
-    axs[2].plot(Cobj[0],Cobj[2],label = 'b',linewidth=lwid)
-    axs[2].plot(Cobj[0],Cobj[3],label = 'c',linewidth=lwid)   
+    axs[2].plot(Cobj[0],Cobj[1],label = 'a',linewidth=lwid,color=colors[0])
+    axs[2].plot(Cobj[0],Cobj[2],label = 'b',linewidth=lwid,color=colors[1])
+    axs[2].plot(Cobj[0],Cobj[3],label = 'c',linewidth=lwid,color=colors[2])   
     axs[2].set_xlim([0,xlimmax])
     axs[2].set_ylim([-1.1,1.2])
     axs[2].set_yticks([-1,0,1])
@@ -2226,9 +2466,9 @@ def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     
     
     #colors = ["C0","C1","C2","C3"]   
-    axs[3].plot(Mobj[0], Mobj[1], label = 'a' , linewidth=lwid) 
-    axs[3].plot(Mobj[0], Mobj[2], label = 'b' , linewidth=lwid) 
-    axs[3].plot(Mobj[0], Mobj[3], label = 'c' , linewidth=lwid) 
+    axs[3].plot(Mobj[0], Mobj[1], label = 'a' , linewidth=lwid,color=colors[0]) 
+    axs[3].plot(Mobj[0], Mobj[2], label = 'b' , linewidth=lwid,color=colors[1]) 
+    axs[3].plot(Mobj[0], Mobj[3], label = 'c' , linewidth=lwid,color=colors[2]) 
     axs[3].plot(Mobj[0], Mobj[4], label = 'CF' ,color ='k', linewidth=lwid, linestyle='dashed') 
     #axs[2].plot(Mobj[0], Mobj[1], label = 'a-NN1' ,color =colors[0], linewidth=lwid) 
     #axs[2].plot(Mobj[0], Mobj[2], label = 'b-NN1' ,color =colors[1], linewidth=lwid) 
@@ -2239,8 +2479,8 @@ def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     
     axs[3].set_xlim([0,xlimmax])
     axs[3].tick_params(axis='both', which='major', labelsize=12.5)
-    axs[3].set_ylim([0,1.1])
-    axs[3].set_yticks([0,0.5,1])
+    axs[3].set_ylim([-1.1,1.1])
+    axs[3].set_yticks([-1,0,1])
     axs[3].set_ylabel('MO order', fontsize = 15) # Y label
     axs[3].set_xlabel("time (ps)", fontsize = 14) # X label
     axs[3].legend(prop={'size': 12.2},ncol=4,loc=0)
