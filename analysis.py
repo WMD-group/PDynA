@@ -1066,8 +1066,8 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
     return Dgauss, Dgaussstd
 
 
-def abs_sqrt(num):
-    return np.sqrt(abs(num))*math.copysign(1, num)
+def abs_sqrt(m):
+    return np.sqrt(np.abs(m))*np.sign(m)
 
 
 def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', scasize = 1.5, y_lim = [-1,1]):
@@ -1159,23 +1159,18 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
         axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
 
-
         y,binEdges=np.histogram(C[i],bins=n_bins,range=[-45,45]) 
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
         yc=y/max(y)
-        
         yy=yt*yc
 
-        #axs[i].fill_between(bincenters, yy, 0,facecolor=tuple(rgbcode[i,:]), interpolate=True)
         axs[i].fill_between(bincenters, yy, 0, facecolor = colors[i], alpha=fill_alpha, interpolate=True)
-        #axs[i].fill_between(bincenters, yt, 0, where = yc>0.05,facecolor=tuple(rgbcode[i,:]), interpolate=True)
-        #axs[i].fill_between(bincenters, yc, 0, where = np.logical_or(yt>yc,yt>0.2),facecolor=tuple(rgbcode[i,:]), interpolate=True)
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
         
         axs[i].set_ylim(bottom=0)
         
-        parneg = np.sum(np.power(yy,corr_power)[bincenters<0])
-        parpos = np.sum(np.power(yy,corr_power)[bincenters>0])
+        parneg = np.sum(np.power(yc,corr_power)[bincenters<0])
+        parpos = np.sum(np.power(yc,corr_power)[bincenters>0])
         por[i] = (-parneg+parpos)/(parneg+parpos)
         
     for ax in axs.flat:
@@ -1198,6 +1193,101 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
 
     if not title is None:
         axs[0].set_title(title,fontsize=17)
+        
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        
+    plt.show()
+    
+    div = 0.35
+    scal = 4/3
+    for ci, cval in enumerate(por):
+        if abs(cval) > div:
+            cval = np.sign(cval)*(np.power(((np.abs(cval)-div)/(1-div)),1/scal)*(1-div)+div)
+            por[ci] = np.round(cval,4)
+        else:
+            cval = np.sign(cval)*(np.power(np.abs(cval)/div,scal)*div)
+            por[ci] = np.round(cval,4)
+    
+    return por
+
+
+def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, title = None):
+    
+    fig_name=f"traj_tilt_corr_density_full_{uniname}.png"
+    
+    corr_power = 2.5
+    fill_alpha = 0.5
+    
+    div = 0.35
+    scal = 4/3
+    
+    T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
+    T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
+    T_c = T[:,:,2].reshape((T.shape[0]*T.shape[1]))
+    tup_T = (T_a,T_b,T_c)
+    
+    C = np.empty((3,3,Cf.shape[0]*Cf.shape[1]*2))
+    for i in range(3):
+        for j in range(3):
+            C[i,j,:] = Cf[:,:,i,j,:].reshape(-1,)
+    
+    figs, axs = plt.subplots(3, 3)
+    labels = ["a","b","c"]
+    colors = ["C0", "C1", "C2"]
+    #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
+    por = np.empty((3,3))
+    for i in range(3):
+        y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
+        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+        yt=y/max(y)
+        for j in range(3):
+            
+            axs[i,j].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 1.5)
+            #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+
+            y,binEdges=np.histogram(C[i,j,:],bins=n_bins,range=[-45,45]) 
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yc=y/max(y)
+            yy=yt*yc
+
+            axs[i,j].fill_between(bincenters, yy, 0, facecolor = colors[j], alpha=fill_alpha, interpolate=True)
+            #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
+            
+            axs[i,j].set_ylim(bottom=0)
+            
+            parneg = np.sum(np.power(yc,corr_power)[bincenters<0])
+            parpos = np.sum(np.power(yc,corr_power)[bincenters>0])
+            cval = (-parneg+parpos)/(parneg+parpos)
+            
+            if abs(cval) > div:
+                cval = np.sign(cval)*(np.power(((np.abs(cval)-div)/(1-div)),1/scal)*(1-div)+div)
+                por[i,j] = np.round(cval,4)
+            else:
+                cval = np.sign(cval)*(np.power(np.abs(cval)/div,scal)*div)
+                por[i,j] = np.round(cval,4)
+            
+            axs[i,j].text(0.80, 0.82, round(cval,3), horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i,j].transAxes)
+            
+    for ax in axs.flat:
+        ax.tick_params(axis='both', which='major', labelsize=10)
+        #ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+        #ax.set_xlabel('Tilt Angle (deg)', fontsize = 15) # X label
+        ax.set_xlim([-20,20])
+        ax.set_xticks([-20,-10,0,10,20])
+        ax.xaxis.set_ticklabels([])
+        ax.yaxis.set_ticklabels([])
+        ax.set_yticks([])
+    
+    axs[2,0].xaxis.set_ticklabels([-20,-10,0,10,20])  
+    axs[2,1].xaxis.set_ticklabels([-20,-10,0,10,20])    
+    axs[2,2].xaxis.set_ticklabels([-20,-10,0,10,20])  
+    
+    axs[1,0].set_ylabel('Counts (a.u.)', fontsize = 12) # Y label
+    axs[2,1].set_xlabel('Tilt Angle (deg)', fontsize = 12) # X label
+
+    if not title is None:
+        axs[0,1].set_title(title,fontsize=13)
         
     if saveFigures:
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
@@ -1305,12 +1395,124 @@ def draw_tilt_spacial_corr(C, uniname, saveFigures, n_bins = 100):
     plt.show()
 
 
+def quantify_tilt_domain(sc,scnorm):
+    
+    if_crosszero = np.sum(np.abs(np.diff(np.sign(sc+0.03),axis=1)),axis=1)>1
+    
+    #thr = 0.015
+    #sc[np.abs(sc)>thr] = (np.sqrt(np.abs(sc))*np.sign(sc))[np.abs(sc)>thr]
+    
+    fig,ax = plt.subplots()
+    plt.plot(list(range(9)),sc[0,:,0],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(9)),sc[1,:,0],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(9)),sc[2,:,0],linewidth=1.5,label='axis 2')
+    plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
+    plt.title("Along axis 0",fontsize=15)
+    ax.set_ylim([-1,1])
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Distance (unit cell)', fontsize=14)
+    plt.ylabel('Spatial correlation (a.u.)', fontsize=14)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    fig,ax = plt.subplots()
+    plt.plot(list(range(9)),sc[0,:,1],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(9)),sc[1,:,1],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(9)),sc[2,:,1],linewidth=1.5,label='axis 2')
+    plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
+    plt.title("Along axis 1",fontsize=15)
+    ax.set_ylim([-1,1])
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Distance (unit cell)', fontsize=14)
+    plt.ylabel('Spatial correlation (a.u.)', fontsize=14)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    fig,ax = plt.subplots()
+    plt.plot(list(range(9)),sc[0,:,2],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(9)),sc[1,:,2],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(9)),sc[2,:,2],linewidth=1.5,label='axis 2')
+    plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
+    plt.title("Along axis 2",fontsize=15)
+    ax.set_ylim([-1,1])
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Distance (unit cell)', fontsize=14)
+    plt.ylabel('Spatial correlation (a.u.)', fontsize=14)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    from scipy.optimize import curve_fit
+    def model_func1(x, a, k1):
+        return a * np.exp(-k1*x)
+    
+    pop_warning = []
+    scabs = np.abs(scnorm)
+    scdecay = np.empty((3,3))
+    for i in range(3):
+        for j in range(3):
+            tc = scabs[i,:,j]
+            p0 = (0.90,5) # starting search coeffs
+            opt, pcov = curve_fit(model_func1, np.array(list(range(sc.shape[1]))), tc, p0)
+            a, k= opt
+            if a < 0.85 or a > 1.05:
+                pop_warning.append(a)
+                
+            scdecay[i,j] = (1/k)
+    
+    if pop_warning:
+        print(f"!Tilt Spatial Corr: fitting of devay length may be wrong, a value(s): {pop_warning}")
+    
+    return scdecay
+
+
+def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
+    from matplotlib.animation import FuncAnimation, PillowWriter
+    from matplotlib.colors import LightSource
+    
+    timeline1 = np.array(list(range(frs[-1]+frs[0])))*tstep-frs[0]*tstep
+    
+    x1, x2, x3 = np.indices((ss+1,ss+1,ss+1))
+    grids = np.zeros((ss,ss,ss),dtype="bool")
+    selind = list(set(list(np.where(bin_indices[2,:]==ss)[0])+list(np.where(bin_indices[0,:]==ss)[0])+list(np.where(bin_indices[1,:]==1)[0])))
+    sel = bin_indices[:,selind]
+    for i in range(len(selind)):
+        grids[sel[:,i][0]-1,sel[:,i][1]-1,sel[:,i][2]-1] = True
+    
+    cmval = np.empty((cfeat.shape[0],ss,ss,ss,4))
+    for j in range(cfeat.shape[1]):
+        cmval[:,bin_indices[0,j]-1,bin_indices[1,j]-1,bin_indices[2,j]-1,:] = cfeat[:,j,:]
+    
+    def init():
+        ls = LightSource(azdeg=80)
+        return fig,
+
+    def animate(i):
+        ax.voxels(x1,x2,x3,grids,facecolors=cmval[i,:])
+        timelabel.set_text(f"{round(timeline1[i],1)} ps")
+        return fig,
+
+    fig=plt.figure()
+    ax = plt.axes(projection='3d')
+    timelabel = ax.text2D(0.85, 0.10, f"{round(timeline1[0],1)} ps", ha='center', va='center', fontsize=14, color="k", transform=ax.transAxes)
+    ax.set_facecolor("grey")
+    ax.axis('off')
+    ax.set_aspect('auto')
+    #ax.set_axis_off()
+
+    anim = FuncAnimation(fig, animate, init_func=init, frames=frs, interval=200)
+    writer = PillowWriter(fps=15)
+    #anim.save(f"{figname}.gif", writer=writer)
+    anim.save("link-anim.gif", writer=writer)
+    plt.show()
+
+
 def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, smoother=True):
     
     fig_name = f"traj_tilt_domain_time_{uniname}.png"
     
     time_window = 5 # picosecond
     sgw = round(time_window/timestep)
+    if sgw<5: sgw = 5
     if sgw%2==0: sgw+=1
     
 # =============================================================================
@@ -1630,7 +1832,7 @@ def orientation_density_3D_sphere(cnsn,moltype,SaveFigures,uniname,title=None):
     plt.show()
     
 
-def orientation_density(cnsn,SaveFigures,uniname,title=None):
+def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=False):
     
     thetas=[] # List to collect data for later histogramming
     phis=[]
@@ -1655,8 +1857,30 @@ def orientation_density(cnsn,SaveFigures,uniname,title=None):
     w, h = figaspect(1/1.2)
     fig, ax = plt.subplots(figsize=(w,h))
 
-    plt.hexbin(phis,thetas,gridsize=46,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
+    plt.hexbin(phis,thetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
     plt.title(title, fontsize = 16)
+    
+    if miller_mask:
+        mil_111 = np.array([[1,1,1],[-1,1,1],[1,-1,1],[1,1,-1],[1,-1,-1],[-1,-1,1],[-1,1,-1],[-1,-1,-1]])
+        mil_100 = np.array([[1,0,0],[0,1,0],[-1,0,0],[0,-1,0],[-0.99,-0.01,0]])
+        
+        mil111thetas=[] # List to collect data for later histogramming
+        mil111phis=[]
+        for frame in mil_111[:,:]:
+            miltheta,milphi = spherical_coordinates(frame) # Values used for ORIENTATION 
+            mil111thetas.append(miltheta) #append this data point to lists
+            mil111phis.append(milphi)
+        mil100thetas=[] # List to collect data for later histogramming
+        mil100phis=[]
+        for frame in mil_100[:,:]:
+            miltheta,milphi = spherical_coordinates(frame) # Values used for ORIENTATION 
+            mil100thetas.append(miltheta) #append this data point to lists
+            mil100phis.append(milphi)
+        ax.scatter(mil111phis,mil111thetas,label='(111)',s=10,color='lime')
+        ax.scatter(mil100phis,mil100thetas,label='(100)',s=10,color='gold')
+        legend = ax.legend(prop={'size': 12},frameon = True, loc="upper right")
+        legend.get_frame().set_alpha(0.7)
+    
     #cbar = plt.colorbar()
     #cbar.set_ticks([])
     pi=np.pi
@@ -1706,10 +1930,10 @@ def orientation_density(cnsn,SaveFigures,uniname,title=None):
     
     plt.show()
     if (SaveFigures):
-        fig.savefig("MO_MA_orientation_density_Oh_symm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig(f"MO_{moltype}_orientation_density_Oh_symm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
 
-def orientation_density_2pan(cnsn,nnsn,SaveFigures,uniname,title=None):
+def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,miller_mask=False):
     
     thetas=[] # List to collect data for later histogramming
     phis=[]
@@ -1757,7 +1981,31 @@ def orientation_density_2pan(cnsn,nnsn,SaveFigures,uniname,title=None):
 
     axs[0].hexbin(phis,thetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
     axs[1].hexbin(nnphis,nnthetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r)
-    #plt.title(title, fontsize = 16)
+    
+    if miller_mask:
+        mil_111 = np.array([[1,1,1],[-1,1,1],[1,-1,1],[1,1,-1],[1,-1,-1],[-1,-1,1],[-1,1,-1],[-1,-1,-1]])
+        mil_100 = np.array([[1,0,0],[0,1,0],[-1,0,0],[0,-1,0],[-0.99,-0.01,0]])
+        
+        mil111thetas=[] # List to collect data for later histogramming
+        mil111phis=[]
+        for frame in mil_111[:,:]:
+            miltheta,milphi = spherical_coordinates(frame) # Values used for ORIENTATION 
+            mil111thetas.append(miltheta) #append this data point to lists
+            mil111phis.append(milphi)
+        mil100thetas=[] # List to collect data for later histogramming
+        mil100phis=[]
+        for frame in mil_100[:,:]:
+            miltheta,milphi = spherical_coordinates(frame) # Values used for ORIENTATION 
+            mil100thetas.append(miltheta) #append this data point to lists
+            mil100phis.append(milphi)
+        axs[0].scatter(mil111phis,mil111thetas,label='(111)',s=10,color='lime')
+        axs[1].scatter(mil111phis,mil111thetas,s=10,color='lime')
+        axs[0].scatter(mil100phis,mil100thetas,label='(100)',s=10,color='gold')
+        axs[1].scatter(mil100phis,mil100thetas,s=10,color='gold')
+        legend = axs[0].legend(prop={'size': 12},frameon = True, loc="upper right")
+        legend.get_frame().set_alpha(0.7)
+    
+    axs[0].set_title(title, fontsize = 16)
     #cbar = plt.colorbar()
     #cbar.set_ticks([])
     pi=np.pi
@@ -1779,7 +2027,7 @@ def orientation_density_2pan(cnsn,nnsn,SaveFigures,uniname,title=None):
     
     plt.show()
     if (SaveFigures):
-        fig.savefig("MO_FA_orientation_density_nosymm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig(f"MO_{moltype}_orientation_density_nosymm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
     
     w, h = figaspect(2/1.2)
@@ -1812,7 +2060,7 @@ def orientation_density_2pan(cnsn,nnsn,SaveFigures,uniname,title=None):
 
     plt.show()
     if (SaveFigures):
-        fig.savefig("MO_FA_orientation_density_Oh_symm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
+        fig.savefig(f"MO_{moltype}_orientation_density_Oh_symm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
 
 
