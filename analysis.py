@@ -230,7 +230,7 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoot
     
     assert dm.shape[0] == len(steps)
     if dm.ndim == 3:
-        La, Lb, Lc = np.mean(dm[:,:,0],axis=1), np.mean(dm[:,:,1],axis=1), np.mean(dm[:,:,2],axis=1)
+        La, Lb, Lc = np.nanmean(dm[:,:,0],axis=1), np.nanmean(dm[:,:,1],axis=1), np.nanmean(dm[:,:,2],axis=1)
         
     elif dm.ndim == 2:
         La, Lb, Lc = dm[:,0], dm[:,1], dm[:,2]
@@ -294,23 +294,25 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoot
     plt.show()
 
 
-def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = False, x_lims = None, y_lims = None):
+def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0, x_lims = None, y_lims = None):
     
     fig_name = f"lattice_time_{uniname}.png"
     
     assert dm.shape[0] == len(steps)
     if dm.ndim == 3:
-        La, Lb, Lc = np.mean(dm[:,:,0],axis=1), np.mean(dm[:,:,1],axis=1), np.mean(dm[:,:,2],axis=1)   
+        La, Lb, Lc = np.nanmean(dm[:,:,0],axis=1), np.nanmean(dm[:,:,1],axis=1), np.nanmean(dm[:,:,2],axis=1)   
     elif dm.ndim == 2:
         La, Lb, Lc = dm[:,0], dm[:,1], dm[:,2]
     
-    if smoother:
-        Nwindows = round(dm.shape[0]*0.15)
-        if Nwindows%2 == 0:
-            Nwindows+=1
-        La = savitzky_golay(La,window_size=Nwindows)
-        Lb = savitzky_golay(Lb,window_size=Nwindows)
-        Lc = savitzky_golay(Lc,window_size=Nwindows)
+    if smoother != 0:
+        ts = steps[1] - steps[0]
+        time_window = smoother # picosecond
+        sgw = round(time_window/ts)
+        if sgw<5: sgw = 5
+        if sgw%2==0: sgw+=1
+        La = savitzky_golay(La,window_size=sgw)
+        Lb = savitzky_golay(Lb,window_size=sgw)
+        Lc = savitzky_golay(Lc,window_size=sgw)
     
     w, h = figaspect(0.8/1.45)
     plt.subplots(figsize=(w,h))
@@ -340,7 +342,7 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = F
     return (steps,La,Lb,Lc)
 
 
-def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y_lim = None):
+def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim = None):
     
     fig_name = f"traj_tilt_time_{uniname}.png"
     
@@ -349,7 +351,7 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y
     
     Tline = np.empty((0,3))
 
-    aw = 5
+    aw = 15
     
     for i in range(T.shape[0]-aw+1):
         temp = T[list(range(i,i+aw)),:,:]
@@ -357,12 +359,15 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = False, y
         fitted = np.array(compute_tilt_density(temp)).reshape((1,3))
         Tline = np.concatenate((Tline,fitted),axis=0)
     
-    sgs = round(len(steps)/9)
-    if sgs%2==0: sgs+=1
-    if smoother:
-        Ta = savitzky_golay(Tline[:,0],window_size=sgs)
-        Tb = savitzky_golay(Tline[:,1],window_size=sgs)
-        Tc = savitzky_golay(Tline[:,2],window_size=sgs)
+    ts = steps[1] - steps[0]
+    time_window = smoother # picosecond
+    sgw = round(time_window/ts)
+    if sgw<5: sgw = 5
+    if sgw%2==0: sgw+=1
+    if smoother != 0:
+        Ta = savitzky_golay(Tline[:,0],window_size=sgw)
+        Tb = savitzky_golay(Tline[:,1],window_size=sgw)
+        Tc = savitzky_golay(Tline[:,2],window_size=sgw)
     else:
         Ta = Tline[:,0]
         Tb = Tline[:,1]
@@ -522,7 +527,9 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
         Mu = []
         Std = []
         for i in range(4):
-            mu, std = norm.fit(D[:,i])
+            dfil = D[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
             axs[i].text(0.872, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i].transAxes)
@@ -623,6 +630,9 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, ti
 
 
 def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, title = None):
+    """ 
+    Isolate tilting pattern wrt. the connectivity type.  
+    """
     
     fig_name=f"traj_tilt_density_{uniname}.png"
     
@@ -695,6 +705,9 @@ def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n
 
 
 def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins = 100, symm_n_fold = 4):
+    """ 
+    Isolate tilting pattern wrt. the local halide configuration.  
+    """
     
     fig_name=f"tilt_octatype_density_{uniname}.png"
     
@@ -792,6 +805,10 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
 
 
 def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
+    """ 
+    Isolate distortion mode wrt. the local halide configuration.  
+    """
+    
     fig_name=f"dist_octatype_density_{uniname}.png"
     
     typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
@@ -821,7 +838,9 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
         Mu = []
         Std = []
         for i in range(4):
-            mu, std = norm.fit(D[:,i])
+            dfil = D[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
             axs[i].text(0.882, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10.5, verticalalignment='center', transform=axs[i].transAxes)
@@ -831,7 +850,7 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
         for ax in axs.flat:
             ax.tick_params(axis='both', which='major', labelsize=14)
             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel('Distortion ($\AA$)', fontsize = 15) # X label
+            ax.set_xlabel('Distortion', fontsize = 15) # X label
             ax.set_xlim(xrange)
             ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
             ax.set_yticks([])
@@ -878,7 +897,7 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
     plt.legend(prop={'size': 12})
     
     ax.tick_params(axis='both', which='major', labelsize=14)
-    ax.set_ylabel(r'Distortion ($\AA$)', fontsize = 15) # Y label
+    ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
     ax.set_xlabel('Br content', fontsize = 15) # X label
     ax.set_xticks(plotx)
     ax.set_xticklabels(plotxlab)
@@ -892,6 +911,9 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
 
 
 def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 100, symm_n_fold = 4):
+    """ 
+    Isolate tilting pattern wrt. the local halide concentration.  
+    """
     
     fig_name=f"tilt_halideconc_density_{uniname}.png"
     
@@ -976,6 +998,10 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
 
 
 def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
+    """ 
+    Isolate distortion mode wrt. the local halide concentration.  
+    """
+    
     fig_name=f"dist_halideconc_density_{uniname}.png"
     
     Dgauss = np.empty((0,4))
@@ -997,7 +1023,9 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
         Mu = []
         Std = []
         for i in range(4):
-            mu, std = norm.fit(D[:,i])
+            dfil = D[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
             axs[i].text(0.882, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10.5, verticalalignment='center', transform=axs[i].transAxes)
@@ -1007,7 +1035,7 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
         for ax in axs.flat:
             ax.tick_params(axis='both', which='major', labelsize=14)
             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel('Distortion ($\AA$)', fontsize = 15) # X label
+            ax.set_xlabel('Distortion', fontsize = 15) # X label
             ax.set_xlim(xrange)
             ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
             ax.set_yticks([])
@@ -1054,7 +1082,7 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
     plt.legend(prop={'size': 12})
     
     ax.tick_params(axis='both', which='major', labelsize=14)
-    ax.set_ylabel(r'Distortion ($\AA$)', fontsize = 15) # Y label
+    ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
     ax.set_xlabel('Br content', fontsize = 15) # X label
 
     ax.set_ylim(bottom=0)
@@ -1116,7 +1144,7 @@ def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't
         plt.xlabel("Temperature (K)")
     elif xaxis_type == 't':
         plt.xlabel("Time (ps)")
-    plt.ylabel("Spacial correlation (a.u.)")
+    plt.ylabel("Spatial correlation (a.u.)")
     
     if saveFigures:
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
@@ -1124,6 +1152,9 @@ def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't
 
 
 def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
+    """ 
+    Generate the Glazer plot. 
+    """
     
     fig_name=f"traj_tilt_corr_density_{uniname}.png"
     
@@ -1212,6 +1243,52 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
     return por
 
 
+def draw_tilt_coaxial(T, uniname, saveFigures, n_bins = 71, title = None):
+    
+    fig_name1=f"traj_tilt_coaxial_xy_{uniname}.png"
+    fig_name2=f"traj_tilt_coaxial_xz_{uniname}.png"
+    fig_name3=f"traj_tilt_coaxial_yz_{uniname}.png"
+    
+    cxy = T[:,:,[0,1]].reshape(-1,2)
+    cxz = T[:,:,[0,2]].reshape(-1,2)
+    cyz = T[:,:,[1,2]].reshape(-1,2)
+    a_bins = np.linspace(-20, 20, n_bins)
+    b_bins = np.linspace(-20, 20, n_bins)
+    
+    fig, ax = plt.subplots()
+    plt.hist2d(cxy[:,0], cxy[:,1], bins =[a_bins, b_bins])
+    ax.tick_params(axis='both', which='major', labelsize=13)
+    plt.xlabel('X-tilt (deg)', fontsize=14)
+    plt.ylabel('Y-tilt (deg)', fontsize=14)
+    if not title is None:
+        ax.set_title(title,fontsize=16)
+    if saveFigures:
+        plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    fig, ax = plt.subplots()
+    plt.hist2d(cxz[:,0], cxz[:,1], bins =[a_bins, b_bins])
+    ax.tick_params(axis='both', which='major', labelsize=13)
+    plt.xlabel('X-tilt (deg)', fontsize=14)
+    plt.ylabel('Z-tilt (deg)', fontsize=14)
+    if not title is None:
+        ax.set_title(title,fontsize=16)
+    if saveFigures:
+        plt.savefig(fig_name2, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    fig, ax = plt.subplots()
+    plt.hist2d(cyz[:,0], cyz[:,1], bins =[a_bins, b_bins])
+    ax.tick_params(axis='both', which='major', labelsize=13)
+    plt.xlabel('Y-tilt (deg)', fontsize=14)
+    plt.ylabel('Z-tilt (deg)', fontsize=14)
+    if not title is None:
+        ax.set_title(title,fontsize=16)
+    if saveFigures:
+        plt.savefig(fig_name3, dpi=350,bbox_inches='tight')
+    plt.show()
+
+
 def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, title = None):
     
     fig_name=f"traj_tilt_corr_density_full_{uniname}.png"
@@ -1297,7 +1374,7 @@ def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, t
     return por
 
 
-def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother, n_bins = 50):
+def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother = 0, n_bins = 50):
     
     fig_name = f"traj_tilt_corr_time_{uniname}.png"
     
@@ -1328,12 +1405,15 @@ def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother, 
         
         Cline = np.concatenate((Cline,np.array(por).reshape(1,3)),axis=0)
     
-    sgs = round(len(steps)/9)
-    if sgs%2==0: sgs+=1
-    if smoother:
-        Ca = savitzky_golay(Cline[:,0],window_size=sgs)
-        Cb = savitzky_golay(Cline[:,1],window_size=sgs)
-        Cc = savitzky_golay(Cline[:,2],window_size=sgs)
+    ts = steps[1] - steps[0]
+    time_window = smoother # picosecond
+    sgw = round(time_window/ts)
+    if sgw<5: sgw = 5
+    if sgw%2==0: sgw+=1
+    if smoother != 0:
+        Ca = savitzky_golay(Cline[:,0],window_size=sgw)
+        Cb = savitzky_golay(Cline[:,1],window_size=sgw)
+        Cc = savitzky_golay(Cline[:,2],window_size=sgw)
     else:
         Ca = Cline[:,0]
         Cb = Cline[:,1]
@@ -1347,14 +1427,12 @@ def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother, 
     plt.plot(steps[:(len(steps)-aw+1)],Cb,label = 'b',linewidth=2.5)
     plt.plot(steps[:(len(steps)-aw+1)],Cc,label = 'c',linewidth=2.5)    
 
-    #ax.set_ylim([-45,45])
-    #ax.set_yticks([-45,-30,-15,0,15,30,45])
+    ax.set_ylim([-1,1])
+    plt.axhline(y=0,linestyle='dashed',color='k',linewidth=1)
     
     ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel('time (ps)', fontsize=14)
     plt.ylabel('Tilting correlation polarity (a.u.)', fontsize=14)
     plt.xlabel('Time (ps)', fontsize=14)
-    plt.ylabel('Tilting (deg)', fontsize=14)
     plt.legend(prop={'size': 13})
     
     if saveFigures:
@@ -1364,9 +1442,9 @@ def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother, 
     return (steps[:(len(steps)-aw+1)],Ca,Cb,Cc)
 
 
-def draw_tilt_spacial_corr(C, uniname, saveFigures, n_bins = 100):
+def draw_tilt_spatial_corr(C, uniname, saveFigures, n_bins = 100):
     
-    fig_name = f"traj_tilt_spacial_corr_{uniname}.png"
+    fig_name = f"traj_tilt_spatial_corr_{uniname}.png"
     
     num_lens = C.shape[0]
     
@@ -1395,17 +1473,93 @@ def draw_tilt_spacial_corr(C, uniname, saveFigures, n_bins = 100):
     plt.show()
 
 
+def Tilt_correlation(T,MDTimestep,smoother=0):
+    """ 
+    Compute time-correlation of tilting.  
+    """
+    
+    if T.shape[0] > 1500:
+        sh=1000
+    else:
+        sh=round(T.shape[0]/2) 
+    correlation=np.zeros((sh,T.shape[1],3))
+    
+    if smoother != 0:
+        time_window = smoother # picosecond
+        sgw = round(time_window/MDTimestep)
+        if sgw<5: sgw = 5
+        if sgw%2==0: sgw+=1
+        
+        Ts = T.copy()
+        for i in range(T.shape[1]):
+            for j in range(3):
+                Ts[:,i,j] = savitzky_golay(Ts[:,i,j],window_size=sgw)
+        
+        T = Ts.copy()
+
+    for i in range(T.shape[0]-sh): 
+        for dt in range(sh): 
+            v1 = T[i,:,:]
+            v2 = T[i+dt,:,:]
+            temp = np.sign(v1)*np.sign(v2)*np.sqrt(np.multiply(np.abs(v1),np.abs(v2)))
+            temp[np.isnan(temp)] = 0
+            correlation[dt,:]=correlation[dt,:]+temp
+    
+    correlation = np.mean(correlation/(T.shape[0]-sh),axis=1)
+    
+    x = np.array(range(sh))*MDTimestep
+    x = x.reshape(1,x.shape[0])
+    
+    return x, correlation
+
+
 def quantify_tilt_domain(sc,scnorm):
+    """ 
+    Compute spatial coorelation of tilting.  
+    """
     
     if_crosszero = np.sum(np.abs(np.diff(np.sign(sc+0.03),axis=1)),axis=1)>1
+    
+    nns = sc.shape[1]
     
     #thr = 0.015
     #sc[np.abs(sc)>thr] = (np.sqrt(np.abs(sc))*np.sign(sc))[np.abs(sc)>thr]
     
+    from scipy.optimize import curve_fit
+    def model_func(x, k1, k2):
+        return 0.9 * np.exp(-k1*x) + 0.1 * np.exp(-k2*x)
+        #return a * np.exp(-k*x) + b
+    
+    pop_warning = []
+    scdecay = np.empty((3,3))
+    for i in range(3):
+        for j in range(3):
+            tc = np.abs(scnorm[i,:,j])
+            #p0 = (5) # starting search coeffs
+            #opt, pcov = curve_fit(model_func1, np.array(list(range(sc.shape[1]))), tc, p0)
+            #k= opt
+            
+            p0 = (5,0.1) # starting search coeffs
+            opt, pcov = curve_fit(model_func, np.array(list(range(sc.shape[1]))), tc, p0)
+            k1 ,k2= opt
+            
+            #print(k1 ,k2)
+            k=k1
+            y2 = model_func(np.array(list(range(sc.shape[1]))), k1 ,k2)
+                
+            scdecay[i,j] = (1/k)
+            
+            #fig,ax = plt.subplots()
+            #plt.plot(list(range(nns)),sc[i,:,j],linewidth=1.5)
+            #plt.plot(list(range(nns)),y2,linewidth=1.5)
+    
+    if pop_warning:
+        print(f"!Tilt Spatial Corr: fitting of decay length may be wrong, a value(s): {pop_warning}")
+    
     fig,ax = plt.subplots()
-    plt.plot(list(range(9)),sc[0,:,0],linewidth=1.5,label='axis 0')
-    plt.plot(list(range(9)),sc[1,:,0],linewidth=1.5,label='axis 1')
-    plt.plot(list(range(9)),sc[2,:,0],linewidth=1.5,label='axis 2')
+    plt.plot(list(range(nns)),sc[0,:,0],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(nns)),sc[1,:,0],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(nns)),sc[2,:,0],linewidth=1.5,label='axis 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
     plt.title("Along axis 0",fontsize=15)
     ax.set_ylim([-1,1])
@@ -1416,9 +1570,9 @@ def quantify_tilt_domain(sc,scnorm):
     legend.get_frame().set_alpha(0.7)
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(9)),sc[0,:,1],linewidth=1.5,label='axis 0')
-    plt.plot(list(range(9)),sc[1,:,1],linewidth=1.5,label='axis 1')
-    plt.plot(list(range(9)),sc[2,:,1],linewidth=1.5,label='axis 2')
+    plt.plot(list(range(nns)),sc[0,:,1],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(nns)),sc[1,:,1],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(nns)),sc[2,:,1],linewidth=1.5,label='axis 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
     plt.title("Along axis 1",fontsize=15)
     ax.set_ylim([-1,1])
@@ -1429,9 +1583,9 @@ def quantify_tilt_domain(sc,scnorm):
     legend.get_frame().set_alpha(0.7)
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(9)),sc[0,:,2],linewidth=1.5,label='axis 0')
-    plt.plot(list(range(9)),sc[1,:,2],linewidth=1.5,label='axis 1')
-    plt.plot(list(range(9)),sc[2,:,2],linewidth=1.5,label='axis 2')
+    plt.plot(list(range(nns)),sc[0,:,2],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(nns)),sc[1,:,2],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(nns)),sc[2,:,2],linewidth=1.5,label='axis 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
     plt.title("Along axis 2",fontsize=15)
     ax.set_ylim([-1,1])
@@ -1441,31 +1595,15 @@ def quantify_tilt_domain(sc,scnorm):
     legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
     legend.get_frame().set_alpha(0.7)
     
-    from scipy.optimize import curve_fit
-    def model_func1(x, a, k1):
-        return a * np.exp(-k1*x)
     
-    pop_warning = []
-    scabs = np.abs(scnorm)
-    scdecay = np.empty((3,3))
-    for i in range(3):
-        for j in range(3):
-            tc = scabs[i,:,j]
-            p0 = (0.90,5) # starting search coeffs
-            opt, pcov = curve_fit(model_func1, np.array(list(range(sc.shape[1]))), tc, p0)
-            a, k= opt
-            if a < 0.85 or a > 1.05:
-                pop_warning.append(a)
-                
-            scdecay[i,j] = (1/k)
-    
-    if pop_warning:
-        print(f"!Tilt Spatial Corr: fitting of devay length may be wrong, a value(s): {pop_warning}")
     
     return scdecay
 
 
 def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
+    """ 
+    Visualise tilting in 3D animation.  
+    """
     from matplotlib.animation import FuncAnimation, PillowWriter
     from matplotlib.colors import LightSource
     
@@ -1501,16 +1639,19 @@ def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
 
     anim = FuncAnimation(fig, animate, init_func=init, frames=frs, interval=200)
     writer = PillowWriter(fps=15)
-    #anim.save(f"{figname}.gif", writer=writer)
-    anim.save("link-anim.gif", writer=writer)
+    anim.save(f"{figname}.gif", writer=writer)
+    #anim.save("link-anim.gif", writer=writer)
     plt.show()
 
 
-def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, smoother=True):
+def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, smoother=5):
+    """ 
+    Compute tilt domain lifetime.  
+    """
     
     fig_name = f"traj_tilt_domain_time_{uniname}.png"
     
-    time_window = 5 # picosecond
+    time_window = smoother # picosecond
     sgw = round(time_window/timestep)
     if sgw<5: sgw = 5
     if sgw%2==0: sgw+=1
@@ -1528,7 +1669,7 @@ def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, 
     for i in range(6):
         for j in range(Corr.shape[1]):
             tcline = Corr[:,j,i]
-            if smoother: 
+            if smoother != 0: 
                 tcline = savitzky_golay(tcline,window_size=sgw)
             crosszero = np.diff(np.sign(tcline+tol))
             neg2pos = np.where(crosszero==2)[0]
@@ -1831,7 +1972,21 @@ def orientation_density_3D_sphere(cnsn,moltype,SaveFigures,uniname,title=None):
     #anim.save("link-anim.gif", writer=writer)
     plt.show()
     
+    # also save a snapshot
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.grid(True)
+    ax.plot_surface(xmesh, ymesh, zmesh, alpha=0.8, cstride=1, rstride=1, facecolors=cm.plasma(myheatmap))
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax.set_xlim([-1.05,1.05])
+    ax.set_ylim([-1.05,1.05])
+    ax.set_zlim([-1.05,1.05])
+    ax.view_init(elev=20, azim=0)
+    fig.savefig(f"MO_{moltype}_3D_sphere_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
+    
 def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=False):
     
     thetas=[] # List to collect data for later histogramming
@@ -2063,8 +2218,7 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
         fig.savefig(f"MO_{moltype}_orientation_density_Oh_symm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
 
-
-def fit_exp_decay(x,y):
+def fit_exp_decay(x,y,allow_redo=True):
     from scipy.optimize import curve_fit
     def model_func(x, a, k1, k2):
         return a * np.exp(-k1*x) + (1-a) * np.exp(-k2*x)
@@ -2080,14 +2234,14 @@ def fit_exp_decay(x,y):
     xc = x[:round(x.shape[0]*fitrange)]
     yc = y[:round(y.shape[0]*fitrange)]
     
-    p0 = (0.90,5,0.1) # starting search coeffs
+    p0 = (0.90,20,0.5) # starting search coeffs
     opt, pcov = curve_fit(model_func, xc, yc, p0)
     a, k1 ,k2= opt
 
     y2 = model_func(x, a, k1 ,k2)
     fig, ax = plt.subplots()
     #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
-    ax.plot(x, y2, color='r',label='fitted',linewidth=4)
+    ax.plot(x, y2, color='r',label='fitted',linewidth=3)
     ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel('time (ps)', fontsize=14)
@@ -2109,7 +2263,7 @@ def fit_exp_decay(x,y):
     else:
         k = k1
     
-    if redo:
+    if redo and allow_redo:
         p0 = (0.90,5) # starting search coeffs
         opt, pcov = curve_fit(model_func1, xc, yc, p0)
         a, k= opt
@@ -2129,7 +2283,149 @@ def fit_exp_decay(x,y):
     return 1/k
 
 
-def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, n_bins = 50):
+def fit_exp_decay_both(x,y):
+    from scipy.optimize import curve_fit
+    def model_func(x, a, k1, k2):
+        return a * np.exp(-k1*x) + (1-a) * np.exp(-k2*x)
+        #return a * np.exp(-k*x) + b
+        
+    x = np.squeeze(x)
+    y = np.squeeze(y)/np.amax(y)
+    
+    fitrange = 1
+    xc = x[:round(x.shape[0]*fitrange)]
+    yc = y[:round(y.shape[0]*fitrange)]
+    
+    p0 = (0.90,20,0.5) # starting search coeffs
+    opt, pcov = curve_fit(model_func, xc, yc, p0)
+    a, k1 ,k2= opt
+
+    y2 = model_func(x, a, k1 ,k2)
+    fig, ax = plt.subplots()
+    #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
+    ax.plot(x, y2, color='r',label='fitted',linewidth=4)
+    ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('time (ps)', fontsize=14)
+    plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
+    plt.legend(prop={'size': 12})
+    plt.title('Two-component fitting', fontsize=14)
+    plt.show()
+        
+    return (1/k1,1/k2,a)
+
+
+def fit_exp_decay_fixed(x,y,aconst = 0.9):
+    from scipy.optimize import curve_fit
+    def model_func(x, k1, k2):
+        return aconst * np.exp(-k1*x) + (1-aconst) * np.exp(-k2*x)
+        #return a * np.exp(-k*x) + b
+        
+    x = np.squeeze(x)
+    y = np.squeeze(y)/np.amax(y)
+    
+    fitrange = 1
+    xc = x[:round(x.shape[0]*fitrange)]
+    yc = y[:round(y.shape[0]*fitrange)]
+    
+    p0 = (5,0.1) # starting search coeffs
+    opt, pcov = curve_fit(model_func, xc, yc, p0)
+    k1 ,k2= opt
+
+    y2 = model_func(x, k1 ,k2)
+    fig, ax = plt.subplots()
+    #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
+    ax.plot(x, y2, color='r',label='fitted',linewidth=4)
+    ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('time (ps)', fontsize=14)
+    plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
+    plt.legend(prop={'size': 12})
+    plt.title('Two-component fitting', fontsize=14)
+    plt.show()
+    
+    if k1 < k2:
+        raise ValueError('The fitted time constant k1 is smaller than k2. ')
+    
+    return 1/k1
+
+
+
+def fit_exp_decay_single(x,y):
+    from scipy.optimize import curve_fit
+    def model_func1(x, a, k1):
+        return a * np.exp(-k1*x)
+        #return a * np.exp(-k*x) + b
+        
+    x = np.squeeze(x)
+    y = np.squeeze(y)/np.amax(y)
+    
+    fitrange = 1
+    xc = x[:round(x.shape[0]*fitrange)]
+    yc = y[:round(y.shape[0]*fitrange)]
+    
+    p0 = (0.90,5) # starting search coeffs
+    opt, pcov = curve_fit(model_func1, xc, yc, p0)
+    a, k= opt
+
+    y2 = model_func1(x, a, k)
+    fig, ax = plt.subplots()
+    #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
+    ax.plot(x, y2, color='r',label='fitted',linewidth=4)
+    ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('time (ps)', fontsize=14)
+    plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
+    plt.legend(prop={'size': 12})
+    plt.title('One-component fitting', fontsize=14)
+    plt.show()
+        
+    return 1/k
+
+
+def fit_damped_oscillator(x,y):
+    from scipy.optimize import curve_fit
+    def model_func1(x, omega, gamma):
+        tau = 2/gamma
+        omega_e = np.sqrt(omega**2-gamma**2/4)
+        return np.exp(-x/tau) * (np.cos(omega_e*x)+gamma/(2*omega_e)*np.sin(omega_e*x))
+    
+    def model_func2(x, tau_l, tau_s):
+        return 1/(tau_l-tau_s)*(tau_l*np.exp(-x/tau_l)-tau_s*np.exp(-x/tau_s))
+    
+    
+    x = np.squeeze(x)
+    y = np.squeeze(y)/np.amax(y)
+    
+    fitrange = 1
+    xc = x[:round(x.shape[0]*fitrange)]
+    yc = y[:round(y.shape[0]*fitrange)]
+    
+    p0 = (0.2,0.01) # starting search coeffs
+    opt, pcov = curve_fit(model_func1, xc, yc, p0)
+    omega, gamma= opt
+    
+    p1 = (50,0.5) # starting search coeffs
+    opt, pcov = curve_fit(model_func2, xc, yc, p0)
+    tau_l, tau_s = opt
+
+    y1 = model_func1(x, omega, tau)
+    y2 = model_func2(x, tau_l, tau_s)
+    fig, ax = plt.subplots()
+    #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
+    ax.plot(x, y1, color='r',label='fitted',linewidth=4)
+    ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('time (ps)', fontsize=14)
+    plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
+    plt.legend(prop={'size': 12})
+    plt.title('Damped Oscillator Fitting', fontsize=14)
+    plt.show()
+        
+    return tau
+
+
+def draw_MO_spatial_corr_time(C, steps, uniname, saveFigures, smoother = 0, n_bins = 50):
     
     fig_name = f"traj_MO_time_{uniname}.png"
     
@@ -2152,8 +2448,11 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
         #return sum(np.minimum(hs1,hs2))/(sum(hs1)+sum(hs2)-sum(np.minimum(hs1,hs2)))
         
     plotobj = []
-    tlen = round(C.shape[2]/25)
-    if tlen%2==0: tlen+=1
+    time_window = smoother # picosecond
+    ts = steps[1] - steps[0]
+    sgw = round(time_window/ts)
+    if sgw<5: sgw = 5
+    if sgw%2==0: sgw+=1
     #Cline = np.empty((0,2,3))
     Cline = np.empty((0,4))
 
@@ -2194,15 +2493,15 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
     
     plotobj.append(steps[:(len(steps)-aw+1)])
     for i in range(3):
-        if smoother:
-            temp = savitzky_golay(Cline[:,i],window_size=tlen)
+        if smoother !=0:
+            temp = savitzky_golay(Cline[:,i],window_size=sgw)
         else:
             temp = Cline[:,i]
         plt.plot(steps[:(len(steps)-aw+1)], temp, label = labels[i] ,color =colors[i], linewidth=lwid) 
         plotobj.append(temp)
         
-    if smoother:
-        temp = savitzky_golay(Cline[:,3],window_size=tlen)
+    if smoother !=0 :
+        temp = savitzky_golay(Cline[:,3],window_size=sgw)
     else:
         temp = Cline[:,3]
     plt.plot(steps[:(len(steps)-aw+1)], temp, label = 'CF' ,color ='k',linestyle='dashed', linewidth=lwid) 
@@ -2227,7 +2526,7 @@ def draw_MO_spacial_corr_time(C, steps, uniname, saveFigures, smoother = False, 
     return tuple(plotobj)
 
 
-def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = False, n_bins = 50):
+def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = 0, n_bins = 50):
     
     fig_name = f"traj_MO_order_time_{uniname}.png"
     
@@ -2248,10 +2547,13 @@ def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = False, n_bins 
         val = (sum(np.minimum(y00,y10))/sum(y00)+sum(np.minimum(y01,y11))/sum(y01)+sum(np.minimum(y02,y12))/sum(y02))/3
         return (val-0.5)*2
     
+    ts = steps[1]-steps[0]
+    time_window = smoother # picosecond
+    sgw = round(time_window/ts)
+    if sgw<5: sgw = 5
+    if sgw%2==0: sgw+=1
     plotobj = []
-    tlen = round(C.shape[2]/18)
-    if tlen%2==0: tlen+=1
-    #Cline = np.empty((0,2,3))
+
     Cline = np.empty((0,4))
 
     aw = 11 # careful when tuning this
@@ -2292,15 +2594,15 @@ def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = False, n_bins 
     
     plotobj.append(steps[:(len(steps)-aw+1)])
     for i in range(3):
-        if smoother:
-            temp = savitzky_golay(Cline[:,i],window_size=tlen)
+        if smoother != 0:
+            temp = savitzky_golay(Cline[:,i],window_size=sgw)
         else:
             temp = Cline[:,i]
         plt.plot(steps[:(len(steps)-aw+1)], temp, label = labels[i] ,color =colors[i], linewidth=lwid) 
         plotobj.append(temp)
         
-    if smoother:
-        temp = savitzky_golay(Cline[:,3],window_size=tlen)
+    if smoother != 0:
+        temp = savitzky_golay(Cline[:,3],window_size=sgw)
     else:
         temp = Cline[:,3]
     plt.plot(steps[:(len(steps)-aw+1)], temp, label = 'CF' ,color ='k',linestyle='dashed', linewidth=lwid) 
@@ -2324,9 +2626,9 @@ def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = False, n_bins 
     return tuple(plotobj)
 
 
-def draw_MO_spacial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
+def draw_MO_spatial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
     
-    fig_name = f"traj_MO_spacial_corr_NN12_{uniname}.png"
+    fig_name = f"traj_MO_spatial_corr_NN12_{uniname}.png"
     
     if C.ndim == 3:
         pass
@@ -2370,9 +2672,9 @@ def draw_MO_spacial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
     plt.show()
 
 
-def draw_MO_spacial_corr(C, uniname, saveFigures, n_bins = 50):
+def draw_MO_spatial_corr(C, uniname, saveFigures, n_bins = 50):
     
-    fig_name = f"traj_MO_spacial_corr_{uniname}.png"
+    fig_name = f"traj_MO_spatial_corr_{uniname}.png"
     
     if C.ndim == 3:
         pass
@@ -2411,6 +2713,140 @@ def draw_MO_spacial_corr(C, uniname, saveFigures, n_bins = 50):
     plt.show()
 
 
+def draw_MO_spatial_corr_norm_var(C, uniname, saveFigures, n_bins=30):
+    
+    fig_name = f"traj_MO_spatial_corr_norm_{uniname}.png"
+    
+    assert C.ndim == 4
+    
+    a1 = np.zeros((n_bins,))
+    a1[0] = 1
+    var0 = np.var(a1)
+    
+    m = np.empty((C.shape[0]+1,C.shape[1]))
+    m[0,:] = var0
+    for i in range(C.shape[0]):
+        for j in range(C.shape[1]):
+            temp,_ = np.histogram(C[i][j],bins=n_bins,range=[-1,1])
+            temp = temp/np.sum(temp)
+            m[i+1,j] = np.var(np.power(temp,0.5))
+    m = m/np.amax(m)
+            
+    nns = C.shape[0]+1
+    
+    #thr = 0.015
+    #sc[np.abs(sc)>thr] = (np.sqrt(np.abs(sc))*np.sign(sc))[np.abs(sc)>thr]
+    
+    fig,ax = plt.subplots()
+    plt.plot(list(range(nns)),m[:,0],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(nns)),m[:,1],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(nns)),m[:,2],linewidth=1.5,label='axis 2')
+    #plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
+    ax.set_ylim([0,1])
+    ax.set_xticks(np.arange(C.shape[0]+1))
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Distance (unit cell)', fontsize=14)
+    plt.ylabel('Spatial correlation (a.u.)', fontsize=14)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    
+# =============================================================================
+#     from scipy.optimize import curve_fit
+#     def model_func1(x, a, k1):
+#         return a * np.exp(-k1*x)
+#     
+#     pop_warning = []
+#     scabs = np.abs(m)
+#     scdecay = np.empty((3,))
+#     for i in range(3):
+#         tc = scabs[:,i]
+#         p0 = (0.90,5) # starting search coeffs
+#         opt, pcov = curve_fit(model_func1, np.array(list(range(nns))), tc, p0)
+#         a, k= opt
+#         if a < 0.85 or a > 1.05:
+#             pop_warning.append(a)
+#             
+#         scdecay[i] = (1/k)
+#             
+#     if pop_warning:
+#         print(f"!Tilt Spatial Corr: fitting of decay length may be wrong, a value(s): {pop_warning}")
+# =============================================================================
+    
+    return m
+
+    
+def draw_MO_spatial_corr_norm(C, uniname, saveFigures, n_bins=30):
+    
+    fig_name = f"traj_MO_spatial_corr_norm_{uniname}.png"
+    
+    assert C.ndim == 4
+    
+    a1 = np.zeros((n_bins,))
+    a1[0] = 1
+    var0 = np.var(a1)
+    
+    m = np.empty((C.shape[0]+1,C.shape[1]))
+    m[0,:] = var0
+    for i in range(C.shape[0]):
+        for j in range(C.shape[1]):
+            temp,_ = np.histogram(C[i][j],bins=n_bins,range=[-1,1])
+            temp = temp/np.sum(temp)
+            m[i+1,j] = np.var(np.power(temp,0.5))
+    m = m/np.amax(m)
+            
+    nns = C.shape[0]+1
+    
+    #thr = 0.015
+    #sc[np.abs(sc)>thr] = (np.sqrt(np.abs(sc))*np.sign(sc))[np.abs(sc)>thr]
+    
+    fig,ax = plt.subplots()
+    plt.plot(list(range(nns)),m[:,0],linewidth=1.5,label='axis 0')
+    plt.plot(list(range(nns)),m[:,1],linewidth=1.5,label='axis 1')
+    plt.plot(list(range(nns)),m[:,2],linewidth=1.5,label='axis 2')
+    #plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
+    ax.set_ylim([0,1])
+    ax.set_xticks(np.arange(C.shape[0]+1))
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Distance (unit cell)', fontsize=14)
+    plt.ylabel('Spatial correlation (a.u.)', fontsize=14)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    
+# =============================================================================
+#     from scipy.optimize import curve_fit
+#     def model_func1(x, a, k1):
+#         return a * np.exp(-k1*x)
+#     
+#     pop_warning = []
+#     scabs = np.abs(m)
+#     scdecay = np.empty((3,))
+#     for i in range(3):
+#         tc = scabs[:,i]
+#         p0 = (0.90,5) # starting search coeffs
+#         opt, pcov = curve_fit(model_func1, np.array(list(range(nns))), tc, p0)
+#         a, k= opt
+#         if a < 0.85 or a > 1.05:
+#             pop_warning.append(a)
+#             
+#         scdecay[i] = (1/k)
+#             
+#     if pop_warning:
+#         print(f"!Tilt Spatial Corr: fitting of decay length may be wrong, a value(s): {pop_warning}")
+# =============================================================================
+    
+    return m
+
+
 def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
     
     if rdftype == "CN":
@@ -2441,6 +2877,9 @@ def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
 
 
 def fit_3D_disp_atomwise(disp,readTimestep,uniname,moltype,saveFigures,n_bins=50,title=None):
+    """ 
+    A-site displacement calculation.  
+    """
     from scipy.fft import fft, fftfreq
     fig_name=f"traj_A_vib_center_{moltype}_{uniname}.png"
     
@@ -2580,6 +3019,9 @@ def fit_3D_disp_atomwise(disp,readTimestep,uniname,moltype,saveFigures,n_bins=50
 
 
 def fit_3D_disp_total(dispt,uniname,moltype,saveFigures,n_bins=100,title=None):
+    """ 
+    A-site displacement calculation (total displacement).  
+    """
     
     fig_name=f"traj_A_disp_{moltype}_{uniname}.png"
     histlim = 1.2
@@ -2667,11 +3109,56 @@ def peaks_3D_scatter(peaks, uniname, moltype, saveFigures):
     plt.show()
 
 
+def defect_3D_scatter(peaks, uniname, deftype, saveFigures):
+    from scipy.spatial import distance_matrix as scipydm
+    
+    fig_name=f"traj_defect_3D_{deftype}_{uniname}.png"
+    
+    radial = np.empty((peaks.shape[0],1))
+    for i in range(peaks.shape[0]):
+        #radial[i] = np.linalg.norm(peaks[i,:])
+        radial[i]=np.log10(np.sum(np.reciprocal(np.square(scipydm(peaks[i,:].reshape(1,3),np.delete(peaks,i,axis=0)).T))))
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.scatter(peaks[:,0], peaks[:,1], peaks[:,2], c=radial, s=20 , cmap='YlOrRd')
+    
+    limits = np.array([[0, 1],
+                       [0, 1],
+                       [0, 1]])
+
+    v, e, f = get_cube(limits)
+    ax.plot(*v.T, marker='o', color='k', ls='', markersize=10, alpha=0.5)
+    for i, j in e:
+        ax.plot(*v[[i, j], :].T, color='k', ls='-', lw=2, alpha=0.5)
+    
+    #ax.set_xlabel('X')
+    #ax.set_ylabel('Y')
+    #ax.set_zlabel('Z')
+    tol = 0.0001
+    ax.set_xlim([0-tol,1+tol])
+    ax.set_ylim([0-tol,1+tol])
+    ax.set_zlim([0-tol,1+tol])
+    ax.view_init(30, 65)
+    set_axes_equal(ax)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax._axis3don = False
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    
+    plt.show()
+
+
 def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     
     lwid = 2
     colors = ["C0","C1","C2","C3","C4","C5","C6"]
     xlimmax = min(max(Lobj[0]),max(Tobj[0]),max(Cobj[0]),max(Mobj[0]))*0.9
+    #xlimmax = 40
     
     fig, axs = plt.subplots(nrows=4, ncols=1, sharex=True, sharey=False)
     fig.set_size_inches(6.5,5.5)

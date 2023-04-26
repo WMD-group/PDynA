@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 import time
+from glob import glob
 from ase.atoms import Atoms
 from ase.calculators.lammps import convert
 from pymatgen.util.num import abs_cap
@@ -11,7 +12,42 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from pdyna.structural import get_cart_from_frac, get_frac_from_cart
 
 
+def read_lammps_dir(fdir):
+    filelist = glob(fdir+"*.in")
+    if len(filelist) == 0:
+        raise FileNotFoundError("Can't find any LAMMPS .in file in the directory.")
+    if len(filelist) > 1:
+        raise FileExistsError("There are more than one LAMMPS .in file in the directory.")
+    
+    return read_lammps_settings(filelist[0])
+    
+
+def read_lammps_settings(infile): # internal use 
+    with open(infile,"r") as fp:
+        lines = fp.readlines()
+    tvelo = 0
+    ti = None
+    tf = None
+    tstep = None
+    for line in lines:
+        if line.startswith("velocity"):
+            tvelo = float(line.split()[3])
+        if line.startswith("fix"):
+            ti = float(line.split()[5])
+            tf = float(line.split()[6])
+        if line.startswith("timestep"):
+            tstep = float(line.split()[1])*1000
+    
+    #if tvelo != ti:
+    #    print("!Lammps in file: the thermalization temperature is different from the initial temperature.")
+
+    return {"Ti":ti, "Tf":tf, "tstep":tstep}    
+
+    
 def process_lat(m):
+    """ 
+    Convert lattice matrix to abc and three angles.  
+    """
     
     abc = np.sqrt(np.sum(m**2, axis=1))
     angles = np.zeros(3)
@@ -208,6 +244,7 @@ def read_lammps_dump(filepath):
     Allpos_list = []
     lattice = np.empty((0,6))
     latmat = np.empty((0,3,3))
+    asymb = 0
 
     # avoid references before assignment in case of incorrect file structure
     cell, celldisp = None, None
@@ -247,6 +284,8 @@ def read_lammps_dump(filepath):
             datarows = [lines.popleft() for _ in range(n_atoms)]
             data = np.loadtxt(datarows, dtype=str)
             atomic_symbols, lm, l6, frac_coords, cart_coords = process_lammps_data(data,colnames,cell,celldisp)
+            if asymb == 0:
+                asymb = atomic_symbols
             framenums.append(stepnum)
             
             Allpos_list.append(cart_coords)
@@ -256,20 +295,29 @@ def read_lammps_dump(filepath):
         if lattice.shape[0] > index_end >= 0:
             break
     
-    Allpos = np.array(Allpos_list)
+    if Allpos_list[0].shape != Allpos_list[-1].shape: # the last block is incomplete
+        Allpos = np.array(Allpos_list[:-1])
+        # isolate the first frame which is the initial structure as st0
+        pos0 = Allpos[0,:]
+        cell = latmat[0,:]
+        Allpos = Allpos[1:,:]
+        lattice = lattice[1:-1,:]
+        latmat = latmat[1:-1,:]
+    else:
+        Allpos = np.array(Allpos_list)
+        # isolate the first frame which is the initial structure as st0
+        pos0 = Allpos[0,:]
+        cell = latmat[0,:]
+        Allpos = Allpos[1:,:]
+        lattice = lattice[1:,:]
+        latmat = latmat[1:,:]
     
-    # isolate the first frame which is the initial structure as st0
-    pos0 = Allpos[0,:]
-    cell = latmat[0,:]
+    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
     
-    Allpos = Allpos[1:,:]
-    lattice = lattice[1:,:]
-    latmat = latmat[1:,:]
-    
-    out_atoms = Atoms(symbols=np.array(atomic_symbols),positions=pos0,pbc=[True,True,True],celldisp=celldisp,cell=cell)
+    out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=celldisp,cell=cell)
     st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
     
-    return atomic_symbols, lattice, latmat, Allpos, st0, framenums[-1], framenums[1]-framenums[0]
+    return asymb, lattice, latmat, Allpos, st0, framenums[-1], framenums[1]-framenums[0]
 
 
 def process_lammps_data(
