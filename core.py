@@ -372,57 +372,109 @@ class Trajectory:
         ----------
         
         -- General Parameters
-        read_mod    -- key parameter, 1: static mode, 2: transient mode
+        read_mode   -- key parameter, define the reading mode
+            1: static mode, treats all the frame equally and output equilibrated properties, generally used for constant-T MD.
+            2: transient mode, observes transient properties with respect to changing time or temperature.
         uniname     -- unique user-defined name for this trajectory, will be used in printing and figure saving
-        allow_equil -- take the first x (0 to 1) fraction of the trajectory as equilibration, this part will not be computed
+        allow_equil -- take the first x (0 to 1) fraction of the trajectory as equilibration, this part will not be computed, used for read_mode 1.
+            takes value from 0 to 1, e.g. 0.8 means that only the last 20% of the trajectory will be used for property calculation. default: 0.5
         read_every  -- read only every n steps, default is 0 which the code will decide an appropriate value according to the system size
         
         -- Saving the Outputs
         saveFigures   -- whether to save produced figures
-        lib_saver     -- whether to save computed material properties in lib file
+            True or False
+        lib_saver     -- whether to save computed material properties in lib file, a lib file written in pickle format will be created if the folder does not contain this file
+            True or False
         lib_overwrite -- whether to overwrite existing lib entry, or just change upon them
+            True: overwrite the existing entry with properties calculated in this run
+            False: properties that are not calculated in this run will be preserved 
         
         -- Function Toggles
-        preset              -- Presets of useful function toggles. 0: no preset, need to manually assign toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
+        preset              -- Presets of useful function toggles. Overwrtie the individual function toggles if != 0.
+            0: no preset, need to manually assign toggles, 
+            1: lat & tilt_distort, 
+            2: lat & tilt_distort & tavg & MO, 
+            3: all functions below
         toggle_lat          -- switch of lattice parameter calculation
+            True or False
         toggle_tavg         -- switch of time averaged structure
+            True or False
         toggle_tilt_distort -- switch of octahedral tilting and distortion calculation
+            True or False
         toggle_MO           -- switch of molecular orientation (MO) calculation (for organic A-site)
+            True or False
         toggle_RDF          -- switch of radial distribution function calculation
+            True or False
         toggle_A_disp       -- switch of A-site cation displacement calculation
-        smoother            -- whether to use S-G smoothing on transient outputs, 0: disabled, >0: average window in ps
+            True or False
+        smoother            -- whether to use S-G smoothing on transient outputs, used with read_mode 2
+            0: disabled, 
+            >0: average time window in ps
         
         -- Lattice Parameter Calculation
-        lat_method   -- lattice parameter analysis methods, 1: direct lattice cell dimension, 2: pseudo-cubic lattice parameter
-        zdir         -- specified z-direction in case of lat_method 2, 0-x, 1-y, 2-z considering the sample axis
-        lattice_rot  -- the rotation of system before lattice calculation in case of lat_method 2
-        leading_crop -- remove the first x (0 to 1) fraction of the trajectory on plotting 
-        vis3D_lat    -- 3D visualization of lattice parameter in time.
+        lat_method   -- lattice parameter analysis methods.
+            1: direct lattice cell dimension
+            2: pseudo-cubic lattice parameter
+        zdir         -- specify z-direction in case of lat_method 2.
+            0: x, 1: y, 2: z, considering the sample axis, default is 2. 
+        lattice_rot  -- the rotation of system before lattice calculation in case of lat_method 2, should be used with non-orthogonal lattice.
+            [angle_x,angle_y,angle_z] in degree, default: [0,0,0]
+        leading_crop -- remove the first x (0 to 1) fraction of the trajectory on plotting lattice parameter
+            takes value from 0 to 1, e.g. 0.05 means that the first 5% of the trajectory will not be shown. default: 0.01
+        vis3D_lat    -- 3D visualization of lattice parameter.
+            True or False
         
         -- Time Averaged Structure
-        start_ratio       -- time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory
-        tavg_save_dir     -- directory for saving the time-averaging structures
-        Asite_reconstruct -- setting a different time-averaging algo for organic A-sites
+        start_ratio       -- the portion of trajectory that will be used for computing time-averaging structure.
+            takes value from 0 to 1, e.g. 0.8 means that only the last 20% of the trajectory will be used for computing time-averaging structure. default: 0.5
+        tavg_save_dir     -- directory for saving the time-averaging structures, default: current working directory
+        Asite_reconstruct -- setting a different time-averaging algo for organic A-sites, only works with MOautoCorr enabled
+            True or False
         
         -- Octahedral Tilting and Distortion
-        structure_type    -- 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference     
-        multi_thread      -- 1: no multithreading, >1, enable multi-threading in this calculation, since not vectorized
-        tilt_corr_NN1     -- enable first NN correlation of tilting, reflecting the Glazer notation
-        full_NN1_corr     -- include off-diagonal correlation terms 
+        structure_type    -- define connectivity of the perovskite. 
+            1: 3C polytype, or equally conner-sharing, default
+            2: other non-3C perovskite with orthogonal reference enabled
+            3: other non-3C perovskite with initial config as tilting reference     
+        multi_thread      -- Enable multi-threading in tilting/distortion calculation, the scaling is near-linear
+            1: no multi-threading , default
+            >1, enable multi-threading with n threads
+        tilt_corr_NN1     -- enable first NN correlation of tilting, reflecting the Glazer notation (a key functionality)
+            True or False, default is True
+        full_NN1_corr     -- include off-diagonal NN1 correlation terms 
+            True or False
         tilt_corr_spatial -- enable spatial correlation beyond NN1
+            True or False
         tiltautoCorr      -- compute time-dependent self-correlation of tilting
+            True or False
         octa_locality     -- compute differentiated properties within mixed-halide sample
-        enable_refit      -- refit the octahedral connectivity in case of change of geometry
-        symm_n_fold       -- tilting symmetry range, 0: auto, 2: [-90,90], 4: [-45,45], 8: [0,45]
+            True or False
+        enable_refit      -- refit the octahedral connectivity in case of change of geometry, use with care
+            True or False
+        symm_n_fold       -- tilting angle symmetry range
+            0: auto,  default
+            2: [-90,90], 
+            4: [-45,45], 
+            8: [0,45]
         tilt_recenter     -- whether to eliminate the shift in tilting values according to the mean value of population
+            True or False
         tilt_domain       -- compute the time constant of tilt correlation domain formation
-        vis3D_domain      -- 3D visualization of tilt domain in time. 0: off, 1: apparent tilting, 2: tilting correlation status
-        
+            True or False
+        vis3D_domain      -- 3D visualization of tilt domain in time. 
+            0: off 
+            1: apparent tilt angles, 
+            2: tilting correlation polarity (TCP)
+            
         -- Molecular Orientation (MO)
         MOautoCorr      -- compute MO reorientation time constant
+            True or False
         MO_corr_spatial -- enable spatial correlation function of MO
+            True or False
         draw_MO_anime   -- plot the MO in 3D animation, will take a few minutes
+            True or False
         
+        
+        p.s. The 'True or False' options all have False as the default unless specified otherwise. 
         """
         
         # pre-definitions

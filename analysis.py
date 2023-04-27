@@ -1496,15 +1496,32 @@ def Tilt_correlation(T,MDTimestep,smoother=0):
                 Ts[:,i,j] = savitzky_golay(Ts[:,i,j],window_size=sgw)
         
         T = Ts.copy()
-
+    
+# =============================================================================
+#     Tmean = np.mean(np.abs(T),axis=0)
+#     #Tmean=0
+#     
+#     for i in range(T.shape[0]-sh): 
+#         for dt in range(sh): 
+#             v1 = T[i,:,:] 
+#             v2 = T[i+dt,:,:]
+#             temp = np.sign(v1)*np.sign(v2)*np.sqrt(np.abs(np.multiply(np.abs(v1)-Tmean,np.abs(v2)-Tmean)))
+#             temp[np.isnan(temp)] = 0
+#             correlation[dt,:]=correlation[dt,:]+temp
+# =============================================================================
+    
+    Tmean = np.mean(T,axis=0)
+    #Tmean=0
+    
     for i in range(T.shape[0]-sh): 
         for dt in range(sh): 
-            v1 = T[i,:,:]
+            v1 = T[i,:,:] 
             v2 = T[i+dt,:,:]
-            temp = np.sign(v1)*np.sign(v2)*np.sqrt(np.multiply(np.abs(v1),np.abs(v2)))
+            prod = np.multiply(v1-Tmean,v2-Tmean)
+            temp = np.sign(prod)*np.sqrt(np.abs(prod))
             temp[np.isnan(temp)] = 0
             correlation[dt,:]=correlation[dt,:]+temp
-    
+
     correlation = np.mean(correlation/(T.shape[0]-sh),axis=1)
     
     x = np.array(range(sh))*MDTimestep
