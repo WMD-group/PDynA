@@ -41,10 +41,10 @@ The main language is Python 3 and has been tested using Python 3.8+, with the fo
 - ASE
 
 
-Installation
+Usage
 ------------
 
-Coming soon.
+A molecular dynamics trajectory is given in the examples folder, which can be processed using `pdyna_example.py`.
 
 
 License and attribution
