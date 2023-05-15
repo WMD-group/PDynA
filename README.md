@@ -2,7 +2,7 @@
 [![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<img src="logo.png" width="250">
+<img src="logo.png" width="225">
 
 **P**erovskite **Dyn**amics **A**nalysis (**PDynA**) is a Python package for analysis of perovskite structural dynamics. 
 
@@ -59,12 +59,5 @@ Development notes
 ### Bugs, features and questions
 Please use the [Issue Tracker](https://github.com/aLearningMachine/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16@imperial.ac.uk. 
 
-
 ### Developer
-- Xia Liang (Dept. Materials, Imperial College London)
-
-
-References
-----------
-
-In preparation.
+- Xia Liang (Deptment of Materials, Imperial College London)
