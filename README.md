@@ -2,20 +2,13 @@
 [![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-PDynA
-=====
+<img src="logo.png" width="250">
 
-**P**erovskite **Dyn**amics **A**nalysis (**PDynA**) is a Python package for analysis of perovskite dynamics. 
-
-<!---
-Statement of need
---------
-Coming soon.
---->
+**P**erovskite **Dyn**amics **A**nalysis (**PDynA**) is a Python package for analysis of perovskite structural dynamics. 
 
 Code features
 --------
-- The input to the code is MD trajectories, currently readable formats are VASP-XDATCAR and LAMMPS .out files. The core class of PDynA is the Trajectory class.
+- The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR and LAMMPS .out files. The core class of PDynA is the Trajectory class.
 
 - The structure recognition functions will automatically detect the constituent octahedral network and organic A-site molecules, and process the analysis. 
 
@@ -58,6 +51,7 @@ License and attribution
 -----------------------
 
 Python code and original data tables are licensed under the MIT License.
+
 
 Development notes
 -----------------
