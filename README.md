@@ -18,7 +18,10 @@ Code features
 
 - The octahedral distortion and tilting calculation can be accelerated with parallelization by joblib, this can be tuned with the input parameter multi_thread. 
 
-
+<p align="center">
+<img src="graphic.png" width="450">
+</p>
+ 
 List of modules
 -------
 
