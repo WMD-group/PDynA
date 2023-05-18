@@ -19,7 +19,7 @@ def savitzky_golay(y, window_size=51, order=3, deriv=0, rate=1):
     Parameters
     ----------
     y : array_like, shape (N,)
-        the values of the time history of the signal.
+        the values of the Time history of the signal.
     window_size : int
         the length of the window. Must be an odd integer number.
     order : int
@@ -106,13 +106,14 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
         histrange[1] = np.amax(histranges[:,1])+ra*0.2
         
         figs, axs = plt.subplots(3, 1)
-        labels = ["a","b","c"]
+        #labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+        labels = ['a','b','c']
         colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(Lat[:,i],bins=n_bins,range = histrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
             axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth=2.4)
-            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes, style='italic')
             
         Mu = []
         Std = []
@@ -120,13 +121,13 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
             mu, std = norm.fit(Lat[:,i])
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.882, 0.82, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.903, 0.58, 'SD: %.4f' % std, horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i].transAxes)    
+            axs[i].text(0.88, 0.82, 'Mean: %.2f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.88, 0.58, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)    
         
         for ax in axs.flat:
             ax.tick_params(axis='both', which='major', labelsize=14)
             ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel('Lattice Parameter ($\AA$)', fontsize = 15) # X label
+            ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
             ax.set_xlim(histrange)
             ax.set_yticks([])
             
@@ -177,13 +178,13 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
         Lats = (Lat1,Lat2,Lat3)
         
         figs, axs = plt.subplots(3, 1)
-        labels = ["a","b","c"]
+        labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
         colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(Lats[i],bins=n_bins,range = histrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
             axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth=2.4)
-            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes, style='italic')
             
         Mu = []
         Std = []
@@ -191,13 +192,13 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
             mu, std = norm.fit(Lats[i])
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.872, 0.82, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.89, 0.58, 'SD: %.4f' % std, horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i].transAxes)    
+            axs[i].text(0.88, 0.82, 'Mean: %.2f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.88, 0.58, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)    
         
         for ax in axs.flat:
             ax.tick_params(axis='both', which='major', labelsize=14)
             ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel('Lattice Parameter ($\AA$)', fontsize = 15) # X label
+            ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
             ax.set_xlim(histrange)
             ax.set_yticks([])
             
@@ -252,13 +253,13 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoot
     plt.subplots(1,1)
     if steps[0] == steps[-1] and xaxis_type == 'T':
         steps1 = list(range(0,len(steps)))
-        plt.plot(steps1,La,label = 'a')
-        plt.plot(steps1,Lb,label = 'b')
-        plt.plot(steps1,Lc,label = 'c')
+        plt.plot(steps1,La,label = r'$\mathit{a}$')
+        plt.plot(steps1,Lb,label = r'$\mathit{b}$')
+        plt.plot(steps1,Lc,label = r'$\mathit{c}$')
     else: 
-        plt.plot(steps,La,label = 'a')
-        plt.plot(steps,Lb,label = 'b')
-        plt.plot(steps,Lc,label = 'c')
+        plt.plot(steps,La,label = r'$\mathit{a}$')
+        plt.plot(steps,Lb,label = r'$\mathit{b}$')
+        plt.plot(steps,Lc,label = r'$\mathit{c}$')
     ax = plt.gca()
     if xaxis_type == 'T':
         if steps[0] > steps[-1]:
@@ -274,10 +275,10 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoot
         plt.xlabel("MD step")
     elif xaxis_type == 't':
         ax.set_xlim(left=0)
-        plt.xlabel("time (ps)")
+        plt.xlabel("Time (ps)")
     elif xaxis_type == 'T':
         plt.xlabel("Temperature (K)")
-    plt.ylabel("Lattice constant "+r'($\AA$)')
+    plt.ylabel('Lattice Parameter ($\mathrm{AA}$)')
 
     if not x_lims is None:
         ax.set_xlim(x_lims)
@@ -317,15 +318,15 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0
     w, h = figaspect(0.8/1.45)
     plt.subplots(figsize=(w,h))
     ax = plt.gca()
-    plt.plot(steps,La,label = 'a',linewidth=2)
-    plt.plot(steps,Lb,label = 'b',linewidth=2)
-    plt.plot(steps,Lc,label = 'c',linewidth=2)
+    plt.plot(steps,La,label = r'$\mathit{a}$',linewidth=2)
+    plt.plot(steps,Lb,label = r'$\mathit{b}$',linewidth=2)
+    plt.plot(steps,Lc,label = r'$\mathit{c}$',linewidth=2)
     #ax.text(0.2, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
     
     ax.set_xlim([0,max(steps)])
     ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel("time (ps)", fontsize=14)
-    plt.ylabel("Lattice constant "+r'($\AA$)', fontsize=14)
+    plt.xlabel("Time (ps)", fontsize=14)
+    plt.ylabel('Lattice Parameter ($\mathrm{AA}$)', fontsize=14)
     plt.legend(prop={'size': 12})
     
 
@@ -380,9 +381,9 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim
     #for i in range(T.shape[0]):
     #    plt.scatter(steps[i],T[i,])
     
-    plt.plot(steps[:(len(steps)-aw+1)],Ta,label = 'a',linewidth=2.5)
-    plt.plot(steps[:(len(steps)-aw+1)],Tb,label = 'b',linewidth=2.5)
-    plt.plot(steps[:(len(steps)-aw+1)],Tc,label = 'c',linewidth=2.5)    
+    plt.plot(steps[:(len(steps)-aw+1)],Ta,label = r'$\mathit{a}$',linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Tb,label = r'$\mathit{b}$',linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Tc,label = r'$\mathit{c}$',linewidth=2.5)    
 
     #ax.set_ylim([-45,45])
     #ax.set_yticks([-45,-30,-15,0,15,30,45])
@@ -481,9 +482,9 @@ def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', sc
     
     for i in range(T.shape[1]):
         if i == 0:
-            plt.scatter(steps,T[:,i,0],label = 'a', s = scasize, c = 'green')
-            plt.scatter(steps,T[:,i,1],label = 'b', s = scasize, c = 'blue')
-            plt.scatter(steps,T[:,i,2],label = 'c', s = scasize, c = 'red')
+            plt.scatter(steps,T[:,i,0],label = r'$\mathit{a}$', s = scasize, c = 'green')
+            plt.scatter(steps,T[:,i,1],label = r'$\mathit{b}$', s = scasize, c = 'blue')
+            plt.scatter(steps,T[:,i,2],label = r'$\mathit{c}$', s = scasize, c = 'red')
         else:
             plt.scatter(steps,T[:,i,0], s = scasize, c = 'green')
             plt.scatter(steps,T[:,i,1], s = scasize, c = 'blue')
@@ -521,7 +522,7 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
         y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
         axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-        axs[i].text(0.04, 0.82, labels[i], horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+        axs[i].text(0.05, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
     
     if gaus_fit: # fit a gaussian to the plot
         Mu = []
@@ -532,8 +533,8 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
             mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.872, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.893, 0.50, 'SD: %.4f' % std, horizontalalignment='center', fontsize=10, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
     
     for ax in axs.flat:
         ax.tick_params(axis='both', which='major', labelsize=14)
@@ -592,7 +593,7 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, ti
     tup_T = (T_a,T_b,T_c)
     
     figs, axs = plt.subplots(3, 1)
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     colors = ["C0","C1","C2"]
     for i in range(3):
         y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
@@ -601,13 +602,13 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, ti
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
         
     for ax in axs.flat:
-        #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
+        #ax.set(xlabel=r'Tilt Angle ($\degree$)', ylabel='Counts (a.u.)')
         ax.tick_params(axis='both', which='major', labelsize=14)
         ax.set_xlim(hrange)
         ax.set_xticks(tlabel)
         ax.set_yticks([])
     
-    axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
+    axs[2].set_xlabel(r'Tilt Angle ($\degree$)', fontsize=15)
     axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
     
     axs[0].xaxis.set_ticklabels([])
@@ -658,7 +659,7 @@ def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n
         Ts.append((T_a,T_b,T_c))
     
     figs, axs = plt.subplots(3, 1)
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     colors = ["C0","C1","C2"]
     lstyle = ["solid", "dashed", "dotted", "dashdot"]
     if len(types) > len(lstyle): 
@@ -674,13 +675,13 @@ def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n
             axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
             
     for ax in axs.flat:
-        #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
+        #ax.set(xlabel=r'Tilt Angle ($\degree$)', ylabel='Counts (a.u.)')
         ax.tick_params(axis='both', which='major', labelsize=14)
         ax.set_xlim(hrange)
         ax.set_xticks(tlabel)
         ax.set_yticks([])
     
-    axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
+    axs[2].set_xlabel(r'Tilt Angle ($\degree$)', fontsize=15)
     axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
     
     axs[0].legend(prop={'size': 12},frameon=True)
@@ -741,7 +742,7 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
         assert len(tup_T) == 3
         
         figs, axs = plt.subplots(3, 1)
-        labels = ["a","b","c"]
+        labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
         colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
@@ -750,13 +751,13 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
             axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
             
         for ax in axs.flat:
-            #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
+            #ax.set(xlabel=r'Tilt Angle ($\degree$)', ylabel='Counts (a.u.)')
             ax.tick_params(axis='both', which='major', labelsize=14)
             ax.set_xlim(hrange)
             ax.set_xticks(tlabel)
             ax.set_yticks([])
         
-        axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
+        axs[2].set_xlabel(r'Tilt Angle ($\degree$)', fontsize=15)
         axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
         
         axs[0].xaxis.set_ticklabels([])
@@ -785,9 +786,9 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
     scasize = 50
     plt.subplots(1,1)
     ax = plt.gca()
-    ax.scatter(plotx,maxs[:,0],label='a',alpha=scaalpha,s=scasize)
-    ax.scatter(plotx,maxs[:,1],label='b',alpha=scaalpha,s=scasize)
-    ax.scatter(plotx,maxs[:,2],label='c',alpha=scaalpha,s=scasize)
+    ax.scatter(plotx,maxs[:,0],label=r'$\mathit{a}$',alpha=scaalpha,s=scasize)
+    ax.scatter(plotx,maxs[:,1],label=r'$\mathit{b}$',alpha=scaalpha,s=scasize)
+    ax.scatter(plotx,maxs[:,2],label=r'$\mathit{c}$',alpha=scaalpha,s=scasize)
     plt.legend(prop={'size': 12})
     
     ax.tick_params(axis='both', which='major', labelsize=14)
@@ -843,8 +844,8 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
             mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.882, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10.5, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.903, 0.50, 'SD: %.4f' % std, horizontalalignment='center', fontsize=10.5, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
     
             
         for ax in axs.flat:
@@ -938,7 +939,7 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
         tup_T = (T_a,T_b,T_c)
         
         figs, axs = plt.subplots(3, 1)
-        labels = ["a","b","c"]
+        labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
         colors = ["C0","C1","C2"]
         for i in range(3):
             y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
@@ -947,13 +948,13 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
             axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
             
         for ax in axs.flat:
-            #ax.set(xlabel='Tilt Angle (deg)', ylabel='Counts (a.u.)')
+            #ax.set(xlabel=r'Tilt Angle ($\degree$)', ylabel='Counts (a.u.)')
             ax.tick_params(axis='both', which='major', labelsize=14)
             ax.set_xlim(hrange)
             ax.set_xticks(tlabel)
             ax.set_yticks([])
         
-        axs[2].set_xlabel('Tilt Angle (deg)', fontsize=15)
+        axs[2].set_xlabel(r'Tilt Angle ($\degree$)', fontsize=15)
         axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
         
         axs[0].xaxis.set_ticklabels([])
@@ -980,9 +981,9 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
     scasize = 50
     plt.subplots(1,1)
     ax = plt.gca()
-    ax.scatter(plotx,maxs[:,0],label='a',alpha=scaalpha,s=scasize)
-    ax.scatter(plotx,maxs[:,1],label='b',alpha=scaalpha,s=scasize)
-    ax.scatter(plotx,maxs[:,2],label='c',alpha=scaalpha,s=scasize)
+    ax.scatter(plotx,maxs[:,0],label=r'$\mathit{a}$',alpha=scaalpha,s=scasize)
+    ax.scatter(plotx,maxs[:,1],label=r'$\mathit{b}$',alpha=scaalpha,s=scasize)
+    ax.scatter(plotx,maxs[:,2],label=r'$\mathit{c}$',alpha=scaalpha,s=scasize)
     plt.legend(prop={'size': 12})
     
     ax.tick_params(axis='both', which='major', labelsize=14)
@@ -1028,8 +1029,8 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
             mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.882, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=10.5, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.903, 0.50, 'SD: %.4f' % std, horizontalalignment='center', fontsize=10.5, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
     
             
         for ax in axs.flat:
@@ -1107,9 +1108,9 @@ def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't
     if T.shape[2] == 3:
         for i in range(T.shape[1]):
             if i == 0:
-                plt.scatter(steps,T[:,i,0],label = 'a', s = scasize, c = 'green')
-                plt.scatter(steps,T[:,i,1],label = 'b', s = scasize, c = 'blue')
-                plt.scatter(steps,T[:,i,2],label = 'c', s = scasize, c = 'red')
+                plt.scatter(steps,T[:,i,0],label = r'$\mathit{a}$', s = scasize, c = 'green')
+                plt.scatter(steps,T[:,i,1],label = r'$\mathit{b}$', s = scasize, c = 'blue')
+                plt.scatter(steps,T[:,i,2],label = r'$\mathit{c}$', s = scasize, c = 'red')
             else:
                 plt.scatter(steps,T[:,i,0], s = scasize, c = 'green')
                 plt.scatter(steps,T[:,i,1], s = scasize, c = 'blue')
@@ -1117,11 +1118,11 @@ def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't
     elif T.shape[2] == 6:
         for i in range(T.shape[1]):
             if i == 0:
-                plt.scatter(steps,T[:,i,0],label = 'a', s = scasize, c = 'green')
+                plt.scatter(steps,T[:,i,0],label = r'$\mathit{a}$', s = scasize, c = 'green')
                 plt.scatter(steps,T[:,i,1], s = scasize, c = 'green')
-                plt.scatter(steps,T[:,i,2],label = 'b', s = scasize, c = 'blue')
+                plt.scatter(steps,T[:,i,2],label = r'$\mathit{b}$', s = scasize, c = 'blue')
                 plt.scatter(steps,T[:,i,3], s = scasize, c = 'blue')
-                plt.scatter(steps,T[:,i,4],label = 'c', s = scasize, c = 'red')
+                plt.scatter(steps,T[:,i,4],label = r'$\mathit{c}$', s = scasize, c = 'red')
                 plt.scatter(steps,T[:,i,5], s = scasize, c = 'red')
             else:
                 plt.scatter(steps,T[:,i,0], s = scasize, c = 'green')
@@ -1178,7 +1179,7 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
              np.concatenate((Corr[:,:,4],Corr[:,:,5]),axis=0).reshape((Corr.shape[0]*2*Corr.shape[1])))
 
     figs, axs = plt.subplots(3, 1)
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     colors = ["C0", "C1", "C2"]
     #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
     por = [0,0,0]
@@ -1188,7 +1189,7 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
         yt=y/max(y)
         axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
-        axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+        #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
 
         y,binEdges=np.histogram(C[i],bins=n_bins,range=[-45,45]) 
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
@@ -1196,7 +1197,7 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
         yy=yt*yc
 
         axs[i].fill_between(bincenters, yy, 0, facecolor = colors[i], alpha=fill_alpha, interpolate=True)
-        axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
+        axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=16, verticalalignment='center', transform=axs[i].transAxes, style='italic')
         
         axs[i].set_ylim(bottom=0)
         
@@ -1207,7 +1208,7 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
     for ax in axs.flat:
         ax.tick_params(axis='both', which='major', labelsize=14)
         ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
-        ax.set_xlabel('Tilt Angle (deg)', fontsize = 15) # X label
+        ax.set_xlabel(r'Tilt Angle ($\degree$)', fontsize = 15) # X label
         ax.set_xlim([-45,45])
         ax.set_xticks([-45,-30,-15,0,15,30,45])
         ax.set_yticks([])
@@ -1310,7 +1311,7 @@ def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, t
             C[i,j,:] = Cf[:,:,i,j,:].reshape(-1,)
     
     figs, axs = plt.subplots(3, 3)
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     colors = ["C0", "C1", "C2"]
     #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
     por = np.empty((3,3))
@@ -1349,7 +1350,7 @@ def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, t
     for ax in axs.flat:
         ax.tick_params(axis='both', which='major', labelsize=10)
         #ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
-        #ax.set_xlabel('Tilt Angle (deg)', fontsize = 15) # X label
+        #ax.set_xlabel(r'Tilt Angle ($\degree$)', fontsize = 15) # X label
         ax.set_xlim([-20,20])
         ax.set_xticks([-20,-10,0,10,20])
         ax.xaxis.set_ticklabels([])
@@ -1361,7 +1362,7 @@ def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, t
     axs[2,2].xaxis.set_ticklabels([-20,-10,0,10,20])  
     
     axs[1,0].set_ylabel('Counts (a.u.)', fontsize = 12) # Y label
-    axs[2,1].set_xlabel('Tilt Angle (deg)', fontsize = 12) # X label
+    axs[2,1].set_xlabel(r'Tilt Angle ($\degree$)', fontsize = 12) # X label
 
     if not title is None:
         axs[0,1].set_title(title,fontsize=13)
@@ -1423,9 +1424,9 @@ def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother =
     plt.subplots(figsize=(w,h))
     ax = plt.gca()
     
-    plt.plot(steps[:(len(steps)-aw+1)],Ca,label = 'a',linewidth=2.5)
-    plt.plot(steps[:(len(steps)-aw+1)],Cb,label = 'b',linewidth=2.5)
-    plt.plot(steps[:(len(steps)-aw+1)],Cc,label = 'c',linewidth=2.5)    
+    plt.plot(steps[:(len(steps)-aw+1)],Ca,label = r'$\mathit{a}$',linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Cb,label = r'$\mathit{b}$',linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Cc,label = r'$\mathit{c}$',linewidth=2.5)    
 
     ax.set_ylim([-1,1])
     plt.axhline(y=0,linestyle='dashed',color='k',linewidth=1)
@@ -1449,7 +1450,7 @@ def draw_tilt_spatial_corr(C, uniname, saveFigures, n_bins = 100):
     num_lens = C.shape[0]
     
     fig, axs = plt.subplots(nrows=3, ncols=num_lens, sharex=False, sharey=True)
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     for i in range(3):
         for j in range(num_lens):
             axs[i,j].hist(C[j][i],bins=n_bins,range=[-45,45],orientation='horizontal')
@@ -1465,7 +1466,7 @@ def draw_tilt_spatial_corr(C, uniname, saveFigures, n_bins = 100):
         ax.set_xticks([])
 
     fig.text(0.5, 0.07, 'Counts (a.u.)', ha='center', fontsize=12)
-    fig.text(0.01, 0.5, 'Tilt Angle (deg)', va='center', rotation='vertical', fontsize=12)
+    fig.text(0.01, 0.5, r'Tilt Angle ($\degree$)', va='center', rotation='vertical', fontsize=12)
 
     if saveFigures:
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
@@ -1518,6 +1519,7 @@ def Tilt_correlation(T,MDTimestep,smoother=0):
             v1 = T[i,:,:] 
             v2 = T[i+dt,:,:]
             prod = np.multiply(v1-Tmean,v2-Tmean)
+            #temp = prod
             temp = np.sign(prod)*np.sqrt(np.abs(prod))
             temp[np.isnan(temp)] = 0
             correlation[dt,:]=correlation[dt,:]+temp
@@ -1649,7 +1651,7 @@ def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
     fig=plt.figure()
     ax = plt.axes(projection='3d')
     timelabel = ax.text2D(0.85, 0.10, f"{round(timeline1[0],1)} ps", ha='center', va='center', fontsize=14, color="k", transform=ax.transAxes)
-    ax.set_facecolor("grey")
+    #ax.set_facecolor("grey")
     ax.axis('off')
     ax.set_aspect('auto')
     #ax.set_axis_off()
@@ -1677,7 +1679,7 @@ def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, 
 #     fig,ax = plt.subplots()
 #     plt.plot(np.array(list(range(Corr.shape[0])))*timestep,Corr[:,100,5])
 #     plt.plot(np.array(list(range(Corr.shape[0])))*timestep,savitzky_golay(Corr[:,100,5],window_size=sgw))
-#     ax.set_xlabel("time (ps)")
+#     ax.set_xlabel("Time (ps)")
 #     ax.set_ylabel("TCP")
 #     plt.axhline(y=0,linestyle="dashed",color="k")
 # =============================================================================
@@ -1766,7 +1768,7 @@ def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, 
 #     
 #     ax.tick_params(axis='both', which='major', labelsize=12)
 #     #ax.set_xlim([0,m])
-#     plt.xlabel('time (ps)', fontsize=14)
+#     plt.xlabel('Time (ps)', fontsize=14)
 #     plt.ylabel('Count (a.u.)', fontsize=14)
 #     #plt.legend(prop={'size': 11})
 #     legend = plt.legend(prop={'size': 11},frameon = True, loc="upper right", ncol=2)
@@ -1777,7 +1779,7 @@ def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, 
     
     w, h = figaspect(1.2/1.5)
     fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, sharey=False,figsize=(w,h))
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     colors = ["C0","C1","C2"]
     for i in range(3):
         #axs[i].hist(dom[i],bins=n_bins,range=[hist_filt,m], color=colors[0], label="positive", alpha=0.5)
@@ -1800,7 +1802,7 @@ def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, 
         ax.set_yticks([])
     
     axs[0].legend(prop={'size': 10}, loc="upper right")
-    fig.text(0.5, 0.01, 'time (ps)', ha='center', fontsize=14)
+    fig.text(0.5, 0.01, 'Time (ps)', ha='center', fontsize=14)
     fig.text(0.07, 0.5, 'Counts (a.u.)', va='center', rotation='vertical', fontsize=14)
     
     if saveFigures:
@@ -2063,7 +2065,9 @@ def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=
     plt.yticks( [-pi/2,0,pi/2],
                 [r'$-\pi/2$',r'$0$',r'$\pi/2$'],
                 fontsize=15)
-    
+    ax.set_xlabel(r'$\mathit{\theta}$',fontsize=17)
+    ax.set_ylabel(r'$\mathit{\phi}$',fontsize=17, rotation=0)
+    ax.yaxis.set_label_coords(-0.12,0.46)
     plt.show()
     if (SaveFigures):
         fig.savefig("MO_MA_orientation_density_nosymm_%s.png"%uniname,bbox_inches='tight', pad_inches=0,dpi=350)
@@ -2149,7 +2153,7 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
             nnphisOh.append(nnphiOh)
 
     w, h = figaspect(2/1.2)
-    fig, axs = plt.subplots(figsize=(w,h),nrows=2, ncols=1)
+    fig, axs = plt.subplots(figsize=(w,h),nrows=2, ncols=1,sharey=True)
 
     axs[0].hexbin(phis,thetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
     axs[1].hexbin(nnphis,nnthetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r)
@@ -2196,7 +2200,7 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
     plt.yticks( [-pi/2,0,pi/2],
                 [r'$-\pi/2$',r'$0$',r'$\pi/2$'],
                 fontsize=15)
-    
+    plt.set_ylabel(r'$\mathit{\phi}$',fontsize=17, rotation=0)
     plt.show()
     if (SaveFigures):
         fig.savefig(f"MO_{moltype}_orientation_density_nosymm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
@@ -2229,7 +2233,7 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
 
     #cbar = plt.colorbar()
     #cbar.set_ticks([])
-
+    plt.set_xlabel(r'$\mathit{\theta}$',fontsize=17)
     plt.show()
     if (SaveFigures):
         fig.savefig(f"MO_{moltype}_orientation_density_Oh_symm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
@@ -2258,10 +2262,10 @@ def fit_exp_decay(x,y,allow_redo=True):
     y2 = model_func(x, a, k1 ,k2)
     fig, ax = plt.subplots()
     #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
-    ax.plot(x, y2, color='r',label='fitted',linewidth=3)
-    ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
+    ax.plot(x, y2, color='r',label='fit',linewidth=3)
+    ax.plot(x[::10], y[::10], 'bo', label='raw data',alpha=0.63,markersize=4)
     ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel('time (ps)', fontsize=14)
+    plt.xlabel('Time (ps)', fontsize=14)
     plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
     plt.legend(prop={'size': 12})
     plt.title('Two-component fitting', fontsize=14)
@@ -2291,7 +2295,7 @@ def fit_exp_decay(x,y,allow_redo=True):
         ax.plot(x, y2, color='r',label='fitted',linewidth=4)
         ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
         ax.tick_params(axis='both', which='major', labelsize=12)
-        plt.xlabel('time (ps)', fontsize=14)
+        plt.xlabel('Time (ps)', fontsize=14)
         plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
         plt.legend(prop={'size': 12})
         plt.title('One-component fitting', fontsize=14)
@@ -2323,7 +2327,7 @@ def fit_exp_decay_both(x,y):
     ax.plot(x, y2, color='r',label='fitted',linewidth=4)
     ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
     ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel('time (ps)', fontsize=14)
+    plt.xlabel('Time (ps)', fontsize=14)
     plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
     plt.legend(prop={'size': 12})
     plt.title('Two-component fitting', fontsize=14)
@@ -2355,14 +2359,14 @@ def fit_exp_decay_fixed(x,y,aconst = 0.9):
     ax.plot(x, y2, color='r',label='fitted',linewidth=4)
     ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
     ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel('time (ps)', fontsize=14)
+    plt.xlabel('Time (ps)', fontsize=14)
     plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
     plt.legend(prop={'size': 12})
     plt.title('Two-component fitting', fontsize=14)
     plt.show()
     
     if k1 < k2:
-        raise ValueError('The fitted time constant k1 is smaller than k2. ')
+        raise ValueError('The fitted Time constant k1 is smaller than k2. ')
     
     return 1/k1
 
@@ -2391,7 +2395,7 @@ def fit_exp_decay_single(x,y):
     ax.plot(x, y2, color='r',label='fitted',linewidth=4)
     ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
     ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel('time (ps)', fontsize=14)
+    plt.xlabel('Time (ps)', fontsize=14)
     plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
     plt.legend(prop={'size': 12})
     plt.title('One-component fitting', fontsize=14)
@@ -2426,14 +2430,14 @@ def fit_damped_oscillator(x,y):
     opt, pcov = curve_fit(model_func2, xc, yc, p0)
     tau_l, tau_s = opt
 
-    y1 = model_func1(x, omega, tau)
+    y1 = model_func1(x, omega, gamma)
     y2 = model_func2(x, tau_l, tau_s)
     fig, ax = plt.subplots()
     #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
-    ax.plot(x, y1, color='r',label='fitted',linewidth=4)
+    ax.plot(x, y2, color='r',label='fitted',linewidth=4)
     ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
     ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel('time (ps)', fontsize=14)
+    plt.xlabel('Time (ps)', fontsize=14)
     plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
     plt.legend(prop={'size': 12})
     plt.title('Damped Oscillator Fitting', fontsize=14)
@@ -2501,7 +2505,7 @@ def draw_MO_spatial_corr_time(C, steps, uniname, saveFigures, smoother = 0, n_bi
         Cline = np.concatenate((Cline,moavg),axis=0)
     
     colors = ["C0","C1","C2","C3"]   
-    labels = ['a', 'b', 'c']
+    labels = [r'$\mathit{a}$', r'$\mathit{b}$', r'$\mathit{c}$']
     lwid = 2.2
     
     w, h = figaspect(0.8/1.45)
@@ -2602,7 +2606,7 @@ def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = 0, n_bins = 50
         Cline = np.concatenate((Cline,moavg),axis=0)
     
     colors = ["C0","C1","C2","C3"]   
-    labels = ['a', 'b', 'c']
+    labels = [r'$\mathit{a}$', r'$\mathit{b}$', r'$\mathit{c}$']
     lwid = 2.2
     
     w, h = figaspect(0.8/1.45)
@@ -2656,7 +2660,7 @@ def draw_MO_spatial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
         
     w, h = figaspect(1.2/1.5)
     fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True, sharey=False,figsize=(w,h))
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     colors = ["C0","C1","C2","C3"]
     for i in range(3):
         temp1,binEdges = np.histogram(C[0][i],bins=n_bins,range=[-1,1])
@@ -2679,8 +2683,8 @@ def draw_MO_spatial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
         ax.set_yticks([])
 
     
-    fig.text(0.5, 0.01, 'MO correlation', ha='center', fontsize=14)
-    fig.text(0.07, 0.5, 'Counts (a.u.)', va='center', rotation='vertical', fontsize=14)
+    fig.text(0.5, 0.01, r'$\mathit{w}$', ha='center', fontsize=14)
+    fig.text(0.03, 0.5, r'$\mathit{C_{\alpha}^{(k)}(w)}$ (a.u.)', va='center', rotation='vertical', fontsize=14)
 
         
     if saveFigures:
@@ -2703,7 +2707,7 @@ def draw_MO_spatial_corr(C, uniname, saveFigures, n_bins = 50):
     num_lens = C.shape[0]
     
     fig, axs = plt.subplots(nrows=3, ncols=num_lens, sharex=False, sharey=True)
-    labels = ["a","b","c"]
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     colors = ["C0","C1","C2","C3"]
     for i in range(3):
         for j in range(num_lens):
@@ -3180,47 +3184,47 @@ def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     fig, axs = plt.subplots(nrows=4, ncols=1, sharex=True, sharey=False)
     fig.set_size_inches(6.5,5.5)
 
-    axs[0].plot(Lobj[0],Lobj[1],label = 'a',linewidth=lwid,color=colors[0])
-    axs[0].plot(Lobj[0],Lobj[2],label = 'b',linewidth=lwid,color=colors[1])
-    axs[0].plot(Lobj[0],Lobj[3],label = 'c',linewidth=lwid,color=colors[2])
+    axs[0].plot(Lobj[0],Lobj[1],label = r'$\mathit{a}$',linewidth=lwid,color=colors[0])
+    axs[0].plot(Lobj[0],Lobj[2],label = r'$\mathit{b}$',linewidth=lwid,color=colors[1])
+    axs[0].plot(Lobj[0],Lobj[3],label = r'$\mathit{c}$',linewidth=lwid,color=colors[2])
     #ax.text(0.2, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
     pmax = max(max(Lobj[1]),max(Lobj[2]),max(Lobj[3]))
     pmin = min(min(Lobj[1]),min(Lobj[2]),min(Lobj[3]))
     axs[0].set_ylim([pmin-(pmax-pmin)*0.2,pmax+(pmax-pmin)*0.2])
     axs[0].set_xlim([0,xlimmax])
     axs[0].tick_params(axis='both', which='major', labelsize=12.5)
-    axs[0].set_ylabel("pc-lp "+r'($\AA$)', fontsize = 14) # Y label
-    #axs[0].set_xlabel("time (ps)", fontsize = 12) # X label
+    axs[0].set_ylabel("pc-lp "+r'($\mathrm{\AA}$)', fontsize = 14) # Y label
+    #axs[0].set_xlabel("Time (ps)", fontsize = 12) # X label
     #axs[0].set_xticklabels([])
     
     
-    axs[1].plot(Tobj[0],Tobj[1],label = 'a',linewidth=lwid,color=colors[0])
-    axs[1].plot(Tobj[0],Tobj[2],label = 'b',linewidth=lwid,color=colors[1])
-    axs[1].plot(Tobj[0],Tobj[3],label = 'c',linewidth=lwid,color=colors[2])   
+    axs[1].plot(Tobj[0],Tobj[1],label = r'$\mathit{a}$',linewidth=lwid,color=colors[0])
+    axs[1].plot(Tobj[0],Tobj[2],label = r'$\mathit{b}$',linewidth=lwid,color=colors[1])
+    axs[1].plot(Tobj[0],Tobj[3],label = r'$\mathit{c}$',linewidth=lwid,color=colors[2])   
     axs[1].set_xlim([0,xlimmax])
     axs[1].set_ylim([0,17])
     axs[1].set_yticks([0,5,10,15])
     axs[1].tick_params(axis='both', which='major', labelsize=12.5)
-    axs[1].set_ylabel('Tilting (deg)', fontsize = 14) # Y label
-    #axs[1].set_xlabel("time (ps)", fontsize = 12) # X label
+    axs[1].set_ylabel(r'Tilt Angle ($\degree$)', fontsize = 14) # Y label
+    #axs[1].set_xlabel("Time (ps)", fontsize = 12) # X label
     #axs[1].set_xticklabels([])
     #axs[1].legend(prop={'size': 10},ncol=3)
     
     
-    axs[2].plot(Cobj[0],Cobj[1],label = 'a',linewidth=lwid,color=colors[0])
-    axs[2].plot(Cobj[0],Cobj[2],label = 'b',linewidth=lwid,color=colors[1])
-    axs[2].plot(Cobj[0],Cobj[3],label = 'c',linewidth=lwid,color=colors[2])   
+    axs[2].plot(Cobj[0],Cobj[1],label = r'$\mathit{a}$',linewidth=lwid,color=colors[0])
+    axs[2].plot(Cobj[0],Cobj[2],label = r'$\mathit{b}$',linewidth=lwid,color=colors[1])
+    axs[2].plot(Cobj[0],Cobj[3],label = r'$\mathit{c}$',linewidth=lwid,color=colors[2])   
     axs[2].set_xlim([0,xlimmax])
     axs[2].set_ylim([-1.1,1.2])
     axs[2].set_yticks([-1,0,1])
     axs[2].tick_params(axis='both', which='major', labelsize=12.5)
-    axs[2].set_ylabel('TCP (a.u.)', fontsize = 14) # Y label
+    axs[2].set_ylabel('TCP', fontsize = 14) # Y label
     
     
     #colors = ["C0","C1","C2","C3"]   
-    axs[3].plot(Mobj[0], Mobj[1], label = 'a' , linewidth=lwid,color=colors[0]) 
-    axs[3].plot(Mobj[0], Mobj[2], label = 'b' , linewidth=lwid,color=colors[1]) 
-    axs[3].plot(Mobj[0], Mobj[3], label = 'c' , linewidth=lwid,color=colors[2]) 
+    axs[3].plot(Mobj[0], Mobj[1], label = r'$\mathit{a}$' , linewidth=lwid,color=colors[0]) 
+    axs[3].plot(Mobj[0], Mobj[2], label = r'$\mathit{b}$' , linewidth=lwid,color=colors[1]) 
+    axs[3].plot(Mobj[0], Mobj[3], label = r'$\mathit{c}$' , linewidth=lwid,color=colors[2]) 
     axs[3].plot(Mobj[0], Mobj[4], label = 'CF' ,color ='k', linewidth=lwid, linestyle='dashed') 
     #axs[2].plot(Mobj[0], Mobj[1], label = 'a-NN1' ,color =colors[0], linewidth=lwid) 
     #axs[2].plot(Mobj[0], Mobj[2], label = 'b-NN1' ,color =colors[1], linewidth=lwid) 
@@ -3234,11 +3238,15 @@ def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
     axs[3].set_ylim([-1.1,1.1])
     axs[3].set_yticks([-1,0,1])
     axs[3].set_ylabel('MO order', fontsize = 15) # Y label
-    axs[3].set_xlabel("time (ps)", fontsize = 14) # X label
+    axs[3].set_xlabel("Time (ps)", fontsize = 14) # X label
     axs[3].legend(prop={'size': 12.2},ncol=4,loc=0)
     #axs[2].legend(prop={'size': 10},ncol=3)
 
-    fig.subplots_adjust(hspace = 0,left=0.12,right=0.90)
+    fig.subplots_adjust(hspace = 0.1,left=0.12,right=0.90)
+    
+    for ai in range(4):
+        for axis in ['top', 'bottom', 'left', 'right']:
+            axs[ai].spines[axis].set_linewidth(1)      
 
     if saveFigures:
         plt.savefig(f"quench_trimetric_{uniname}.png", dpi=350,bbox_inches='tight')

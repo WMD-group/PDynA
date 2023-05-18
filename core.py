@@ -1181,7 +1181,9 @@ class Trajectory:
         
         # screening
         T[np.abs(T)>45] = np.nan
-        Di[Di>0.8] = np.nan
+        dscreen = [0.3,0.8,0.4,0.8]
+        for i in range(4):
+            Di[Di[:,:,i]>dscreen[i],:] = np.nan
         
         self.TDtimeline = timeline
         self.Distortion = Di
@@ -1689,6 +1691,7 @@ class Trajectory:
             if max(bincount) != min(bincount):
                 raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
             
+            # visualize tilt domains
             if vis3D_domain == 2:
 
                 temp1 = Corr[:,:,[axisvis*2]]
@@ -1752,12 +1755,11 @@ class Trajectory:
                 figname1 = f"Tilt3D_domain_{uniname}"
             
 
-            def map_rgb(x):
+            def map_rgb_tilt(x):
                 x = x/np.amax(np.abs(x))/2+0.5
                 return plt.cm.coolwarm(x)[:,:,0,:]
             
-            cfeat = map_rgb(plotfeat)
-            
+            cfeat = map_rgb_tilt(plotfeat)
             
             readtime = 60 # ps
             readfreq = 0.6 # ps
@@ -1768,9 +1770,60 @@ class Trajectory:
             et0 = time.time()
             vis3D_domain_anime(cfeat,frs,self.Timestep,supercell_size,bin_indices,figname1)
             et1 = time.time()
-            print(round((et1-et0)/60,2))
+            print("Tilt domain visualization took:",round((et1-et0)/60,2),"minutes. ")
         
+            
+# =============================================================================
+#             # visualize distortion domains
+#             dlims = [np.nanquantile(Di[:,:,i],0.9) for i in range(4)]
+#             dmeans = [np.nanmean(Di[:,:,i]) for i in range(4)]
+#             Df = Di.copy()
+#             for i in range(4):
+#                 #mask = np.logical_or(Df[:,:,i]>dlims[i],np.isnan(Df[:,:,i]))
+#                 mask1 = np.isnan(Df[:,:,i])
+#                 mask2 = Df[:,:,i]>dlims[i]
+#                 Df[:,:,i][mask1] = dmeans[i]
+#                 Df[:,:,i][mask2] = dlims[i]
+#             plotfeat = np.linalg.norm(Df,axis=2)
+#             #plotfeat = Df[:,:,3]
+#             
+#             time_window = 5 # picosecond
+#             sgw = round(time_window/self.Timestep)
+#             if sgw<5: sgw = 5
+#             if sgw%2==0: sgw+=1
+#             
+#             for i in range(plotfeat.shape[1]):
+#                 temp = plotfeat[:,i]
+#                 temp = savitzky_golay(temp,window_size=sgw)
+#                 plotfeat[:,i] = temp
+#             
+#             plotfeat[plotfeat<np.quantile(plotfeat,0.05)] = np.quantile(plotfeat,0.05)
+#             plotfeat[plotfeat>np.quantile(plotfeat,0.95)] = np.quantile(plotfeat,0.95)
+#             plotfeat = plotfeat-np.amin(plotfeat)
+#             plotfeat = plotfeat/np.amax(plotfeat)
+#             plotfeat = np.power(np.abs(plotfeat-0.5),2/3)*np.sign(plotfeat-0.5)
+#             
+#             figname1 = f"Dist3_3D_domain_{uniname}"
+# 
+#             def map_rgb_dist(x):
+#                 x = x/np.amax(np.abs(x))/2+0.5
+#                 return plt.cm.YlGnBu(x)
+#             
+#             cfeat = map_rgb_dist(plotfeat)
+#             
+#             readtime = 60 # ps
+#             readfreq = 0.6 # ps
+#             fstart = round(cfeat.shape[0]*0.1)
+#             fend = min(fstart+round(readtime/self.Timestep),round(cfeat.shape[0]*0.9))
+#             frs = list(np.round(np.linspace(fstart,fend,round((fend-fstart)*self.Timestep/readfreq)+1)).astype(int))
+#             
+#             et0 = time.time()
+#             vis3D_domain_anime(cfeat,frs,self.Timestep,supercell_size,bin_indices,figname1)
+#             et1 = time.time()
+#             print("Distortion domain visualization took:",round((et1-et0)/60,2),"minutes. ")
+# =============================================================================
         
+
         et1 = time.time()
         self.timing["tilt_distort"] = et1-et0
         
