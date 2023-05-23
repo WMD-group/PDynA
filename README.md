@@ -44,12 +44,14 @@ The main language is Python 3 and has been tested using Python 3.8+, with the fo
 - Scipy
 - ASE
 
-
 Usage
 ------------
 
 A molecular dynamics trajectory is given in the examples folder, which can be processed using `pdyna_example.py`.
 
+Citation
+------------
+["Structural dynamics descriptors for metal halide perovskites" arXiv:2305.11617 (2023)](https://arxiv.org/abs/2305.11617)
 
 License and attribution
 -----------------------
