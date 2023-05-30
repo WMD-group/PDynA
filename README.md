@@ -9,7 +9,7 @@
 
 Code features
 --------
-- The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR and LAMMPS .out files. The core class of PDynA is the Trajectory class.
+- The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR and LAMMPS dump files. The core class of PDynA is the Trajectory class.
 
 - The structure recognition functions will automatically detect the constituent octahedral network and organic A-site molecules, and process the analysis. 
 
