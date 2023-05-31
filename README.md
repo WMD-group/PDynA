@@ -64,9 +64,22 @@ Install the package with pip
 Usage
 ------------
 
-A molecular dynamics trajectory is given in the examples folder, which can be processed using `pdyna_example.py`.
+Two molecular dynamics trajectories are given in the examples folder.
+
+
+**1. VASP-XDATCAR trajectory**
+
+The minimal example is based on a VASP-XDATCAR format trajectory, containing about 100 atoms. 
 
 Copy all the files under `examples/minimal` to your working directory and run the script `pdyna_example.py`. 
+
+
+**2. LAMMPS trajectory**
+
+The second example is a larger LAMMPS trajectory (20,000 atoms), covering more functions in **PDynA**. 
+
+Copy all the files under `examples/lammps` to your working directory, unzip `lammps_example_mapbbr3.out.gz` and run the script `example_lammps.py`. 
+
 
 Citation
 ------------
