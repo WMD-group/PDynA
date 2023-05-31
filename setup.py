@@ -26,6 +26,12 @@ setup(
     keywords="perovskite dynamics analysis",
     test_suite="nose.collector", 
     packages=find_packages(),
+    # Specify any non-python files to be distributed with the package
+    package_data={'pdyna': ['basis/*.json']},  # include json files in the basis directory
+    #package_data={
+    #    "pdyna": ["pdyna/basis/*"],
+    #},
+    include_package_data=True,
     install_requires=[
         "scipy",
         "numpy",
