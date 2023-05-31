@@ -8,7 +8,7 @@ import pymatgen.analysis.molecule_matcher
 from pymatgen.core.periodic_table import Element
 from scipy.spatial.transform import Rotation as sstr
 
-filename_basis = os.path.join(os.path.dirname(__file__),'basis/octahedron_basis.json')
+filename_basis = os.path.join(os.path.abspath(pdyna.__file__).rstrip('__init__.py'),'basis/octahedron_basis.json')
 try:
     with open(filename_basis, 'r') as f:
         dict_basis = json.load(f)
