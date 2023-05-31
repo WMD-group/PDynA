@@ -63,7 +63,7 @@ Development notes
 -----------------
 
 ### Bugs, features and questions
-Please use the [Issue Tracker](https://github.com/aLearningMachine/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16@imperial.ac.uk. 
+Please use the [Issue Tracker](https://github.com/WMD-group/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16@imperial.ac.uk. 
 
 ### Developer
 - Xia Liang (Deptment of Materials, Imperial College London)
