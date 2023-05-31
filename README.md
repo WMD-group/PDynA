@@ -44,6 +44,23 @@ The main language is Python 3 and has been tested using Python 3.8+, with the fo
 - Scipy
 - ASE
 
+Installation
+------------
+
+**PDynA** can be installed with the following commands:
+
+Clone the repository
+
+    git clone https://github.com/WMD-group/PDynA.git
+
+cd to PDynA directory
+    
+    cd pdyna
+    
+Install the package with pip
+
+    pip install .
+
 Usage
 ------------
 
