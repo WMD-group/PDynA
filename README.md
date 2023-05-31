@@ -76,7 +76,7 @@ Copy all the files under `examples/minimal` to your working directory and run th
 
 **2. LAMMPS trajectory**
 
-The second example is a larger LAMMPS trajectory (20,000 atoms), covering more functions in **PDynA**. 
+The second example is a larger LAMMPS trajectory (about 20,000 atoms), covering more functions in **PDynA**. 
 
 Copy all the files under `examples/lammps` to your working directory, unzip `lammps_example_mapbbr3.out.gz` and run the script `example_lammps.py`. 
 
