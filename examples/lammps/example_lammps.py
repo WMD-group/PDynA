@@ -14,7 +14,7 @@ traj.dynamics(read_mode= 1, # key parameter, 1: equilibration mode, 2: quench/an
               
               # Lattice parameter calculation
               lat_method = 2, # lattice parameter analysis methods, 1: direct lattice cell dimension, 2: pseudo-cubic lattice parameter
-              zdir = 1, # specified z-direction in case of lat_method 2
+              zdir = 1, # specified z-direction in case of lat_method 2, 0: a-axis, 1: b-axis, 2: c-axis
 
               # time averaged structure
               start_ratio = 0.8, # time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory
