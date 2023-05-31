@@ -459,8 +459,6 @@ def pseudocubic_lat(traj,  # the main class instance
                         templat[B1,i] = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/2
                     else: # x- and y-axis
                         temp = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/np.sqrt(2)
-                        if code[B1] == 1:
-                            i = (i+1)%2
                         templat[B1,i] = temp
             Lati_on[ite,:] = templat
         
@@ -1344,5 +1342,4 @@ def find_population_gap(r,find_range,init):
         raise ValueError("!Structure resolving: Can't separate the different neighbours, check if initial structure is defected or too distorted. ")
 
     return p
-
 
