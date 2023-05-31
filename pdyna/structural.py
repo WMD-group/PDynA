@@ -2,6 +2,7 @@ import numpy as np
 import re, os
 import json
 import sys
+import pdyna
 from joblib import Parallel, delayed
 from tqdm import tqdm
 import pymatgen.analysis.molecule_matcher
