@@ -17,7 +17,7 @@ Code features
 
 - The octahedral distortion and tilting calculation is the core feature of this package, which can quantitatively examine the dynamic behaviour of perovskite in terms of how octahedra tilt and distort, as well as the spatial correlation of these properties (Glazer notation). 
 
-- The octahedral distortion and tilting calculation can be accelerated with parallelization by joblib, this can be tuned with the input parameter *multi_thread*. 
+- The octahedral distortion and tilting calculation can be accelerated with parallelization by joblib, this can be tuned with the input parameter `multi_thread`. 
 
 <p align="center">
 <img src="graphic.png" width="550">
@@ -65,6 +65,8 @@ Usage
 ------------
 
 A molecular dynamics trajectory is given in the examples folder, which can be processed using `pdyna_example.py`.
+
+Copy all the files under `examples/minimal` to your working directory and run the script `pdyna_example.py`. 
 
 Citation
 ------------
