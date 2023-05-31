@@ -24,7 +24,7 @@ setup(
         "Operating System :: OS Independent",
     ],
     keywords="perovskite dynamics analysis",
-    test_suite="nose.collector",
+    test_suite="nose.collector", 
     packages=find_packages(),
     install_requires=[
         "scipy",
