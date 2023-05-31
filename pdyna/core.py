@@ -130,7 +130,7 @@ class Trajectory:
             dump_path, lammps_setting = self.data_path    
             
             print("------------------------------------------------------------")
-            print("Loading Trajectory files")
+            print("Loading Trajectory files...")
             
             atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path)
             
@@ -199,7 +199,7 @@ class Trajectory:
                 raise TypeError("The input npz_path must be either str or list. ")
             
             print("------------------------------------------------------------")
-            print("Loading Trajectory files")
+            print("Loading Trajectory files...")
             
             carts = []
             cellmat = []
@@ -1524,7 +1524,6 @@ class Trajectory:
                         orders[0,j] = np.argmax(np.dot(Bcoordenv[i,:,:],ref_octa[j,:]))
                     Benv[i,:] = Benv[i,:][orders.astype(int)]
                         
-                
                 # now each row of Benv contains the Pb atom index that sit in x,y and z direction of the row-numbered Pb atom.
                 Corr = np.empty((T.shape[0],T.shape[1],6))
                 for B1 in range(T.shape[1]):
@@ -1535,7 +1534,8 @@ class Trajectory:
                 
             else: 
                 raise TypeError(f"The environment matrix is incorrect. {Benv.shape[1]} ")
-                
+            
+            self._BNNenv = Benv
             self.Tilting_Corr = Corr
             
             if Benv.shape[1] == 6 and full_NN1_corr:

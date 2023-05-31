@@ -2109,7 +2109,7 @@ def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=
         fig.savefig(f"MO_{moltype}_orientation_density_Oh_symm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
 
-def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,miller_mask=False):
+def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,miller_mask=True):
     
     thetas=[] # List to collect data for later histogramming
     phis=[]
@@ -2152,11 +2152,12 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
             nnthetasOh.append(nnthetaOh)
             nnphisOh.append(nnphiOh)
 
-    w, h = figaspect(2/1.2)
-    fig, axs = plt.subplots(figsize=(w,h),nrows=2, ncols=1,sharey=True)
+    #w, h = figaspect(2/1.2)
+    #fig, axs = plt.subplots(figsize=(w,h),nrows=2, ncols=1,sharey=True)
+    fig, axs = plt.subplots(nrows=2, ncols=1,sharey=True)
 
-    axs[0].hexbin(phis,thetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
-    axs[1].hexbin(nnphis,nnthetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r)
+    axs[0].hexbin(phis,thetas,gridsize=42,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
+    axs[1].hexbin(nnphis,nnthetas,gridsize=42,marginals=False,cmap=plt.cm.cubehelix_r)
     
     if miller_mask:
         mil_111 = np.array([[1,1,1],[-1,1,1],[1,-1,1],[1,1,-1],[1,-1,-1],[-1,-1,1],[-1,1,-1],[-1,-1,-1]])
@@ -2174,33 +2175,40 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
             miltheta,milphi = spherical_coordinates(frame) # Values used for ORIENTATION 
             mil100thetas.append(miltheta) #append this data point to lists
             mil100phis.append(milphi)
-        axs[0].scatter(mil111phis,mil111thetas,label='(111)',s=10,color='lime')
-        axs[1].scatter(mil111phis,mil111thetas,s=10,color='lime')
-        axs[0].scatter(mil100phis,mil100thetas,label='(100)',s=10,color='gold')
-        axs[1].scatter(mil100phis,mil100thetas,s=10,color='gold')
-        legend = axs[0].legend(prop={'size': 12},frameon = True, loc="upper right")
-        legend.get_frame().set_alpha(0.7)
+        axs[0].scatter(mil111phis,mil111thetas,label='(111)',s=6,color='lime')
+        axs[1].scatter(mil111phis,mil111thetas,s=6,color='lime')
+        axs[0].scatter(mil100phis,mil100thetas,label='(100)',s=6,color='gold')
+        axs[1].scatter(mil100phis,mil100thetas,s=6,color='gold')
+        legend = axs[0].legend(prop={'size': 9},frameon = True, loc="upper right", ncol=2)
+        legend.get_frame().set_alpha(0.5)
     
-    axs[0].set_title(title, fontsize = 16)
+    axs[0].set_title(title, fontsize = 13)
     #cbar = plt.colorbar()
     #cbar.set_ticks([])
     pi=np.pi
 
     plt.sca(axs[0])
     plt.xticks( [-pi,-pi/2,0,pi/2,pi],
-                [r'$-\pi$',r'$-\pi/2$',r'$0$',r'$\pi/2$',r'$\pi$'],
-                fontsize=15)
+                [],
+                fontsize=11)
     plt.yticks( [-pi/2,0,pi/2],
                 [r'$-\pi/2$',r'$0$',r'$\pi/2$'],
-                fontsize=15)
+                fontsize=11)
     plt.sca(axs[1])
     plt.xticks( [-pi,-pi/2,0,pi/2,pi],
                 [r'$-\pi$',r'$-\pi/2$',r'$0$',r'$\pi/2$',r'$\pi$'],
-                fontsize=15)
+                fontsize=11)
     plt.yticks( [-pi/2,0,pi/2],
                 [r'$-\pi/2$',r'$0$',r'$\pi/2$'],
-                fontsize=15)
-    plt.set_ylabel(r'$\mathit{\phi}$',fontsize=17, rotation=0)
+                fontsize=11)
+    axs[0].set_ylabel(r'$\mathit{\phi_{1}}$',fontsize=13, rotation=0)
+    axs[1].set_ylabel(r'$\mathit{\phi_{2}}$',fontsize=13, rotation=0)
+    axs[0].yaxis.set_label_coords(-0.12,0.42)
+    axs[1].yaxis.set_label_coords(-0.12,0.42)
+    axs[1].set_xlabel(r'$\mathit{\theta}$',fontsize=13, rotation=0)
+    axs[0].set_aspect('equal')
+    axs[1].set_aspect('equal')
+    fig.subplots_adjust(hspace = 0.06,left=0.12,right=0.90)
     plt.show()
     if (SaveFigures):
         fig.savefig(f"MO_{moltype}_orientation_density_nosymm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
@@ -2233,7 +2241,7 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
 
     #cbar = plt.colorbar()
     #cbar.set_ticks([])
-    plt.set_xlabel(r'$\mathit{\theta}$',fontsize=17)
+    #plt.xlabel(r'$\mathit{\theta}$',fontsize=17)
     plt.show()
     if (SaveFigures):
         fig.savefig(f"MO_{moltype}_orientation_density_Oh_symm_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
