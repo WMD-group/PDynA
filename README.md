@@ -53,7 +53,7 @@ Clone the repository (or download manually)
 
     git clone https://github.com/WMD-group/PDynA.git
 
-cd to PDynA directory
+cd to PDynA directory with the `setup.py` file
     
     cd pdyna
     
