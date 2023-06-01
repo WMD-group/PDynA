@@ -38,7 +38,7 @@ traj.dynamics(read_mode = no_default,      # key parameter, 1: equilibration mod
                   Asite_reconstruct = False,  # setting a different time-averaging algo for organic A-sites
 
                   # octahedral tilting and distortion
-                  structure_type = 1,         # 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference             
+                  structure_type = 1,         # 1: 3C polytype (corner-sharing), 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference             
                   multi_thread = 1,           # if >1, enable multi-threading in this calculation with n threads
                   tilt_corr_NN1 = True,       # enable first NN correlation of tilting, reflecting the Glazer notation
                   full_NN1_corr = False,      # include off-diagonal correlation terms 
