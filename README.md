@@ -64,7 +64,7 @@ Install the package with pip
 Usage
 ------------
 
-Two molecular dynamics trajectories are given in the examples folder.
+Two molecular dynamics trajectories are given in the `examples` folder.
 
 
 **1. VASP-XDATCAR trajectory**
