@@ -81,6 +81,11 @@ The second example is a larger LAMMPS trajectory (about 20,000 atoms), covering 
 Copy all the files under `examples/lammps` to your working directory, unzip `lammps_example_mapbbr3.out.gz` and run the script `example_lammps.py`. 
 
 
+**3. Parameters explained**
+
+A full list of all the parameters is shown in the `examples/full.py`. 
+
+
 Citation
 ------------
 ["Structural dynamics descriptors for metal halide perovskites" arXiv:2305.11617 (2023)](https://arxiv.org/abs/2305.11617)
