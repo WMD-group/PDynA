@@ -49,7 +49,7 @@ Installation
 
 **PDynA** can be installed with the following commands:
 
-Clone the repository
+Clone the repository (or download manually)
 
     git clone https://github.com/WMD-group/PDynA.git
 
