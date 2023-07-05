@@ -81,7 +81,12 @@ The second example is a larger LAMMPS trajectory (about 20,000 atoms), covering 
 Copy all the files under `examples/lammps` to your working directory, unzip `lammps_example_mapbbr3.out.gz` and run the script `example_lammps.py`. 
 
 
-**3. Parameters explained**
+**3. XYZ trajectory**
+
+Reading of XYZ files can be done similarly by running `traj = Trajectory("xyz",(file_path, MDtup))`, where the MD settings `MDtup = (Ti, Tf, step, nblock)` (`nblock` is the frequency of frame saving).  
+
+
+**4. Parameters explained**
 
 A full list of all the parameters is shown in the `examples/full.py`. 
 
