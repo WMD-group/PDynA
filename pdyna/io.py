@@ -59,6 +59,68 @@ def process_lat(m):
     return np.concatenate((abc,angles)).reshape(1,6)
 
 
+def process_lat_reverse(cellpar):
+    """ 
+    Convert abc and three angles to lattice matrix.  
+    Modified from ASE functions.
+    """
+
+    X = np.array([1., 0., 0.])
+    Y = np.array([0., 1., 0.])
+    Z = np.array([0., 0., 1.])
+
+    # Express va, vb and vc in the X,Y,Z-system
+    alpha, beta, gamma = 90., 90., 90.
+    if isinstance(cellpar, (int, float)):
+        a = b = c = cellpar
+    elif len(cellpar) == 1:
+        a = b = c = cellpar[0]
+    elif len(cellpar) == 3:
+        a, b, c = cellpar
+    else:
+        a, b, c, alpha, beta, gamma = cellpar
+
+    # Handle orthorhombic cells separately to avoid rounding errors
+    eps = 2 * np.spacing(90.0, dtype=np.float64)  # around 1.4e-14
+    # alpha
+    if abs(abs(alpha) - 90) < eps:
+        cos_alpha = 0.0
+    else:
+        cos_alpha = np.cos(alpha * np.pi / 180.0)
+    # beta
+    if abs(abs(beta) - 90) < eps:
+        cos_beta = 0.0
+    else:
+        cos_beta = np.cos(beta * np.pi / 180.0)
+    # gamma
+    if abs(gamma - 90) < eps:
+        cos_gamma = 0.0
+        sin_gamma = 1.0
+    elif abs(gamma + 90) < eps:
+        cos_gamma = 0.0
+        sin_gamma = -1.0
+    else:
+        cos_gamma = np.cos(gamma * np.pi / 180.0)
+        sin_gamma = np.sin(gamma * np.pi / 180.0)
+
+    # Build the cell vectors
+    va = a * np.array([1, 0, 0])
+    vb = b * np.array([cos_gamma, sin_gamma, 0])
+    cx = cos_beta
+    cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma
+    cz_sqr = 1. - cx * cx - cy * cy
+    assert cz_sqr >= 0
+    cz = np.sqrt(cz_sqr)
+    vc = c * np.array([cx, cy, cz])
+
+    # Convert to the Cartesian x,y,z-system
+    abc = np.vstack((va, vb, vc))
+    T = np.vstack((X, Y, Z))
+    cell = np.dot(abc, T)
+
+    return cell
+
+
 def read_xdatcar(filename,natom):
     import re
     from monty.io import zopen
@@ -318,6 +380,75 @@ def read_lammps_dump(filepath):
     st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
     
     return asymb, lattice, latmat, Allpos, st0, framenums[-1], framenums[1]-framenums[0]
+
+
+def read_xyz(filepath): 
+    """
+    Modified from Pymatgen xyz reading functions
+    """
+    
+    import re
+    
+    def read_xyz_block(bloc):
+        """Convert a single frame XYZ string to a molecule."""
+        num_sites = int(bloc[0])
+        if len(bloc) != num_sites+2:
+            raise SyntaxError("The XYZ format should be line 1: N-atoms; line 2: cell dimension: [a b c alpha beta gamma] ; line 3-end: species and atomic coordinates. ")
+        cellstr = bloc[1]
+        try: 
+            cell = [float(entry) for entry in cellstr.split()]
+        except ValueError:
+            raise SyntaxError("The XYZ format should be line 1: N-atoms; line 2: cell dimension: [a b c alpha beta gamma] ; line 3-end: species and atomic coordinates. ")
+        
+        coords = []
+        sp = []
+        coord_patt = re.compile(r"(\w+)\s+([0-9\-\+\.*^eEdD]+)\s+([0-9\-\+\.*^eEdD]+)\s+([0-9\-\+\.*^eEdD]+)")
+        for i in range(2, 2 + num_sites):
+            m = coord_patt.search(bloc[i])
+            if m:
+                sp.append(m.group(1))  # this is 1-indexed
+                xyz = [val.lower().replace("d", "e").replace("*^", "e") for val in m.groups()[1:4]]
+                coords.append([float(val) for val in xyz])
+        return sp, np.array(coords), np.array(cell)
+    
+    contents = open(filepath, "rt").read()
+    lines = re.split("\n", contents)
+    blockheads = [i for i,s in enumerate(lines) if bool(re.match("\s*\d+\s*$", s))]
+    if len(blockheads) < 2: 
+        raise ValueError("The frames can be read correctly, please check the file integrity.")
+    frames = []
+    cart = []
+    celldim = []
+    cellmat = []
+    for i,j in enumerate(blockheads):
+        if j != blockheads[-1]:
+            bloc = lines[j:blockheads[i+1]]
+        else:
+            bloc = lines[j:]
+            while len(bloc[-1]) == 0:
+                bloc.pop()
+                
+        asymb, ci, celli = read_xyz_block(bloc)
+        cart.append(ci)
+        celldim.append(celli)
+        cellmat.append(process_lat_reverse(celli))
+    
+    Allpos = np.array(cart)
+    lattice = np.array(celldim)
+    latmat = np.array(cellmat)    
+        
+    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
+    
+    # isolate the first frame which is the initial structure as st0
+    Allpos = Allpos[1:,:]
+    lattice = lattice[1:,:]
+    latmat = latmat[1:,:]
+        
+    out_atoms = Atoms(symbols=np.array(asymb),positions=Allpos[0,:],pbc=[True,True,True],celldisp=np.array([0., 0., 0.]),cell=latmat[0,:])
+    st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
+    
+    return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
+
 
 
 def process_lammps_data(

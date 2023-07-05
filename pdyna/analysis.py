@@ -2028,7 +2028,7 @@ def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=
             thetasOh.append(thetaOh)
             phisOh.append(phiOh)
 
-    w, h = figaspect(1/1.2)
+    w, h = figaspect(1/1.6)
     fig, ax = plt.subplots(figsize=(w,h))
 
     plt.hexbin(phis,thetas,gridsize=36,marginals=False,cmap=plt.cm.cubehelix_r) #PuRd) #cmap=plt.cm.jet)
@@ -2055,8 +2055,10 @@ def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=
         legend = ax.legend(prop={'size': 12},frameon = True, loc="upper right")
         legend.get_frame().set_alpha(0.7)
     
-    #cbar = plt.colorbar()
-    #cbar.set_ticks([])
+    cbar = plt.colorbar()
+    #cbar.ax.set_yaxis('Intensity (a.u.)', fontsize=15)
+    cbar.ax.set_ylabel('Intensity (a.u.)', fontsize=15, rotation=270, labelpad=20)
+    cbar.set_ticks([])
     pi=np.pi
 
     plt.xticks( [-pi,-pi/2,0,pi/2,pi],
