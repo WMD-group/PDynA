@@ -9,7 +9,7 @@
 
 Code features
 --------
-- The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR, XYZ and LAMMPS dump files. The core class of PDynA is the `Trajectory` class.
+- The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR, XYZ, PDB (proteindatabank) and LAMMPS dump files. The core class of PDynA is the `Trajectory` class.
 
 - The structure recognition functions will automatically detect the constituent octahedral network and organic A-site molecules, and process the analysis. 
 
@@ -86,7 +86,12 @@ Copy all the files under `examples/lammps` to your working directory, unzip `lam
 Reading of XYZ files can be done similarly by running `traj = Trajectory("xyz",(file_path, MDtup))`, where the MD settings `MDtup = (Ti, Tf, step, nblock)` (`nblock` is the frequency of frame saving).  
 
 
-**4. Parameters explained**
+**4. PDB trajectory**
+
+Reading of PDB files can be done similarly by running `traj = Trajectory("pdb",(file_path, MDtup))`, where the MD settings `MDtup = (Ti, Tf, step, nblock)` (`nblock` is the frequency of frame saving).  
+
+
+**5. Parameters explained**
 
 A full list of all the parameters is shown in the `examples/full.py`. 
 
@@ -108,4 +113,4 @@ Development notes
 Please use the [Issue Tracker](https://github.com/WMD-group/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16@imperial.ac.uk. 
 
 ### Developer
-- Xia Liang (Deptment of Materials, Imperial College London)
+- Xia Liang (Department of Materials, Imperial College London)
