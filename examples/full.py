@@ -34,7 +34,7 @@ traj.dynamics(read_mode = no_default,      # key parameter, 1: equilibration mod
 
                   # time averaged structure
                   start_ratio = 0.5,          # time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory
-                  tavg_save_dir = '.\\',      # directory for saving the time-averaging structures 
+                  tavg_save_dir = '.',      # directory for saving the time-averaging structures 
                   Asite_reconstruct = False,  # setting a different time-averaging algo for organic A-sites
 
                   # octahedral tilting and distortion
