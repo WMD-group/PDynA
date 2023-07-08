@@ -390,7 +390,7 @@ def read_xyz(filepath):
     import re
     
     def read_xyz_block(bloc):
-        """Convert a single frame XYZ string to a molecule."""
+
         num_sites = int(bloc[0])
         if len(bloc) != num_sites+2:
             raise SyntaxError("The XYZ format should be line 1: N-atoms; line 2: cell dimension: [a b c alpha beta gamma] ; line 3-end: species and atomic coordinates. ")
@@ -449,6 +449,69 @@ def read_xyz(filepath):
     
     return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
 
+
+def read_pdb(filepath): 
+    """
+    Modified from Pymatgen xyz reading functions
+    """
+    
+    import re
+    
+    def read_pdb_block(bloc):
+        
+        coords = []
+        sp = []
+        for line in bloc:
+            if line.startswith("CRYST1"):
+                str1 = line.lstrip("CRYST1").split()
+                cell = np.array([float(e) for e in str1])
+            if line.startswith("ATOM"):
+                coords.append(np.array([float(line[30:38]),float(line[38:46]),float(line[46:54])], dtype=np.float64))
+                sp.append(line[76:78].strip())
+        
+        return sp, np.array(coords), cell
+    
+    contents = open(filepath, "rt").read()
+    lines = re.split("\n", contents)
+    b0 = []
+    b1 = []
+    for i,s in enumerate(lines):
+        if s.startswith("REMARK"): b0.append(i)
+        elif s.startswith("END"): b1.append(i)
+    
+    if len(b0) != len(b1):
+        raise ValueError("The PDB file format is not recognized, please check file integrity. ")
+    if len(b0) < 2:
+        raise ValueError("The PDB file format is not recognized, please check file integrity. ")
+
+    cart = []
+    celldim = []
+    cellmat = []
+    for i in range(len(b0)):
+        bloc = lines[b0[i]:b1[i]]
+        
+        asymb, ci, celli = read_pdb_block(bloc)
+        cart.append(ci)
+        celldim.append(celli)
+        cellmat.append(process_lat_reverse(celli))
+    
+    Allpos = np.array(cart)
+    lattice = np.array(celldim)
+    latmat = np.array(cellmat)    
+        
+    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
+    
+    # isolate the first frame which is the initial structure as st0
+    pos0 = Allpos[0,:]
+    lat0 = latmat[0,:]
+    Allpos = Allpos[1:,:]
+    lattice = lattice[1:,:]
+    latmat = latmat[1:,:]
+        
+    out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=np.array([0., 0., 0.]),cell=lat0)
+    st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
+    
+    return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
 
 
 def process_lammps_data(

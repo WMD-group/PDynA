@@ -247,6 +247,69 @@ class Trajectory:
             self.Tgrad = (md_setting[1]-md_setting[0])/(md_setting[3]*md_setting[2]/1000)   # temeperature gradient
             
         
+        elif self.data_format == 'pdb':
+            
+            from pdyna.io import read_pdb, chemical_from_formula
+            
+            if len(self.data_path) != 2:
+                raise TypeError("The input format for lammps must be (xyz_path, MD setting tuple). ")
+            pdb_path, md_setting = self.data_path    
+            
+            print("------------------------------------------------------------")
+            print("Loading Trajectory files...")
+            
+            atomic_symbols, lattice, latmat, Allpos, st0, nstep = read_pdb(pdb_path)
+            
+            for elem in st0.symbol_set:
+                if not elem in known_elem:
+                    raise ValueError(f"An unexpected element {elem} is found. ")
+             
+            self.st0 = st0
+            self.natom = len(st0)
+            self.species_set = st0.symbol_set
+            self.formula = chemical_from_formula(st0)
+            
+            Xindex = []
+            Bindex = []
+            Cindex = []
+            Nindex = []
+            Hindex = []
+            for i,site in enumerate(atomic_symbols):
+                 if site in Xsite_species:
+                     Xindex.append(i)
+                 if site in Bsite_species:
+                     Bindex.append(i)  
+                 if site == 'C':
+                     Cindex.append(i)  
+                 if site == 'N':
+                     Nindex.append(i)  
+                 if site == 'H':
+                     Hindex.append(i)  
+            
+            self.Bindex = Bindex
+            self.Xindex = Xindex
+            self.Cindex = Cindex
+            self.Hindex = Hindex
+            self.Nindex = Nindex
+            
+            self.Allpos = Allpos
+            
+            self.lattice = lattice
+            self.latmat = latmat
+            
+            self.nframe = lattice.shape[0]
+            
+            
+            self.MDsetting = {}
+            self.MDsetting["nblock"] = md_setting[3]
+            self.MDsetting["nsw"] = nstep*md_setting[3]
+            self.MDsetting["Ti"] = md_setting[0]
+            self.MDsetting["Tf"] = md_setting[1]
+            self.MDsetting["tstep"] = md_setting[2]
+            self.MDTimestep = md_setting[2]/1000*md_setting[3]  # the timestep between recorded frames
+            self.Tgrad = (md_setting[1]-md_setting[0])/(md_setting[3]*md_setting[2]/1000)   # temeperature gradient
+            
+        
         elif self.data_format == 'npz': # only for internal use, not generalised 
             from pdyna.io import process_lat, chemical_from_formula
             from ase.io.lammpsdata import read_lammps_data as rld
