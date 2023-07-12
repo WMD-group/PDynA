@@ -5,7 +5,6 @@ from math import factorial
 from scipy.stats import norm
 from matplotlib.figure import figaspect
 import matplotlib.pyplot as plt
-from pdyna.structural import periodicity_fold
 
 if os.path.exists("style.mplstyle"):
     plt.style.use("style.mplstyle")
@@ -575,6 +574,7 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, ti
     
     fig_name=f"traj_tilt_density_{uniname}.png"
     
+    from pdyna.structural import periodicity_fold
     T = periodicity_fold(T,n_fold=symm_n_fold)
     
     if symm_n_fold == 2:
@@ -637,6 +637,7 @@ def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n
     
     fig_name=f"traj_tilt_density_{uniname}.png"
     
+    from pdyna.structural import periodicity_fold
     T = periodicity_fold(T,n_fold=symm_n_fold)
     
     if symm_n_fold == 2:
@@ -710,6 +711,7 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
     Isolate tilting pattern wrt. the local halide configuration.  
     """
     
+    from pdyna.structural import periodicity_fold
     fig_name=f"tilt_octatype_density_{uniname}.png"
     
     if symm_n_fold == 2:
@@ -916,6 +918,7 @@ def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 
     Isolate tilting pattern wrt. the local halide concentration.  
     """
     
+    from pdyna.structural import periodicity_fold
     fig_name=f"tilt_halideconc_density_{uniname}.png"
     
     if symm_n_fold == 2:

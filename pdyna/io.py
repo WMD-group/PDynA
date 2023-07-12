@@ -514,6 +514,48 @@ def read_pdb(filepath):
     return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
 
 
+def read_ase_traj(filepath): 
+    """
+    Modified from ASE original trajectory reading functions
+    """
+    
+    import re
+    from ase.io import Trajectory
+    
+    contents = Trajectory(filepath)
+    
+    cart = []
+    celldim = []
+    cellmat = []
+    for bloc in contents:
+        ci = bloc.positions
+        cmat = bloc.cell.array
+        
+        cart.append(ci)
+        celldim.append(process_lat(cmat)[0,:])
+        cellmat.append(cmat)
+    
+    Allpos = np.array(cart)
+    lattice = np.array(celldim)
+    latmat = np.array(cellmat)    
+        
+    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
+    
+    # isolate the first frame which is the initial structure as st0
+    Allpos = Allpos[1:,:]
+    lattice = lattice[1:,:]
+    latmat = latmat[1:,:]
+        
+    st0 = pia.AseAtomsAdaptor.get_structure(contents[0])
+    if not np.array_equal(np.array(st0.atomic_numbers),np.array(contents[0].numbers)):
+        raise TypeError("Fatal: the converted Pymatgen structure does not match with the ASE Atoms. ")
+    asymb = []
+    for s in st0.species:
+        asymb.append(s.name)
+    
+    return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
+
+
 def process_lammps_data(
     data,
     colnames,
