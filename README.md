@@ -9,7 +9,7 @@
 
 Code features
 --------
-- The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR, XYZ, PDB (proteindatabank) and LAMMPS dump files. The core class of PDynA is the `Trajectory` class.
+- The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR, XYZ, PDB (proteindatabank), ASE-Trajectory and LAMMPS dump files. The core class of PDynA is the `Trajectory` class.
 
 - The structure recognition functions will automatically detect the constituent octahedral network and organic A-site molecules, and process the analysis. 
 
@@ -81,17 +81,12 @@ The second example is a larger LAMMPS trajectory (about 20,000 atoms), covering 
 Copy all the files under `examples/lammps` to your working directory, unzip `lammps_example_mapbbr3.out.gz` and run the script `example_lammps.py`. 
 
 
-**3. XYZ trajectory**
+**3. XYZ/PDB/ASE trajectory**
 
-Reading of XYZ files can be done similarly by running `traj = Trajectory("xyz",(file_path, MDtup))`, where the MD settings `MDtup = (Ti, Tf, step, nblock)` (`nblock` is the frequency of frame saving).  
-
-
-**4. PDB trajectory**
-
-Reading of PDB files can be done similarly by running `traj = Trajectory("pdb",(file_path, MDtup))`, where the MD settings `MDtup = (Ti, Tf, step, nblock)` (`nblock` is the frequency of frame saving).  
+Reading of these file types can be done similarly by running `traj = Trajectory(filetype,(file_path, MDtup))`, where `filetype` is one of "xyz", "pdb" or "ase-traj", the MD settings `MDtup = (Ti, Tf, timestep, nblock)` (`timestep` is MD time step in femtosecond, `nblock` is the frequency of frame saving).  
 
 
-**5. Parameters explained**
+**4. Parameters explained**
 
 A full list of all the parameters is shown in the `examples/full.py`. 
 
