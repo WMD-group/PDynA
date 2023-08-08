@@ -1548,26 +1548,26 @@ def quantify_tilt_domain(sc,scnorm):
     #sc[np.abs(sc)>thr] = (np.sqrt(np.abs(sc))*np.sign(sc))[np.abs(sc)>thr]
     
     from scipy.optimize import curve_fit
-    def model_func(x, k1, k2):
-        return 0.9 * np.exp(-k1*x) + 0.1 * np.exp(-k2*x)
-        #return a * np.exp(-k*x) + b
+    def model_func(x, k):
+        #return 0.9 * np.exp(-k1*x) + 0.1 * np.exp(-k2*x)
+        return np.exp(-k*x)
     
     pop_warning = []
     scdecay = np.empty((3,3))
     for i in range(3):
         for j in range(3):
             tc = np.abs(scnorm[i,:,j])
-            #p0 = (5) # starting search coeffs
-            #opt, pcov = curve_fit(model_func1, np.array(list(range(sc.shape[1]))), tc, p0)
-            #k= opt
-            
-            p0 = (5,0.1) # starting search coeffs
+            p0 = (5) # starting search coeffs
             opt, pcov = curve_fit(model_func, np.array(list(range(sc.shape[1]))), tc, p0)
-            k1 ,k2= opt
+            k= opt
+            
+            #p0 = (5,0.1) # starting search coeffs
+            #opt, pcov = curve_fit(model_func, np.array(list(range(sc.shape[1]))), tc, p0)
+            #k1 ,k2= opt
             
             #print(k1 ,k2)
-            k=k1
-            y2 = model_func(np.array(list(range(sc.shape[1]))), k1 ,k2)
+            #k=k1
+            #y2 = model_func(np.array(list(range(sc.shape[1]))), k1 ,k2)
                 
             scdecay[i,j] = (1/k)
             

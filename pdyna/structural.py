@@ -532,7 +532,7 @@ def pseudocubic_lat(traj,  # the main class instance
         # find the correct a and b vectors
         #code = np.remainder(np.sum(grided,axis=1),2)
         code = np.remainder(grided[:,1],2)
-        trajnum = list(range(round(traj.nframe*allow_equil),traj.nframe))
+        trajnum = list(range(round(traj.nframe*allow_equil),traj.nframe,traj.read_every))
         lats = traj.latmat[trajnum,:]
         Bpos = traj.Allpos[trajnum,:,:][:,traj.Bindex,:]
         

@@ -1269,7 +1269,7 @@ class Trajectory:
             b1 = Bpos[-1,:]
             x1 = Xpos[-1,:]
             rf = distance_array(b1,x1,mybox1)
-            if np.amax(r-rf) > 3: 
+            if np.amax(r-rf) > 4: 
                 raise ValueError(f"The difference between initial and final configs are too large ({np.amax(r-rf)})")
             
             octa_halide_code = [] # resolve the halides of a octahedron, key output
@@ -1324,11 +1324,7 @@ class Trajectory:
             ranger0 = round(ranger*allow_equil)
             timeline = timeline[round(timeline.shape[0]*allow_equil):]
         
-        readfr = []
-        for fr in range(ranger0,ranger):
-            if read_every != 1 and fr%read_every != 0:
-                continue
-            readfr.append(fr)
+        readfr = list(range(ranger0,ranger,self.read_every))
         self.frames_read = readfr
     
         if orthogonal_frame:
@@ -2344,7 +2340,7 @@ class Trajectory:
         from MDAnalysis.analysis.distances import distance_array
         from pdyna.analysis import draw_RDF
         
-        trajnum = list(range(round(self.nframe*allow_equil),self.nframe))
+        trajnum = list(range(round(self.nframe*allow_equil),self.nframe,self.read_every))
         
         Xindex = self.Xindex
         Bindex = self.Bindex
@@ -2354,7 +2350,7 @@ class Trajectory:
         Xpos = self.Allpos[:,Xindex,:]
         
         CNtol = 2.7
-        BXtol = 12.8
+        BXtol = 15
         
         if self._flag_organic_A:
             
