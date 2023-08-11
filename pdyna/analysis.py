@@ -1252,7 +1252,7 @@ def draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures, n_bins
     Generate the Glazer plot. 
     """
     
-    fig_name=f"traj_tilt_corr_density_{uniname}.png"
+    fig_name=f"frame_tilts_{uniname}.png"
     
     corr_power = 2.5
     fill_alpha = 0.5
