@@ -2845,6 +2845,7 @@ class Frame:
         from scipy.spatial.transform import Rotation as sstr
         from MDAnalysis.analysis.distances import distance_array
         from pdyna.structural import octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors
+        from pdyna.analysis import draw_dist_density_frame
         
         et0 = time.time()
         
@@ -2876,7 +2877,13 @@ class Frame:
         T = np.zeros((Bcount,3))
         for i in range(Rmat.shape[0]):
             T[i,:] = sstr.from_matrix(Rmat[i,:]).as_euler('xyz', degrees=True)
-
+        
+        self.Tilting = T
+        self.Distortion = D
+        
+        dmu = draw_dist_density_frame(D, uniname, saveFigures, n_bins = 100)        
+        print("Octahedral distortions:",np.round(dmu,4))
+        
         
         # NN1 correlation function of tilting (Glazer notation)
         from pdyna.analysis import abs_sqrt, draw_tilt_corr_evolution_sca, draw_tilt_and_corr_density_shade_frame
@@ -2899,7 +2906,7 @@ class Frame:
         except IndexError:
             print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
             print("See the gap between the populations. \n")
-            test_range = ri.reshape((1,ri.shape[0]**2))
+            test_range = r0.reshape((1,r0.shape[0]**2))
             import matplotlib.pyplot as plt
             fig,ax = plt.subplots(1,1)
             plt.hist(test_range.reshape(-1,),range=[5.3,9.0],bins=100)
@@ -2945,8 +2952,15 @@ class Frame:
         self._BNNenv = Benv
         self.Tilting_Corr = Corr
         
-        polarity = draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures)
+        tquant, polarity = draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures)
+        print("Tilt angles found:")
+        print(f"a-axis: {tquant[0]}")
+        print(f"b-axis: {tquant[1]}")
+        print(f"c-axis: {tquant[2]}")
         print("tilting correlation:",np.round(np.array(polarity).reshape(3,),3))
+        
+        self.tilt_peaks = tquant
+        self.tilt_corr_polarity = polarity
         
         et1 = time.time()
         self.timing["tilt_distort"] = et1-et0

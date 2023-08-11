@@ -570,6 +570,62 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
         return Mu, Std
 
 
+def draw_dist_density_frame(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
+    
+    fig_name = f"frame_dist_{uniname}.png"
+    
+    assert D.ndim == 2
+    
+    figs, axs = plt.subplots(4, 1)
+    labels = ["Eg","T2g","T1u","T2u"]
+    colors = ["C3","C4","C5","C6"]
+    for i in range(4):
+        y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+        axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+        axs[i].text(0.05, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
+    
+    Mu = []
+    Std = []
+    for i in range(4):
+        dfil = D[:,i].copy()
+        dfil = dfil[~np.isnan(dfil)]
+        mu, std = norm.fit(dfil)
+        Mu.append(mu)
+        Std.append(std)
+        axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+    
+    for ax in axs.flat:
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+        ax.set_xlabel('Distortion', fontsize = 15) # X label
+        ax.set_xlim(xrange)
+        ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+        ax.set_yticks([])
+        
+    axs[0].xaxis.set_ticklabels([])
+    axs[1].xaxis.set_ticklabels([])
+    axs[2].xaxis.set_ticklabels([])
+    axs[0].yaxis.set_ticklabels([])
+    axs[1].yaxis.set_ticklabels([])
+    axs[2].yaxis.set_ticklabels([])
+    axs[3].yaxis.set_ticklabels([])
+    axs[0].set_xlabel("")
+    axs[1].set_xlabel("")
+    axs[2].set_xlabel("")
+    axs[0].set_ylabel("")
+    axs[2].set_ylabel("")
+    axs[3].set_ylabel("")
+    axs[1].yaxis.set_label_coords(-0.02,-0.40)
+    
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        
+    plt.show()
+    return Mu
+
+
 def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, title = None):
     
     fig_name=f"traj_tilt_density_{uniname}.png"
@@ -1273,14 +1329,16 @@ def draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures, n_bins
     colors = ["C0", "C1", "C2"]
     #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
     por = [0,0,0]
+    tquant = []
     for i in range(3):
-        
         y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
         yt=y/max(y)
         axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
         #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
-
+        
+        t1 = list(np.round(bincenters[np.logical_and(y>0,bincenters>-0.0001)],3))
+        
         y,binEdges=np.histogram(C[i],bins=n_bins,range=[-45,45]) 
         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
         yc=y/max(y)
@@ -1294,6 +1352,8 @@ def draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures, n_bins
         parneg = np.sum(np.power(yc,corr_power)[bincenters<0])
         parpos = np.sum(np.power(yc,corr_power)[bincenters>0])
         por[i] = (-parneg+parpos)/(parneg+parpos)
+        
+        tquant.append(t1)
         
     for ax in axs.flat:
         ax.tick_params(axis='both', which='major', labelsize=14)
@@ -1328,7 +1388,7 @@ def draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures, n_bins
             cval = np.sign(cval)*(np.power(np.abs(cval)/div,scal)*div)
             por[ci] = np.round(cval,4)
     
-    return por
+    return tquant, por
 
 
 def draw_tilt_coaxial(T, uniname, saveFigures, n_bins = 71, title = None):
