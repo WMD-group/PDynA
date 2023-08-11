@@ -6,7 +6,7 @@ with open("README.md") as file:
 
 setup(
     name="pdyna",
-    version="1.0.0",
+    version="1.0.1",
     description="Perovskite dynamics analysis package",
     url="https://github.com/WMD-group/PDynA",
     author="Xia Liang",
