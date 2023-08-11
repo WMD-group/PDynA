@@ -194,6 +194,37 @@ def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
         return neigh_list, ref_initial
 
 
+def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,mybox,mymat,rotated,rotmat):
+    """ 
+    Resolve the octahedral connectivity. 
+    """
+    from MDAnalysis.analysis.distances import distance_array
+
+    r=distance_array(Bpos_frame,Xpos_frame,mybox)
+    max_BX_distance = find_population_gap(r, [0.1,8], [3,6.8])
+        
+    neigh_list = np.zeros((Bpos_frame.shape[0],6))
+    for B_site, X_list in enumerate(r): # for each B-site atom
+        X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
+        if len(X_idx) != 6:
+            raise ValueError(f"The number of X site atoms connected to B site atom no.{B_site} is not 6 but {len(X_idx)}. \n")
+        
+        bx_raw = Xpos_frame[X_idx,:] - Bpos_frame[B_site,:]
+        bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
+        
+        if rotated:
+            order1 = match_bx_orthogonal_rotated(bx,mymat,rotmat) 
+        else:
+            order1 = match_bx_orthogonal(bx,mymat) 
+        neigh_list[B_site,:] = np.array(X_idx)[order1]
+
+    
+    neigh_list = neigh_list.astype(int)
+
+    return neigh_list
+
+
+
 def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
     """ 
     Resolve the octahedral connectivity with a defect tolerance. 
@@ -874,6 +905,29 @@ def match_bx_orthogonal(bx,mymat):
                              [0,  0,  1],
                              [0,  1,  0],
                              [1,  0,  0]])
+    order = []
+    for ix in range(6):
+        fits = np.dot(bx,ideal_coords[ix,:])
+        if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-2]] < 0.5):
+            print(bx,fits)
+            raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
+        order.append(np.argmax(fits))
+    assert len(set(order)) == 6 # double-check sanity
+    return order
+
+
+def match_bx_orthogonal_rotated(bx,mymat,rotmat):
+    """ 
+    Find the order of atoms in octahedron through matching with the reference. 
+    Used in connectivity type 2.
+    """
+    ideal_coords = np.array([[-1, 0,  0],
+                             [0, -1,  0],
+                             [0,  0, -1],
+                             [0,  0,  1],
+                             [0,  1,  0],
+                             [1,  0,  0]])
+    ideal_coords = np.matmul(ideal_coords,rotmat)
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])

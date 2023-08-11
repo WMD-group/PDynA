@@ -31,12 +31,11 @@ class Trajectory:
     data_format: str = field(repr=False)
     data_path: tuple = field(repr=False)
     
+    _Xsite_species = ['Cl','Br','I'] # update if your structrue contains other elements on the X-sites
+    _Bsite_species = ['Pb','Sn'] # update if your structrue contains other elements on the B-sites
+    _known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs") # update if your structure has other constituent elements, this is just to make sure all the elements should appear in the structure. 
     
     def __post_init__(self):
-        
-        Xsite_species = ['Cl','Br','I'] # update if needed
-        Bsite_species = ['Pb','Sn'] # update if needed
-        known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs")
         
         et0 = time.time()
 
@@ -56,8 +55,8 @@ class Trajectory:
             st0 = vi.Poscar.from_file(poscar_path,check_for_POTCAR=False).structure # initial configuration
             
             for elem in st0.symbol_set:
-                if not elem in known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                if not elem in self._known_elem:
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem above. ")
             self.st0 = st0
             self.natom = len(st0)
             self.species_set = st0.symbol_set
@@ -76,9 +75,9 @@ class Trajectory:
             Nindex = []
             Hindex = []
             for i,site in enumerate(atomic_symbols):
-                 if site in Xsite_species:
+                 if site in self._Xsite_species:
                      Xindex.append(i)
-                 if site in Bsite_species:
+                 if site in self._Bsite_species:
                      Bindex.append(i)  
                  if site == 'C':
                      Cindex.append(i)  
@@ -135,7 +134,7 @@ class Trajectory:
             atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path)
             
             for elem in st0.symbol_set:
-                if not elem in known_elem:
+                if not elem in self._known_elem:
                     raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
              
             self.st0 = st0
@@ -149,9 +148,9 @@ class Trajectory:
             Nindex = []
             Hindex = []
             for i,site in enumerate(atomic_symbols):
-                 if site in Xsite_species:
+                 if site in self._Xsite_species:
                      Xindex.append(i)
-                 if site in Bsite_species:
+                 if site in self._Bsite_species:
                      Bindex.append(i)  
                  if site == 'C':
                      Cindex.append(i)  
@@ -198,7 +197,7 @@ class Trajectory:
             atomic_symbols, lattice, latmat, Allpos, st0, nstep = read_xyz(xyz_path)
             
             for elem in st0.symbol_set:
-                if not elem in known_elem:
+                if not elem in self._known_elem:
                     raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
              
             self.st0 = st0
@@ -212,9 +211,9 @@ class Trajectory:
             Nindex = []
             Hindex = []
             for i,site in enumerate(atomic_symbols):
-                 if site in Xsite_species:
+                 if site in self._Xsite_species:
                      Xindex.append(i)
-                 if site in Bsite_species:
+                 if site in self._Bsite_species:
                      Bindex.append(i)  
                  if site == 'C':
                      Cindex.append(i)  
@@ -261,7 +260,7 @@ class Trajectory:
             atomic_symbols, lattice, latmat, Allpos, st0, nstep = read_pdb(pdb_path)
             
             for elem in st0.symbol_set:
-                if not elem in known_elem:
+                if not elem in self._known_elem:
                     raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
              
             self.st0 = st0
@@ -275,9 +274,9 @@ class Trajectory:
             Nindex = []
             Hindex = []
             for i,site in enumerate(atomic_symbols):
-                 if site in Xsite_species:
+                 if site in self._Xsite_species:
                      Xindex.append(i)
-                 if site in Bsite_species:
+                 if site in self._Bsite_species:
                      Bindex.append(i)  
                  if site == 'C':
                      Cindex.append(i)  
@@ -324,7 +323,7 @@ class Trajectory:
             atomic_symbols, lattice, latmat, Allpos, st0, nstep = read_ase_traj(ase_path)
             
             for elem in st0.symbol_set:
-                if not elem in known_elem:
+                if not elem in self._known_elem:
                     raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
              
             self.st0 = st0
@@ -338,9 +337,9 @@ class Trajectory:
             Nindex = []
             Hindex = []
             for i,site in enumerate(atomic_symbols):
-                 if site in Xsite_species:
+                 if site in self._Xsite_species:
                      Xindex.append(i)
-                 if site in Bsite_species:
+                 if site in self._Bsite_species:
                      Bindex.append(i)  
                  if site == 'C':
                      Cindex.append(i)  
@@ -410,7 +409,7 @@ class Trajectory:
             st0 = pia.AseAtomsAdaptor.get_structure(at)
             
             for elem in st0.symbol_set:
-                if not elem in known_elem:
+                if not elem in self._known_elem:
                     raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
             
             self.st0 = st0
@@ -428,9 +427,9 @@ class Trajectory:
             Nindex = []
             Hindex = []
             for i,site in enumerate(atomic_symbols):
-                 if site in Xsite_species:
+                 if site in self._Xsite_species:
                      Xindex.append(i)
-                 if site in Bsite_species:
+                 if site in self._Bsite_species:
                      Bindex.append(i)  
                  if site == 'C':
                      Cindex.append(i)  
@@ -798,7 +797,7 @@ class Trajectory:
         
         hal_count = 0
         for sp in self.st0.symbol_set:
-            if sp in ("I", "Br", "Cl", "F"):
+            if sp in self._Xsite_species:
                 hal_count += 1
         if hal_count == 0:
             raise TypeError("The structure does not contain any recognised X site.")
@@ -2653,3 +2652,301 @@ class Trajectory:
         et1 = time.time()
         self.timing["A_disp"] = et1-et0
 
+
+@dataclass
+class Frame:
+    
+    """
+    Class for analysis of single-frame structure.
+    Initialize the class with reading the raw data.
+
+    Parameters
+    ----------
+    data_format : data format based on the software
+        Currently compatible format is 'poscar'.
+    data_path : tuple of input files
+        The input file path.
+        poscar: poscar_path
+
+    """
+    
+    data_format: str = field(repr=False)
+    data_path: str = field(repr=False)
+    
+    
+    def __post_init__(self):
+        
+        #Xsite_species = ['Cl','Br','I'] # update if needed
+        #Bsite_species = ['Pb','Sn'] # update if needed
+        #known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs") # update if needed
+        
+        Xsite_species = ['Ba'] # update if needed
+        Bsite_species = ['P'] # update if needed
+        known_elem = ('Ba', 'P', 'Sb') # update if needed
+        
+        et0 = time.time()
+
+        if self.data_format == 'poscar':
+            
+            import pymatgen.io.vasp.inputs as vi
+            from pdyna.io import chemical_from_formula
+            
+            poscar_path = self.data_path
+            
+            print("------------------------------------------------------------")
+            print("Loading Frame files...")
+            
+            # read POSCAR and XDATCAR files
+            st0 = vi.Poscar.from_file(poscar_path,check_for_POTCAR=False).structure # initial configuration
+            
+            for elem in st0.symbol_set:
+                if not elem in known_elem:
+                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+            self.st0 = st0
+            self.natom = len(st0)
+            self.species_set = st0.symbol_set
+            self.formula = chemical_from_formula(st0)
+            self.scaled_up = False
+
+            # read the coordinates and save   
+            Xindex = []
+            Bindex = []
+
+            for i,site in enumerate(st0.sites):
+                 if site.species_string in Xsite_species:
+                     Xindex.append(i)
+                 if site.species_string in Bsite_species:
+                     Bindex.append(i)  
+            
+            if len(Bindex) < 16:
+                st0.make_supercell([2,2,2])
+                
+                self.st0 = st0
+                self.natom = len(st0)
+                self.scaled_up = True
+                
+                Xindex = []
+                Bindex = []
+
+                for i,site in enumerate(st0.sites):
+                     if site.species_string in Xsite_species:
+                         Xindex.append(i)
+                     if site.species_string in Bsite_species:
+                         Bindex.append(i)  
+            
+            self.Bindex = Bindex
+            self.Xindex = Xindex
+        
+        else:
+            raise TypeError("Unsupported data format: {}".format(self.data_format))
+        
+        et1 = time.time()
+        self.timing = {}
+        self.timing["reading"] = et1-et0
+
+
+    def __str__(self):
+        pattern = '''
+        Perovskite Trajectory
+        Formula:          {}
+        Number of atoms:  {}
+        '''
+        return pattern.format(self.formula, self.natom)
+    
+    
+    def __repr__(self):
+        return 'PDynA Trajectory({}, {} atoms)'.format(self.formula, self.natom)    
+    
+    
+    def analysis(self,
+                 # general parameters
+                 uniname = "test", # A unique user-defined name for this trajectory, will be used in printing and figure saving
+                 saveFigures = False, # whether to save produced figures
+                 align_rotation = [0,0,0] # rotation of structure to match orthogonal directions
+                 ):
+        
+        """
+        Core function for analysing perovskite trajectory.
+        The parameters are used to enable various analysis functions and handle their functionality.
+
+        Parameters
+        ----------
+        
+        -- General Parameters
+        uniname     -- unique user-defined name for this trajectory, will be used in printing and figure saving
+        
+        -- Saving the Outputs
+        saveFigures   -- whether to save produced figures
+            True or False
+
+        -- Octahedral Tilting and Distortion
+        align_rotation  -- rotation angles about [a,b,c] in angles 
+        p.s. The 'True or False' options all have False as the default unless specified otherwise. 
+        """
+        
+        # pre-definitions
+        print("Current sample:",uniname)
+        #print("Initializing trajectory")
+        
+        # reset timing
+        self.timing = {"reading": self.timing["reading"]}
+        self.uniname = uniname
+        
+        et0 = time.time()
+        print(" ")
+        
+        # label the constituent octahedra
+        from pdyna.structural import fit_octahedral_network_frame
+        
+        st0Bpos = self.st0.cart_coords[self.Bindex,:]
+        st0Xpos = self.st0.cart_coords[self.Xindex,:]
+        mybox = np.array([self.st0.lattice.abc,self.st0.lattice.angles]).reshape(6,)
+        mymat = self.st0.lattice.matrix
+        
+        rotated = False
+        if align_rotation != [0,0,0]: 
+            rotated = True
+            from scipy.spatial.transform import Rotation as sstr
+            align_rotation = np.array(align_rotation)/180*np.pi
+            rotmat = sstr.from_rotvec(align_rotation).as_matrix().reshape(3,3)
+        
+        if rotated:
+            neigh_list = fit_octahedral_network_frame(st0Bpos,st0Xpos,mybox,mymat,rotated,rotmat)
+        else:
+            neigh_list = fit_octahedral_network_frame(st0Bpos,st0Xpos,mybox,mymat,rotated,None)
+        
+        self.rotated = rotated
+        self.frame_rotation = rotmat
+        self.octahedra = neigh_list
+            
+        et1 = time.time()
+        self.timing["env_resolve"] = et1-et0
+        
+        
+        print("Computing octahedral tilting and distortion...")
+        self.tilting_and_distortion(uniname=uniname,saveFigures=saveFigures)
+        print(" ")
+
+        # summary
+        self.timing["total"] = sum(list(self.timing.values()))
+        print(" ")
+        print_time(self.timing)
+        
+        # end of calculation
+        print("------------------------------------------------------------")
+    
+    def tilting_and_distortion(self,uniname,saveFigures):
+        
+        """
+        Octhedral tilting and distribution analysis.
+
+        """
+        
+        from scipy.spatial.transform import Rotation as sstr
+        from MDAnalysis.analysis.distances import distance_array
+        from pdyna.structural import octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors
+        
+        et0 = time.time()
+        
+        mybox = np.array([self.st0.lattice.abc,self.st0.lattice.angles]).reshape(6,)
+        mymat = self.st0.lattice.matrix
+        Bcount = len(self.Bindex)
+        neigh_list = self.octahedra
+        Bpos = self.st0.cart_coords[self.Bindex,:]
+        Xpos = self.st0.cart_coords[self.Xindex,:]
+        if self.rotated:
+            rotmat = np.linalg.inv(self.frame_rotation)
+        
+        D = np.empty((0,4))
+        Rmat = np.zeros((Bcount,3,3))
+        Rmsd = np.zeros((Bcount,1))
+        for B_site in range(Bcount): # for each B-site atom
+            raw = Xpos[neigh_list[B_site,:].astype(int),:] - Bpos[B_site,:]
+            bx = octahedra_coords_into_bond_vectors(raw,mymat)
+            #if self.rotated:
+            bx = np.matmul(bx,rotmat)
+      
+            dist_val,rot,rmsd = calc_distortions_from_bond_vectors(bx)
+                
+            Rmat[B_site,:] = rot
+            Rmsd[B_site] = rmsd
+            D = np.concatenate((D,dist_val.reshape(1,4)),axis = 0)
+                
+        
+        T = np.zeros((Bcount,3))
+        for i in range(Rmat.shape[0]):
+            T[i,:] = sstr.from_matrix(Rmat[i,:]).as_euler('xyz', degrees=True)
+
+        
+        # NN1 correlation function of tilting (Glazer notation)
+        from pdyna.analysis import abs_sqrt, draw_tilt_corr_evolution_sca, draw_tilt_and_corr_density_shade_frame
+        from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
+        
+        #default_BB_dist = 6.1
+        r0=distance_array(self.st0.cart_coords[self.Bindex,:],self.st0.cart_coords[self.Bindex,:],mybox)
+        
+        search_NN1 = find_population_gap(r0, [3,9.6], [6,8.8])
+        default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
+
+        
+        Benv = []
+        for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
+            Benv.append([i for i,B2 in enumerate(B2_list) if (B2 > 0.1 and B2 < search_NN1)])
+        Benv = np.array(Benv)
+        
+        try:
+            aa = Benv.shape[1] # if some of the rows in Benv don't have 6 neighbours.
+        except IndexError:
+            print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
+            print("See the gap between the populations. \n")
+            test_range = ri.reshape((1,ri.shape[0]**2))
+            import matplotlib.pyplot as plt
+            fig,ax = plt.subplots(1,1)
+            plt.hist(test_range.reshape(-1,),range=[5.3,9.0],bins=100)
+            #ax.scatter(test_range,test_range)
+            #ax.set_xlim([5,10])
+            
+            
+        if Benv.shape[1] == 3: # indicate a 2*2*2 supercell
+            
+            raise ValueError("The cell size is too small, PBC can't be analyzed. ")
+
+        elif Benv.shape[1] == 6: # indicate a larger supercell
+            
+            Bcoordenv = np.empty((Benv.shape[0],6,3))
+            for i in range(Benv.shape[0]):
+                Bcoordenv[i,:] = Bpos[Benv[i,:],:] - Bpos[i,:]
+            
+            Bcoordenv = apply_pbc_cart_vecs_single_frame(Bcoordenv,mymat)    
+                            
+            ref_octa = np.array([[1,0,0],[-1,0,0],
+                                 [0,1,0],[0,-1,0],
+                                 [0,0,1],[0,0,-1]])
+            for i in range(Bcoordenv.shape[0]):
+                orders = np.zeros((1,6))
+                for j in range(6):
+                    temp = Bcoordenv[i,:,:]
+                    if self.rotated:
+                        temp = np.matmul(temp,rotmat)
+                    orders[0,j] = np.argmax(np.dot(temp,ref_octa[j,:]))
+                Benv[i,:] = Benv[i,:][orders.astype(int)]
+                    
+            # now each row of Benv contains the Pb atom index that sit in x,y and z direction of the row-numbered Pb atom.
+            Corr = np.empty((T.shape[0],6))
+            for B1 in range(T.shape[0]):
+                    
+                Corr[B1,[0,1]] = abs_sqrt(T[[B1],0]*T[Benv[B1,[0,1]],0]) # x neighbour 1,2
+                Corr[B1,[2,3]] = abs_sqrt(T[[B1],1]*T[Benv[B1,[2,3]],1]) # y neighbour 1,2
+                Corr[B1,[4,5]] = abs_sqrt(T[[B1],2]*T[Benv[B1,[4,5]],2]) # z neighbour 1,2
+            
+        else: 
+            raise TypeError(f"The environment matrix is incorrect. {Benv.shape[1]} ")
+        
+        self._BNNenv = Benv
+        self.Tilting_Corr = Corr
+        
+        polarity = draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures)
+        print("tilting correlation:",np.round(np.array(polarity).reshape(3,),3))
+        
+        et1 = time.time()
+        self.timing["tilt_distort"] = et1-et0
