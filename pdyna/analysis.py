@@ -969,6 +969,115 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
     return Dgauss, Dgaussstd
 
 
+def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins = 100):
+    """ 
+    Isolate distortion mode wrt. the local halide configuration.  
+    """
+    
+    fig_name=f"lat_octatype_density_{uniname}.png"
+    
+    typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
+                 "I3 Br3: planar","I2 Br4: right-angle","I2 Br4: linear","I1 Br5","I0 Br6"]
+    typexval = [0,1,1.8,2.2,2.8,3.2,3.8,4.2,5,6]
+    typextick = ['0','1','2r','2l','3r','3p','4r','4l','5','6']
+    
+    config_types = list(config_types)
+    config_involved = []
+    
+    Lgauss = np.empty((0,3))
+    Lgaussstd = np.empty((0,3))
+    
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+    colors = ["C0","C1","C2"]
+    
+    for di, L in enumerate(Ltype):
+        if L.ndim == 3:
+            L = L.reshape(L.shape[0]*L.shape[1],3)
+        
+        figs, axs = plt.subplots(3, 1)
+        
+        histranges = np.zeros((3,2))
+        for i in range(3):
+            histranges[i,:] = [np.quantile(L[:,i], 0.02),np.quantile(L[:,i], 0.98)]
+            
+        histrange = np.zeros((2,))
+        ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
+        histrange[0] = np.amin(histranges[:,0])-ra*0.2
+        histrange[1] = np.amax(histranges[:,1])+ra*0.2
+
+        for i in range(3):
+            y,binEdges=np.histogram(L[:,i],bins=n_bins,range=histrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+        
+        Mu = []
+        Std = []
+        for i in range(3):
+            dfil = L[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
+            Mu.append(mu)
+            Std.append(std)
+            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+    
+            
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
+            ax.set_yticks([])
+            ax.set_xlim(histrange)
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[1].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[2].set_ylabel("")
+        axs[1].yaxis.set_label_coords(-0.02,-0.40)
+
+        axs[0].set_title(typesname[config_types[di]],fontsize=16)
+        config_involved.append(typesname[config_types[di]])    
+            
+        plt.show()
+        
+        Lgauss = np.concatenate((Lgauss,np.array(Mu).reshape(1,-1)),axis=0)
+        Lgaussstd = np.concatenate((Lgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+     
+    # plot type dependence   
+    plotx = np.array([typexval[i] for i in config_types])
+    plotxlab = [typextick[i] for i in config_types]
+    
+    scaalpha = 0.8
+    scasize = 50
+    plt.subplots(1,1)
+    ax = plt.gca()
+    ax.scatter(plotx-0.05,Lgauss[:,0],label=r'$\mathit{a}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx-0.05,Lgauss[:,0],yerr=Lgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+    ax.scatter(plotx,Lgauss[:,1],label=r'$\mathit{b}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx,Lgauss[:,1],yerr=Lgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+    ax.scatter(plotx+0.05,Lgauss[:,2],label=r'$\mathit{c}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx+0.05,Lgauss[:,2],yerr=Lgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+    plt.legend(prop={'size': 12})
+    
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.set_ylabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # Y label
+    ax.set_xlabel('Br content', fontsize = 15) # X label
+    ax.set_xticks(plotx)
+    ax.set_xticklabels(plotxlab)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return Lgauss, Lgaussstd
+
+
 def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 100, symm_n_fold = 4):
     """ 
     Isolate tilting pattern wrt. the local halide concentration.  
@@ -1152,6 +1261,106 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
     plt.show()
     
     return Dgauss, Dgaussstd
+
+
+def draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures, n_bins = 100):
+    """ 
+    Isolate lattice parameter wrt. the local halide concentration.  
+    """
+    
+    fig_name=f"lat_halideconc_density_{uniname}.png"
+    
+    Lgauss = np.empty((0,3))
+    Lgaussstd = np.empty((0,3))
+    
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+    colors = ["C0","C1","C2"]
+    
+    for di, L in enumerate(Lconc):
+        if L.ndim == 3:
+            L = L.reshape(L.shape[0]*L.shape[1],3)
+        
+        figs, axs = plt.subplots(3, 1)
+        
+        histranges = np.zeros((3,2))
+        for i in range(3):
+            histranges[i,:] = [np.quantile(L[:,i], 0.02),np.quantile(L[:,i], 0.98)]
+            
+        histrange = np.zeros((2,))
+        ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
+        histrange[0] = np.amin(histranges[:,0])-ra*0.2
+        histrange[1] = np.amax(histranges[:,1])+ra*0.2
+
+        for i in range(3):
+            
+            y,binEdges=np.histogram(L[:,i],bins=n_bins,range=histrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+        
+        Mu = []
+        Std = []
+        for i in range(3):
+            dfil = L[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
+            Mu.append(mu)
+            Std.append(std)
+            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+    
+            
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
+            ax.set_yticks([])
+            ax.set_xlim(histrange)
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[1].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[2].set_ylabel("")
+        #axs[1].yaxis.set_label_coords(-0.02,-0.40)
+
+        axs[0].set_title('Br concentration: '+str(round(concent[di],4)),fontsize=16)  
+            
+        plt.show()
+        
+        Lgauss = np.concatenate((Lgauss,np.array(Mu).reshape(1,-1)),axis=0)
+        Lgaussstd = np.concatenate((Lgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+     
+    # plot type dependence   
+    plotx = np.array(concent)
+    
+    dist_gap = 0.0005
+    
+    scaalpha = 0.8
+    scasize = 50
+    plt.subplots(1,1)
+    ax = plt.gca()
+    ax.scatter(plotx-2*dist_gap,Lgauss[:,0],label=r'$\mathit{a}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx-2*dist_gap,Lgauss[:,0],yerr=Lgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+    ax.scatter(plotx,Lgauss[:,1],label=r'$\mathit{b}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx,Lgauss[:,1],yerr=Lgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+    ax.scatter(plotx+2*dist_gap,Lgauss[:,2],label=r'$\mathit{c}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx+2*dist_gap,Lgauss[:,2],yerr=Lgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+    plt.legend(prop={'size': 12})
+    
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.set_ylabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # Y label
+    ax.set_xlabel('Br content', fontsize = 15) # X label
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return Lgauss, Lgaussstd
 
 
 def abs_sqrt(m):

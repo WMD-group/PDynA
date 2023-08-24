@@ -1,4 +1,4 @@
-"""Core object of PDyna."""
+"""Core objects of PDyna."""
 
 from __future__ import annotations
 
@@ -25,7 +25,11 @@ class Trajectory:
         The input file path.
         vasp: (poscar_path, xdatcar_path, incar_path)
         lammps: (dump.out_path, MD setting tuple)
-            MD setting tuple: (Ti,Tf,tstep)
+        xyz: (xyz_path, MD setting tuple)
+        ase-trajectory: (ase_traj_path, MD setting tuple)
+        pdb: (pdb_path, MD setting tuple)
+        
+            format for MD setting tuple: (Ti,Tf,tstep) , this is the same for all formats except VASP which uses INCAR file
     """
     
     data_format: str = field(repr=False)
@@ -668,8 +672,9 @@ class Trajectory:
         
         # pre-definitions
         print("Current sample:",uniname)
-        print("Frame count:",self.nframe)
         print("Time Span:",round(self.nframe*self.MDTimestep,3),"ps")
+        print("Frame count:",self.nframe)
+        
         #print("Initializing trajectory")
         
         # reset timing
@@ -719,13 +724,6 @@ class Trajectory:
         else:
             #title = stfor+"  T="+str(Ti)+"K-"+str(Tf)+"K"
             title = None
-        
-        if self.MDsetting["Ti"] == self.MDsetting["Ti"]:
-            print("Temperature: "+str(self.MDsetting["Ti"])+"K")
-        else:
-            print("Temperature: "+str(self.MDsetting["Ti"])+"K-"+str(self.MDsetting["Ti"])+"K")
-        
-        print(" ")
         
         if allow_equil >= 1:
             raise TypeError("Parameter allow_equil must be within 0 to 1 (excluded) or auto (-1). ")
@@ -791,6 +789,15 @@ class Trajectory:
                     read_every = round(self.nframe*(7.2e-05*(len(self.Bindex)**0.7)))
                 if read_every < 1:
                     read_every = 1
+        
+        print(f"Reading every {read_every} frame(s)")
+        
+        if self.MDsetting["Ti"] == self.MDsetting["Ti"]:
+            print("Temperature: "+str(self.MDsetting["Ti"])+"K")
+        else:
+            print("Temperature: "+str(self.MDsetting["Ti"])+"K-"+str(self.MDsetting["Ti"])+"K")
+        
+        print(" ")
         
         if not tilt_corr_NN1: 
             tilt_domain = False
@@ -1268,8 +1275,8 @@ class Trajectory:
             b1 = Bpos[-1,:]
             x1 = Xpos[-1,:]
             rf = distance_array(b1,x1,mybox1)
-            if np.amax(r-rf) > 4: 
-                raise ValueError(f"The difference between initial and final configs are too large ({np.amax(r-rf)})")
+            if np.amax(r-rf) > 3.5: 
+                print(f"Warning: The maximum atomic position difference between initial and final configs are too large ({round(np.amax(r-rf),3)} A). ")
             
             octa_halide_code = [] # resolve the halides of a octahedron, key output
             octa_halide_code_single = []
@@ -1621,7 +1628,36 @@ class Trajectory:
             
             Tmaxs_conc = draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures)
             Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
-        
+            
+            self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
+            self.dist_wrt_halideconc = [concent,Dgauss_conc]
+            
+            if read_mode == 1:
+                self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
+                self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
+                
+            if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
+                L = self.Lat
+                Ltype = []
+                for ti, types in enumerate(typelib):
+                    Ltype.append(L[:,types,:])
+                
+                concent = [] # concentrations recorded
+                Lconc = []
+                for ii,item in enumerate(brbins):
+                    if len(item) == 0: continue
+                    concent.append(bincent[ii])
+                    Lconc.append(L[:,item,:])
+                    
+                from pdyna.analysis import draw_halideconc_lat_density, draw_octatype_lat_density
+                Lgauss_conc, Lgaussstd_conc = draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures)
+                Lgauss_type, Lgaussstd_type = draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures)
+
+                self.lat_wrt_halideconc = [concent,Lgauss_conc]
+                if read_mode == 1:
+                    self.prop_lib['lattice_halideconc'] = self.lat_wrt_halideconc
+                
+            
         if read_mode == 1:
             Tval = np.array(compute_tilt_density(T)).reshape((3,1))
             self.prop_lib['distortion'] = [Dmu,Dstd]
