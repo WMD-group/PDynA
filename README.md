@@ -27,7 +27,7 @@ List of modules
 -------
 
 * **pdyna** library containing:
-  * **core.py**: Contains the core class Trajectory and related functions. 
+  * **core.py**: Contains the dataclass Trajectory and Frame as well as their related functions. 
   * **structural.py**: Handles structure recognition and property calculations. 
   * **analysis.py**: A collection of tools for computing and visualizing the output.
   * **io.py**: The IO to input data files.
