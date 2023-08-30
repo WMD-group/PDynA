@@ -66,6 +66,7 @@ Usage
 
 Two molecular dynamics trajectories are given in the `examples` folder.
 
+We encourage users to run orthogonal (the vectors connecting adjacent B-atoms are parallel to the principal axes) perovskite structures with corner-sharing connectivity to get the best performance of structure matching, when possible. 
 
 **1. VASP-XDATCAR trajectory**
 
