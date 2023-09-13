@@ -94,7 +94,7 @@ A full list of all the parameters is shown in the `examples/full.py`.
 
 Citation
 ------------
-["Structural dynamics descriptors for metal halide perovskites" arXiv:2305.11617 (2023)](https://arxiv.org/abs/2305.11617)
+["Structural dynamics descriptors for metal halide perovskites" Journal of Physical Chemistry C (2023)](https://pubs.acs.org/doi/full/10.1021/acs.jpcc.3c03377)
 
 License and attribution
 -----------------------
@@ -106,7 +106,7 @@ Development notes
 -----------------
 
 ### Bugs, features and questions
-Please use the [Issue Tracker](https://github.com/WMD-group/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16@imperial.ac.uk. 
+Please use the [Issue Tracker](https://github.com/WMD-group/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16[at]imperial.ac.uk. 
 
-### Developer
+### Lead developer
 - Xia Liang (Department of Materials, Imperial College London)
