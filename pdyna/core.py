@@ -40,7 +40,8 @@ class Trajectory:
     _known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs", "Se", "W") # update if your structure has other constituent elements, this is just to make sure all the elements should appear in the structure. 
     
     # characteristic value of bond length of your material for structure construction 
-    # the first interval covers the first and second NN of B-X (B-B) pairs, the second interval covers only the first NN of B-X (B-B) pairs.
+    # the first interval should be large enough to cover all the first and second NN of B-X (B-B) pairs, 
+    # in the second list, the two elements are 0) approximate first NN distance of B-X (B-B) pairs, and 1) 0) approximate second NN distance of B-X (B-B) pairs
     _fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
     _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
     
