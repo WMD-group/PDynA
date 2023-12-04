@@ -1,3 +1,4 @@
+"""Functions for data analysis."""
 import os
 import math
 import numpy as np
@@ -780,10 +781,10 @@ def draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures, n_bins
         hrange = [0,45]
         tlabel = [0,15,30,45]
     
-    typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
-                 "I3 Br3: planar","I2 Br4: right-angle","I2 Br4: linear","I1 Br5","I0 Br6"]
+    typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
+                 "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
     typexval = [0,1,1.8,2.2,2.8,3.2,3.8,4.2,5,6]
-    typextick = ['0','1','2r','2l','3r','3p','4r','4l','5','6']
+    typextick = ['0','1','2c','2t','3f','3m','4c','4t','5','6']
     
     config_types = list(config_types)
     config_involved = []
@@ -870,10 +871,10 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
     
     fig_name=f"dist_octatype_density_{uniname}.png"
     
-    typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
-                 "I3 Br3: planar","I2 Br4: right-angle","I2 Br4: linear","I1 Br5","I0 Br6"]
+    typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
+                 "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
     typexval = [0,1,1.8,2.2,2.8,3.2,3.8,4.2,5,6]
-    typextick = ['0','1','2r','2l','3r','3p','4r','4l','5','6']
+    typextick = ['0','1','2c','2t','3f','3m','4c','4t','5','6']
     
     config_types = list(config_types)
     config_involved = []
@@ -976,10 +977,10 @@ def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins 
     
     fig_name=f"lat_octatype_density_{uniname}.png"
     
-    typesname = ["I6 Br0","I5 Br1","I4 Br2: right-angle","I4 Br2: linear","I3 Br3: right-angle",
-                 "I3 Br3: planar","I2 Br4: right-angle","I2 Br4: linear","I1 Br5","I0 Br6"]
+    typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
+                 "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
     typexval = [0,1,1.8,2.2,2.8,3.2,3.8,4.2,5,6]
-    typextick = ['0','1','2r','2l','3r','3p','4r','4l','5','6']
+    typextick = ['0','1','2c','2t','3f','3m','4c','4t','5','6']
     
     config_types = list(config_types)
     config_involved = []
@@ -1039,7 +1040,7 @@ def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins 
         axs[1].set_xlabel("")
         axs[0].set_ylabel("")
         axs[2].set_ylabel("")
-        axs[1].yaxis.set_label_coords(-0.02,-0.40)
+        axs[0].yaxis.set_label_coords(-0.02,-0.40)
 
         axs[0].set_title(typesname[config_types[di]],fontsize=16)
         config_involved.append(typesname[config_types[di]])    
@@ -1077,6 +1078,51 @@ def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins 
     
     return Lgauss, Lgaussstd
 
+
+def print_partition(typelib,config_types,brbins,Bins,halcounts):
+    typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
+                 "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
+    typextick = ['0','1','2c','2t','3f','3m','4c','4t','5','6']
+    config_types = list(config_types)
+    bincent = (Bins[1:]+Bins[:-1])/2
+    
+    title = f"Total: {halcounts[0]} I, {halcounts[1]} Br"
+    
+    types = np.zeros((10,)).astype(int)
+    for i,t in enumerate(typelib):
+        types[config_types[i]] = len(t)
+    
+    concs = np.zeros((len(bincent),)).astype(int)
+    for i,t in enumerate(brbins):
+        concs[i] = len(t)
+    
+    # plotting
+    y1, y2, y3 = np.zeros((7,)),np.zeros((7,)),np.zeros((7,))
+    y1[:2] = types[:2]
+    y2[2:5] = types[[2,4,6]]
+    y3[2:5] = types[[3,5,7]]
+    y1[5:] = types[8:]
+    
+    x = ['0', '1', '2', '3', '4', '5', '6']
+    # plot bars in stack manner
+    plt.bar(x, y1, )
+    plt.bar(x, y2, bottom=y1)
+    plt.bar(x, y3, bottom=y1+y2)
+    plt.title(title,fontsize=13)
+    plt.xlabel("Br content",fontsize=12)
+    plt.ylabel("Counts",fontsize=12)
+    plt.legend(['pure', 'cis/fac', 'trans/mer'])
+    plt.show()
+    
+    plt.hist(bincent, bins=len(concs),weights=concs, range=(min(Bins), max(Bins)))
+    ax = plt.gca()
+    plt.title(title,fontsize=13)
+    ax.set_xlim([-0.1,1.1])
+    plt.xlabel("Br content",fontsize=12)
+    plt.ylabel("Counts",fontsize=12)
+    plt.show()
+
+    
 
 def draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures, n_bins = 100, symm_n_fold = 4):
     """ 
@@ -1445,6 +1491,96 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
         C = (np.concatenate((Corr[:,:,0],Corr[:,:,1]),axis=0).reshape((Corr.shape[0]*2*Corr.shape[1])),
              np.concatenate((Corr[:,:,2],Corr[:,:,3]),axis=0).reshape((Corr.shape[0]*2*Corr.shape[1])),
              np.concatenate((Corr[:,:,4],Corr[:,:,5]),axis=0).reshape((Corr.shape[0]*2*Corr.shape[1])))
+
+    figs, axs = plt.subplots(3, 1)
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+    colors = ["C0", "C1", "C2"]
+    #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
+    por = [0,0,0]
+    for i in range(3):
+        
+        y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
+        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+        yt=y/max(y)
+        axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
+        #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+
+        y,binEdges=np.histogram(C[i],bins=n_bins,range=[-45,45]) 
+        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+        yc=y/max(y)
+        yy=yt*yc
+
+        axs[i].fill_between(bincenters, yy, 0, facecolor = colors[i], alpha=fill_alpha, interpolate=True)
+        axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=16, verticalalignment='center', transform=axs[i].transAxes, style='italic')
+        
+        axs[i].set_ylim(bottom=0)
+        
+        parneg = np.sum(np.power(yc,corr_power)[bincenters<0])
+        parpos = np.sum(np.power(yc,corr_power)[bincenters>0])
+        por[i] = (-parneg+parpos)/(parneg+parpos)
+        
+    for ax in axs.flat:
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+        ax.set_xlabel(r'Tilt Angle ($\degree$)', fontsize = 15) # X label
+        ax.set_xlim([-45,45])
+        ax.set_xticks([-45,-30,-15,0,15,30,45])
+        ax.set_yticks([])
+        
+    axs[0].xaxis.set_ticklabels([])
+    axs[1].xaxis.set_ticklabels([])
+    axs[0].yaxis.set_ticklabels([])
+    axs[1].yaxis.set_ticklabels([])
+    axs[2].yaxis.set_ticklabels([])
+    axs[0].set_xlabel("")
+    axs[0].set_ylabel("")
+    axs[1].set_xlabel("")
+    axs[2].set_ylabel("")
+
+    if not title is None:
+        axs[0].set_title(title,fontsize=17)
+        
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        
+    plt.show()
+    
+    div = 0.35
+    scal = 4/3
+    for ci, cval in enumerate(por):
+        if abs(cval) > div:
+            cval = np.sign(cval)*(np.power(((np.abs(cval)-div)/(1-div)),1/scal)*(1-div)+div)
+            por[ci] = np.round(cval,4)
+        else:
+            cval = np.sign(cval)*(np.power(np.abs(cval)/div,scal)*div)
+            por[ci] = np.round(cval,4)
+    
+    return por
+
+
+def draw_tilt_and_corr_density_shade_longarray(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
+    """ 
+    Generate the Glazer plot. 
+    """
+    
+    fig_name=f"traj_tilt_corr_density_{uniname}.png"
+    
+    corr_power = 2.5
+    fill_alpha = 0.5
+    
+    T_a = T[:,0]
+    T_b = T[:,1]
+    T_c = T[:,2]
+    tup_T = (T_a,T_b,T_c)
+    assert len(tup_T) == 3
+    assert Corr.shape[1] == 3 or Corr.shape[1] == 6
+
+    if Corr.shape[1] == 3:
+        C = (Corr[:,0],Corr[:,1],Corr[:,2])
+    elif Corr.shape[1] == 6:
+        C = (np.concatenate((Corr[:,0],Corr[:,1]),axis=0),
+             np.concatenate((Corr[:,2],Corr[:,3]),axis=0),
+             np.concatenate((Corr[:,4],Corr[:,5]),axis=0))
 
     figs, axs = plt.subplots(3, 1)
     labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']

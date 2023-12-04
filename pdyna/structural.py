@@ -1,3 +1,4 @@
+"""Functions for structural analysis."""
 import numpy as np
 import re, os
 import json
@@ -17,7 +18,7 @@ except IOError:
     sys.stderr.write('IOError: failed reading from {}.'.format(filename_basis))
     sys.exit(1)
 
-def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,neigh_list,orthogonal_frame,structure_type,ref_initial=None):
+def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial=None,rtr=None):
     """ 
     Compute octahedral tilting and distortion from the trajectory coordinates and octahedral connectivity.
     """
@@ -40,6 +41,8 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                 bx = octahedra_coords_into_bond_vectors(raw,mymat)
                 if not orthogonal_frame:
                     bx = np.matmul(bx,ref_initial[B_site,:])
+                if not rtr is None:
+                    bx = np.matmul(bx,rtr)
           
                 dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
                     
@@ -57,9 +60,14 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
         #tilts = periodicity_fold(tilts) 
         return (disto.reshape(1,Bcount,4),tilts.reshape(1,Bcount,3),Rmsd)
     
+    if (not ref_initial is None) and (not rtr is None):
+        raise TypeError("individual reference of octahedra and orthogonal lattice alignment are simulaneously enabled. Check structure_type and rotation_from_orthogonal parameters. ")
 
     Bcount = Bpos.shape[1]
     refits = np.empty((0,2))
+    
+    #if not rotation_from_orthogonal is None:
+    #    rtr = np.linalg.inv(rotation_from_orthogonal)
     
     if multi_thread == 1: # multi-threading disabled and can do in-situ refit
         
@@ -87,6 +95,8 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                     bx = octahedra_coords_into_bond_vectors(raw,mymat)
                     if not orthogonal_frame:
                         bx = np.matmul(bx,ref_initial[B_site,:])
+                    if not rtr is None:
+                        bx = np.matmul(bx,rtr)
          
                     dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
 
@@ -94,16 +104,19 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                     Rmsd[B_site] = rmsd
                     disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
             
-            if enable_refit and fr > 0 and max(np.amax(disto)) > 0.8: # re-fit neigh_list if large distortion value is found
+            if enable_refit and fr > 0 and max(np.amax(disto)) > 1: # re-fit neigh_list if large distortion value is found
                 disto_prev = np.nanmean(disto,axis=0)
                 neigh_list_prev = neigh_list
                 
-                Bpos_frame = Bpos[fr,:]
+                Bpos_frame = Bpos[fr,:]     
                 Xpos_frame = Xpos[fr,:]
                 if orthogonal_frame:
-                    neigh_list = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type)
+                    if rtr is None:
+                        neigh_list = fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type)
+                    else: # non-orthogonal
+                        neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type,np.linalg.inv(rtr))
                 else:
-                    neigh_list, ref_initial = fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type)
+                    neigh_list, ref_initial = fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type)
 
                 mybox=lattice[fr,:]
                 mymat=latmat[fr,:]
@@ -118,6 +131,8 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                     bx = octahedra_coords_into_bond_vectors(raw,mymat)
                     if not orthogonal_frame:
                         bx = np.matmul(bx,ref_initial[B_site,:])
+                    if not rtr is None:
+                        bx = np.matmul(bx,rtr)
                     
                     dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
                         
@@ -157,14 +172,14 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
     return Di, T, refits
 
 
-def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
+def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type):
     """ 
     Resolve the octahedral connectivity. 
     """
     from MDAnalysis.analysis.distances import distance_array
 
     r=distance_array(Bpos_frame,Xpos_frame,mybox)
-    max_BX_distance = find_population_gap(r, [0.1,8], [3,6.8])
+    max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
         
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
     ref_initial = np.zeros((Bpos_frame.shape[0],3,3))
@@ -194,14 +209,14 @@ def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
         return neigh_list, ref_initial
 
 
-def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,mybox,mymat,rotated,rotmat):
+def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,rotated,rotmat):
     """ 
     Resolve the octahedral connectivity. 
     """
     from MDAnalysis.analysis.distances import distance_array
 
     r=distance_array(Bpos_frame,Xpos_frame,mybox)
-    max_BX_distance = find_population_gap(r, [0.1,8], [3,6.8])
+    max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
         
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
     for B_site, X_list in enumerate(r): # for each B-site atom
@@ -225,14 +240,14 @@ def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,mybox,mymat,rotated,rotma
 
 
 
-def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,structure_type):
+def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type):
     """ 
     Resolve the octahedral connectivity with a defect tolerance. 
     """
     from MDAnalysis.analysis.distances import distance_array
 
     r=distance_array(Bpos_frame,Xpos_frame,mybox)
-    max_BX_distance = find_population_gap(r, [0.1,8], [3,6.8])
+    max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
     
     bxs = []
     bxc = []
@@ -279,6 +294,51 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,structur
         return neigh_list
     else:
         return neigh_list, ref_initial
+    
+
+def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type,rotmat):
+    """ 
+    Resolve the octahedral connectivity with a defect tolerance. 
+    """
+    from MDAnalysis.analysis.distances import distance_array
+    
+    if structure_type != 1:
+        raise TypeError("The non-orthogonal initial structure can only be analysed under the 3C (corner-sharing) connectivity. ")
+    #rotmat = np.linalg.inv(rotmat)
+        
+    r=distance_array(Bpos_frame,Xpos_frame,mybox)
+    max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
+    
+    bxs = []
+    bxc = []
+    for B_site, X_list in enumerate(r): # for each B-site atom
+        X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
+        bxc.append(len(X_idx))
+        bxs.append(X_idx)
+    bxc = np.array(bxc)
+    
+    ndef = None
+    if np.amax(bxc) != 6 or np.amin(bxc) != 6:
+        ndef = np.sum(bxc!=6) 
+        if np.amax(bxc) == 7 and np.amin(bxc) == 5: # benign defects
+            print(f"!Structure Resolving: the initial structure contains {ndef} out of {len(bxc)} octahedra with defects. The algorithm has screened them out of the population. ")
+        else: # bad defects
+            raise TypeError(f"!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
+            
+    neigh_list = np.zeros((Bpos_frame.shape[0],6))
+    ref_initial = np.zeros((Bpos_frame.shape[0],3,3))
+    for B_site, bxcom in enumerate(bxs): # for each B-site atom
+        if len(bxcom) == 6:
+            bx_raw = Xpos_frame[bxcom,:] - Bpos_frame[B_site,:]
+            bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
+
+            order1 = match_bx_orthogonal_rotated(bx,mymat,rotmat) 
+            neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
+
+        else:
+            neigh_list[B_site,:] = np.nan
+
+    return neigh_list
 
 
 def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
@@ -376,7 +436,7 @@ def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
 def pseudocubic_lat(traj,  # the main class instance
                     allow_equil = 0, #take the first x fraction of the trajectory as equilibration
                     zdrc = 2,  # zdrc: the z direction for pseudo-cubic lattice paramter reading. a,b,c = 0,1,2
-                    lattice_tilt = [0,0,0] # if primary B-B bond is not along orthogonal directions, in degrees
+                    lattice_tilt = None # if primary B-B bond is not along orthogonal directions, in degrees
                     ): 
     
     """ 
@@ -398,6 +458,7 @@ def pseudocubic_lat(traj,  # the main class instance
     dm = dm.reshape((dm.shape[0]**2,1))
     BBdist = np.mean(dm[np.logical_and(dm>0.1,dm<7)]) # default B-B distance
     
+    #if not traj._non_orthogonal:
     celldim = np.cbrt(len(traj.Bindex))
     if not celldim.is_integer():
         raise ValueError("The cell is not in cubic shape. ")
@@ -423,8 +484,8 @@ def pseudocubic_lat(traj,  # the main class instance
     if len(bincount) != tss**3:
         raise TypeError("Incorrect number of bins. ")
     if max(bincount) != min(bincount):
-        raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
-    
+        raise ValueError("Not all bins contain exactly the same number of atoms (1). ")    
+        
     dims = [0,1,2]
     dims.remove(zdrc)
     grided = bin_indices[dims,:].T
@@ -437,11 +498,8 @@ def pseudocubic_lat(traj,  # the main class instance
     maps = mappings[zdrc,:,:] # select out of x,y,z
     maps_frac = ma[zdrc,:,:]
     
-    if lattice_tilt != [0,0,0]:
-        rot = sstr.from_euler('xyz', lattice_tilt, degrees=True)
-        rotmat = rot.as_matrix()
-        
-        maps = np.dot(maps,rotmat)
+    if not lattice_tilt is None:
+        maps = np.dot(maps,lattice_tilt)
 
     if len(blist) <= 8:
         Im = np.empty((0,3))
@@ -859,6 +917,46 @@ def calc_distortions_from_bond_vectors(bx):
     return distortion_amplitudes,rotmat,rmsd
 
 
+def calc_rotation_from_arbitrary_order(bx):
+    """ 
+    Compute the rotation of six bond vectors with arbitrary order. 
+    """
+    # constants
+    ideal_coords = [[-1, 0,  0],
+                    [0, -1,  0],
+                    [0,  0, -1],
+                    [0,  0,  1],
+                    [0,  1,  0],
+                    [1,  0,  0]]
+
+    # define "molecules"
+    pymatgen_molecule = pymatgen.core.structure.Molecule(
+        species=[Element("Pb"),Element("H"),Element("H"),Element("H"),Element("H"),Element("H"),Element("H")],
+        coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
+
+    pymatgen_molecule_ideal = pymatgen.core.structure.Molecule(
+        species=pymatgen_molecule.species,
+        coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
+
+    # transform
+    pymatgen_molecule,rotmat,rmsd = match_molecules_extra(
+        pymatgen_molecule, pymatgen_molecule_ideal)
+    
+    if rmsd > 0.1:
+        raise ValueError("The RMSD of fitting related to non-orthogonal frame mapping is too large (RMSD = {round(rmsd},4))")
+    
+    rots = sstr.from_matrix(rotmat).as_euler('xyz', degrees=True)
+    rots = periodicity_fold(rots)
+    
+    for i in range(len(rots)):
+        if abs(rots[i]) < 0.01:
+            rots[i] = 0
+            
+    rotmat = sstr.from_rotvec(rots/180*np.pi).as_matrix()
+            
+    return rots, rotmat
+
+
 def quick_match_octahedron(bx):
     """ 
     Compute the rotation status of an octahedron with a reference. 
@@ -908,7 +1006,8 @@ def match_bx_orthogonal(bx,mymat):
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-2]] < 0.5):
+        if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-2]] < 0.6):
+        #if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > 0.25):
             print(bx,fits)
             raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
         order.append(np.argmax(fits))
@@ -1393,7 +1492,27 @@ def find_population_gap(r,find_range,init):
     bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
     
     if y[(np.abs(bincenters - p)).argmin()] != 0:
-        raise ValueError("!Structure resolving: Can't separate the different neighbours, check if initial structure is defected or too distorted. ")
+        raise ValueError("!Structure resolving: Can't separate the different neighbours, please check the fpg_val values are correct according to the guidance at the beginning of the Trajectory class, or check if initial structure is defected or too distorted. ")
 
     return p
 
+
+def get_volume(lattice):
+    assert lattice.shape == (6,) or (lattice.ndim == 2 and lattice.shape[1] == 6)
+    if lattice.shape == (6,):
+        A,B,C,a,b,c = lattice
+        a=a/180*np.pi
+        b=b/180*np.pi
+        c=c/180*np.pi
+        Vol = A*B*C*(1-np.cos(a)**2-np.cos(b)**2-np.cos(c)**2+2*np.cos(a)*np.cos(b)*np.cos(c))**0.5
+    else:
+        Vol = []
+        for i in range(lattice.shape[0]):
+            A,B,C,a,b,c = lattice[i,:]
+            a=a/180*np.pi
+            b=b/180*np.pi
+            c=c/180*np.pi
+            vol = A*B*C*(1-np.cos(a)**2-np.cos(b)**2-np.cos(c)**2+2*np.cos(a)*np.cos(b)*np.cos(c))**0.5
+            Vol.append(vol)
+        Vol = np.array(Vol)    
+    return Vol

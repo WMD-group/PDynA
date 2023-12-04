@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 import time
+import re
 from glob import glob
 from ase.atoms import Atoms
 from ase.calculators.lammps import convert
@@ -42,6 +43,38 @@ def read_lammps_settings(infile): # internal use
     #    print("!Lammps in file: the thermalization temperature is different from the initial temperature.")
 
     return {"Ti":ti, "Tf":tf, "tstep":tstep}    
+
+
+def read_ase_md_settings(fdir): # internal use 
+
+    filelist = glob(fdir+"*.py")
+    if len(filelist) == 0:
+        raise FileNotFoundError("Can't find any ASE MD .py file in the directory.")
+    if len(filelist) > 1:
+        raise FileExistsError("There are more than one ASE MD .py file in the directory.")
+    
+    infile = filelist[0]
+
+    with open(infile,"r") as fp:
+        lines = fp.readlines()
+    
+    ti = None
+    tstep = None
+    nsw = None
+    nblock = None
+    for line in lines:
+        if line.startswith("dyn = NPT"):
+            sets = line.split(',')
+            for s in sets:
+                if "temperature_K" in s:
+                    ti = int(s.split("=")[1])
+            tstep=float(sets[1].rstrip("*units.fs"))
+        if line.startswith("dyn.run"):
+            nsw = int(re.search(r'\d+', line).group())
+        if line.startswith("dyn.attach") and "write_frame" in line:
+            nblock = int(re.search(r'\d+', line).group())
+    
+    return ti, tstep, nsw, nblock
 
     
 def process_lat(m):
@@ -393,12 +426,12 @@ def read_xyz(filepath):
 
         num_sites = int(bloc[0])
         if len(bloc) != num_sites+2:
-            raise SyntaxError("The XYZ format should be line 1: N-atoms; line 2: cell dimension: [a b c alpha beta gamma] ; line 3-end: species and atomic coordinates. ")
+            raise SyntaxError("The XYZ format should be line 1: N-atoms; line 2: cell dimension: [a b c alpha beta gamma]; line 3-end: species and atomic coordinates. ")
         cellstr = bloc[1]
         try: 
             cell = [float(entry) for entry in cellstr.split()]
         except ValueError:
-            raise SyntaxError("The XYZ format should be line 1: N-atoms; line 2: cell dimension: [a b c alpha beta gamma] ; line 3-end: species and atomic coordinates. ")
+            raise SyntaxError("The XYZ format should be line 1: N-atoms; line 2: cell dimension: [a b c alpha beta gamma]; line 3-end: species and atomic coordinates. ")
         
         coords = []
         sp = []
@@ -933,7 +966,8 @@ def print_time(times):
     
     print("--Elapsed Time")
     print("Data Reading:          {}".format(time_format(round(times['reading']))))
-    print("Structure Resolving:   {}".format(time_format(round(times['env_resolve']))))
+    if 'env_resolve' in times:
+        print("Structure Resolving:   {}".format(time_format(round(times['env_resolve']))))
     if 'lattice' in times:
         print("Lattice Parameter:     {}".format(time_format(round(times['lattice']))))
     if 'tavg' in times:
@@ -946,7 +980,8 @@ def print_time(times):
         print("Radial Distribution:   {}".format(time_format(round(times['RDF']))))
     if 'A_disp' in times:
         print("A-site Displacement:   {}".format(time_format(round(times['A_disp']))))
-    
+    if 'property_processing' in times:
+        print("Property processing:   {}".format(time_format(round(times['property_processing']))))
     
     print("Total:                 {}".format(time_format(round(times['total']))))
     
