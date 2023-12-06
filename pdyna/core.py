@@ -47,8 +47,6 @@ class Trajectory:
     # These values can be obtained by inspecting the initial configuration or, e.g. in the pair distrition function of the structure
     _fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
     _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
-    #_fpg_val_BB = [[2,6], [3.2,5.7]] # WSe2
-    #_fpg_val_BX = [[1,4.6], [2.5,4.1]] # WSe2
     
     def __post_init__(self):
         
