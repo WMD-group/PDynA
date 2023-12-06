@@ -39,7 +39,6 @@ setup(
         "pymatgen",
         "ase",
         "scikit-learn",
-        "mdanalysis",
     ],
     data_files=["LICENSE"],
 )
