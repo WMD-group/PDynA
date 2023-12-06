@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pymatgen.io.ase import AseAtomsAdaptor as aaa
 import matplotlib.pyplot as plt
 from pdyna.io import print_time
+from pdyna.structural import distance_matrix_ase_replace, distance_matrix_ase, distance_matrix
 import numpy as np
 import time
 import os
@@ -37,13 +39,16 @@ class Trajectory:
     
     _Xsite_species = ['Cl','Br','I','Se'] # update if your structrue contains other elements on the X-sites
     _Bsite_species = ['Pb','Sn','W'] # update if your structrue contains other elements on the B-sites
-    _known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs", "Se", "W") # update if your structure has other constituent elements, this is just to make sure all the elements should appear in the structure. 
+    _known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs", "Se", "W", "Sn") # update if your structure has other constituent elements, this is just to make sure all the elements should appear in the structure. 
     
     # characteristic value of bond length of your material for structure construction 
     # the first interval should be large enough to cover all the first and second NN of B-X (B-B) pairs, 
     # in the second list, the two elements are 0) approximate first NN distance of B-X (B-B) pairs, and 1) 0) approximate second NN distance of B-X (B-B) pairs
+    # These values can be obtained by inspecting the initial configuration or, e.g. in the pair distrition function of the structure
     _fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
     _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
+    #_fpg_val_BB = [[2,6], [3.2,5.7]] # WSe2
+    #_fpg_val_BX = [[1,4.6], [2.5,4.1]] # WSe2
     
     def __post_init__(self):
         
@@ -824,26 +829,24 @@ class Trajectory:
         self._rotmat_from_orthogonal = None
         
         st0 = self.st0
+        at0 = aaa.get_atoms(st0)
+        self.at0 = at0
         st0Bpos = st0.cart_coords[self.Bindex,:]
         st0Xpos = st0.cart_coords[self.Xindex,:]
-        mybox = np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
         mymat = st0.lattice.matrix
         
         from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
-        from MDAnalysis.analysis.distances import distance_array
         cell_lat = st0.lattice.abc
-        box0=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
-        r0=distance_array(self.st0.cart_coords[self.Bindex,:],st0.cart_coords[self.Bindex,:],box0)
+        r0=distance_matrix_ase(st0Bpos,st0Bpos,at0.cell,at0.pbc)
         search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
         default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
         self.default_BB_dist = default_BB_dist
         
         #default_BB_dist = 6.1
-        box0=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
         Bpos = self.Allpos[:,self.Bindex,:]
-        r0=distance_array(st0.cart_coords[self.Bindex,:],st0.cart_coords[self.Bindex,:],box0)
-        ri=distance_array(Bpos[0,:],Bpos[0,:],self.lattice[0,:])
-        rf=distance_array(Bpos[-1,:],Bpos[-1,:],self.lattice[-1,:])
+        
+        ri=distance_matrix_ase_replace(Bpos[0,:],Bpos[0,:],at0.cell,self.latmat[0,:],at0.pbc)
+        rf=distance_matrix_ase_replace(Bpos[-1,:],Bpos[-1,:],at0.cell,self.latmat[-1,:],at0.pbc)
 
         if np.amax(np.abs(ri-rf)) > 3: # confirm that no change in the Pb framework
             print("!Tilt-spatial: The difference between the initial and final distance matrix is above threshold ({} A), check ri and rf. \n".format(round(np.amax(np.abs(ri-rf)),3)))
@@ -922,12 +925,13 @@ class Trajectory:
             self._flag_cubic_cell = True
             self._non_orthogonal = False
         
-        elif Benv.shape[1] in [4,5]:
-            self._flag_cubic_cell = False
-            self._non_orthogonal = False
             
         else:
-            raise TypeError(f"The environment matrix is incorrect. The connectivity is {Benv.shape[1]} instead of 6. ")
+            self._flag_cubic_cell = False
+            self._non_orthogonal = False
+            print(f"The B-B environment matrix is {Benv.shape[1]}. This indicates a non-3C polytype (3 or 6). ")
+        
+            #raise TypeError(f"The environment matrix is incorrect. The connectivity is {Benv.shape[1]} instead of 6. ")
         
         if self._flag_cubic_cell:
             supercell_size = round(np.mean(cell_lat)/default_BB_dist)
@@ -938,25 +942,26 @@ class Trajectory:
         # label the constituent octahedra
         if toggle_tavg or toggle_tilt_distort: 
             from pdyna.structural import fit_octahedral_network_defect_tol, fit_octahedral_network_defect_tol_non_orthogonal, find_polytype_network
+            rt = distance_matrix_ase(st0Bpos,st0Xpos,self.at0.cell,self.at0.pbc)
             
             if orthogonal_frame:
                 if not self._non_orthogonal:
-                    neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,mybox,mymat,self._fpg_val_BX,structure_type)
+                    neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
                 else: # non-orthogonal
-                    neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,mybox,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
+                    neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
                 self.octahedra = neigh_list
             else:
-                neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,mybox,mymat,self._fpg_val_BX,structure_type)
+                neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
                 self.octahedra = neigh_list
                 self.octahedra_ref = ref_initial
             
             # determine polytype (experimental)
-            #conntypeStr, connectivity, conn_category = find_polytype_network(st0Bpos,st0Xpos,mybox,mymat,neigh_list)
+            #rt=distance_matrix_ase(st0Bpos,st0Xpos,self.at0.cell,self.at0.pbc)
+            #conntypeStr, connectivity, conn_category = find_polytype_network(st0Bpos,st0Xpos,rt,mymat,neigh_list)
             #self.octahedral_connectivity = conn_category
         
         # label the constituent A-sites
         if toggle_MO or toggle_A_disp:
-            from MDAnalysis.analysis.distances import distance_array
             from pdyna.io import display_A_sites
             
             Nindex = self.Nindex
@@ -966,10 +971,9 @@ class Trajectory:
             Aindex_fa = []
             Aindex_ma = []
             Aindex_azr = []
-            
-            mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
-            dm = distance_array(st0.cart_coords[Cindex,:], st0.cart_coords[Nindex,:], mybox)   
-            dm1 = distance_array(st0.cart_coords[Cindex,:], st0.cart_coords[Cindex,:], mybox)   
+        
+            dm = distance_matrix_ase(st0.cart_coords[Cindex,:],st0.cart_coords[Nindex,:],at0.cell,at0.pbc)
+            dm1 = distance_matrix_ase(st0.cart_coords[Cindex,:],st0.cart_coords[Cindex,:],at0.cell,at0.pbc)
             
             CN_max_distance = 2.5
             
@@ -1179,7 +1183,7 @@ class Trajectory:
                     Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
                     
             else: # changing-T MD
-                if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
+                if self.nframe*self.MDsetting["nblock"] > self.MDsetting["nsw"]*0.99: # with tolerance
                     print("Lattice: Incomplete run detected! \n")
                     Ti = self.MDsetting["Ti"]
                     Tf = self.MDsetting["Ti"]+(self.MDsetting["Tf"]-self.MDsetting["Ti"])*(self.nframe*self.MDsetting["nblock"]/self.MDsetting["nsw"])
@@ -1329,7 +1333,6 @@ class Trajectory:
 
         """
         
-        from MDAnalysis.analysis.distances import distance_array
         from pdyna.structural import resolve_octahedra
         from pdyna.analysis import compute_tilt_density
         
@@ -1344,7 +1347,6 @@ class Trajectory:
         Xpos = self.Allpos[:,self.Xindex,:]
         neigh_list = self.octahedra
         
-        mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
         mymat=st0.lattice.matrix
         
         # tilting and distortion calculations
@@ -1367,9 +1369,9 @@ class Trajectory:
         rotation_from_orthogonal = None
         if self._non_orthogonal:
             rotation_from_orthogonal = self._rotmat_from_orthogonal
-            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial,np.linalg.inv(rotation_from_orthogonal))
+            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial,np.linalg.inv(rotation_from_orthogonal))
         else:
-            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial)
+            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial)
         
         if tilt_recenter:
             recenter = []
@@ -1440,15 +1442,12 @@ class Trajectory:
 #             self.defect_octahedra = None
 #         #set(def_sites1).intersection(set(def_sites2))
 #         
-# 
-#         mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
 #         b0 = st0.cart_coords[Bindex,:]
 #         x0 = st0.cart_coords[Xindex,:]
-#         r0 = distance_array(b0,x0,mybox)
-#         mybox1=self.lattice[-1,:]
+#         r0 = distance_matrix_ase(b0,x0,at0.cell,at0.pbc)
 #         b1 = Bpos[-1,:]
 #         x1 = Xpos[-1,:]
-#         rf = distance_array(b1,x1,mybox1)
+#         rf = distance_matrix_ase_replace(b1,x1,at0.cell,self.latmat[-1,:],at0.pbc)
 #         
 #         
 #         diffr = np.abs(rf-r0)
@@ -1579,8 +1578,9 @@ class Trajectory:
         
         # data visualization
         if read_mode == 2:
-            from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time
-            self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures=False, smoother=smoother )
+            from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time, draw_dist_evolution_time
+            self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures=False, smoother=smoother)
+            self.Dobj = draw_dist_evolution_time(Di, timeline,uniname, saveFigures=False, smoother=smoother)
             
         elif self.Tgrad != 0: # read_mode 1 and changing-T MD
             from pdyna.analysis import draw_distortion_evolution_sca, draw_tilt_evolution_sca
@@ -2002,7 +2002,6 @@ class Trajectory:
         
         et0 = time.time()
         
-        from MDAnalysis.analysis.distances import distance_array
         from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay, orientation_density_3D_sphere
         from pdyna.structural import apply_pbc_cart_vecs
         
@@ -2010,14 +2009,14 @@ class Trajectory:
         Ama = self.A_sites["MA"]
         Aazr = self.A_sites["Azr"]
         
-        lattice = self.lattice
         Cpos = self.Allpos[:,self.Cindex,:]
         Npos = self.Allpos[:,self.Nindex,:]
         
         trajnum = list(range(round(self.nframe*allow_equil),self.nframe))
         latmat = self.latmat[trajnum,:]
-        
-        CNdiff = np.amax(np.abs(distance_array(Cpos[0,:],Npos[0,:],lattice[0,:])-distance_array(Cpos[-1,:],Npos[-1,:],lattice[-1,:])))
+        r0=distance_matrix_ase_replace(Cpos[0,:],Npos[0,:],self.at0.cell,self.latmat[0,:],self.at0.pbc)
+        r1=distance_matrix_ase_replace(Cpos[-1,:],Npos[-1,:],self.at0.cell,self.latmat[-1,:],self.at0.pbc)
+        CNdiff = np.amax(np.abs(r0-r1))
         
         if CNdiff > 5:
             print(f"!MO: A change of C-N connectivity is detected (ref value {round(CNdiff,3)} A).")
@@ -2310,7 +2309,6 @@ class Trajectory:
         
         et0 = time.time()
         
-        from MDAnalysis.analysis.distances import distance_array
         from pdyna.analysis import draw_RDF
         from pdyna.structural import get_volume
         
@@ -2333,10 +2331,8 @@ class Trajectory:
             CNda = np.empty((0,))
             BXda = np.empty((0,))
             for i,fr in enumerate(trajnum):
-                mybox=self.lattice[fr,:]
-
-                CNr=distance_array(Cpos[fr,:],Npos[fr,:],mybox)
-                BXr=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
+                CNr=distance_matrix_ase_replace(Cpos[fr,:],Npos[fr,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
+                BXr=distance_matrix_ase_replace(Bpos[fr,:],Xpos[fr,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
 
                 CNda = np.concatenate((CNda,CNr[CNr<CNtol]),axis = 0)
                 BXda = np.concatenate((BXda,BXr[BXr<BXtol]),axis = 0)
@@ -2361,9 +2357,7 @@ class Trajectory:
 
             BXda = np.empty((0,))
             for i,fr in enumerate(trajnum):
-                mybox=self.lattice[fr,:]
-
-                BXr=distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
+                BXr=distance_matrix_ase_replace(Bpos[fr,:],Xpos[fr,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
                 BXda = np.concatenate((BXda,BXr[BXr<BXtol]),axis = 0)
 
             draw_RDF(BXda, "BX", uniname, False)
@@ -2373,27 +2367,6 @@ class Trajectory:
             
             self.BX_RDF = BXRDF
             self.BXbond = BXda
-        
-# =============================================================================
-#         # pair distribution function
-#         Vol = get_volume(self.lattice)
-#         BXda = np.empty((0,))
-#         for i,fr in enumerate(trajnum):
-#             mybox = self.lattice[fr,:]
-#             vol = get_volume(self.lattice[fr,:])
-#             rad = len(Xindex)/vol*(len(Xindex)/self.natom)
-# 
-#             BXr = distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
-#             cr,binEdges=np.histogram(BXr,bins=200,range=[0.1,24])
-#             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-#             
-#             BXda = np.concatenate((BXda,BXr[BXr<BXtol]),axis = 0)
-#             
-#         cr,binEdges=np.histogram(BXda,bins=200,range=[0.1,24])
-#         bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-#         cn=np.multiply(cr,1/np.power(bincenters,3))
-#         plt.plot(bincenters,cn)
-# =============================================================================
         
         et1 = time.time()
         self.timing["RDF"] = et1-et0
@@ -2409,7 +2382,6 @@ class Trajectory:
 
         """
 
-        from MDAnalysis.analysis.distances import distance_array
         from pdyna.structural import centmass_organic, centmass_organic_vec, find_B_cage_and_disp
         from pdyna.analysis import fit_3D_disp_atomwise, fit_3D_disp_total, peaks_3D_scatter
         
@@ -2430,7 +2402,6 @@ class Trajectory:
         Aindex_cs = self.A_sites["Cs"]
         
         ABsep = 8.2
-        mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
         st0Bpos = st0pos[Bindex,:]
         
         CN_H_tol = 1.35
@@ -2443,12 +2414,12 @@ class Trajectory:
         
         if len(Afa) > 0:
             for i,env in enumerate(Afa):
-                dm = distance_array(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mybox)
+                dm = distance_matrix_ase(st0pos[env[0]+env[1],:],st0pos[Hindex,:],self.at0.cell,self.at0.pbc)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_fa.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_array(cent,st0Bpos,mybox) 
+                ri=distance_matrix_ase(cent,st0Bpos,self.at0.cell,self.at0.pbc)
                 Bs = []
                 for j in range(ri.shape[1]):
                     if ri[0,j] < ABsep:
@@ -2460,7 +2431,7 @@ class Trajectory:
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_array(cent[fr,:],Allpos[fr,Bindex,:],lattice[fr,:]) 
+                        ri[fr,:,]=distance_matrix_ase_replace(cent[fr,:],Allpos[fr,Bindex,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
                     ri = np.expand_dims(np.average(ri,axis=0),axis=0)
                     
                     Bs = []
@@ -2472,12 +2443,12 @@ class Trajectory:
         
         if len(Ama) > 0:
             for i,env in enumerate(Ama):
-                dm = distance_array(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mybox)
+                dm = distance_matrix_ase(st0pos[env[0]+env[1],:],st0pos[Hindex,:],self.at0.cell,self.at0.pbc)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_ma.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_array(cent,st0Bpos,mybox) 
+                ri=distance_matrix_ase(cent,st0Bpos,self.at0.cell,self.at0.pbc)
                 
                 Bs = []
                 for j in range(ri.shape[1]):
@@ -2490,7 +2461,7 @@ class Trajectory:
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_array(cent[fr,:],Allpos[fr,Bindex,:],lattice[fr,:]) 
+                        ri[fr,:,]=distance_matrix_ase_replace(cent[fr,:],Allpos[fr,Bindex,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
                     ri = np.expand_dims(np.average(ri,axis=0),axis=0)
                     
                     Bs = []
@@ -2502,12 +2473,12 @@ class Trajectory:
         
         if len(Aazr) > 0:
             for i,env in enumerate(Aazr):
-                dm = distance_array(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mybox)
+                dm = distance_matrix_ase(st0pos[env[0]+env[1],:], st0pos[Hindex,:],self.at0.cell,self.at0.pbc)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_azr.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_array(cent,st0Bpos,mybox) 
+                ri=distance_matrix_ase(cent,st0Bpos,self.at0.cell,self.at0.pbc)
                 
                 Bs = []
                 for j in range(ri.shape[1]):
@@ -2520,7 +2491,7 @@ class Trajectory:
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_array(cent[fr,:],Allpos[fr,Bindex,:],lattice[fr,:]) 
+                        ri[fr,:,]=distance_matrix_ase_replace(cent[fr,:],Allpos[fr,Bindex,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
                     ri = np.expand_dims(np.average(ri,axis=0),axis=0)
                     
                     Bs = []
@@ -2533,8 +2504,7 @@ class Trajectory:
                 
         if len(Aindex_cs) > 0:
             for i,env in enumerate(Aindex_cs):
-
-                ri=distance_array(st0.cart_coords[env,:],st0Bpos,mybox) 
+                ri=distance_matrix_ase(st0.cart_coords[env,:],st0Bpos,self.at0.cell,self.at0.pbc)
                 Bs = []
                 for j in range(ri.shape[1]):
                     if ri[0,j] < ABsep:
@@ -2628,7 +2598,6 @@ class Trajectory:
         et0 = time.time()
         
         if octa_locality:
-            from MDAnalysis.analysis.distances import distance_array
             from pdyna.structural import octahedra_coords_into_bond_vectors, match_mixed_halide_octa_dot
             
             st0 = self.st0
@@ -2640,7 +2609,6 @@ class Trajectory:
             Xpos = self.Allpos[:,self.Xindex,:]
             neigh_list = self.octahedra
             
-            mybox=np.array([st0.lattice.abc,st0.lattice.angles]).reshape(6,)
             mymat=st0.lattice.matrix
             
             b0 = st0.cart_coords[Bindex,:]
@@ -2661,13 +2629,12 @@ class Trajectory:
                  else:
                      raise TypeError(f"A X-site element {site.species_string} is found other than I and Br. ")
             
-            r = distance_array(b0,x0,mybox)
+            r = distance_matrix_ase(b0,x0,self.at0.cell,self.at0.pbc)
             
             # compare with final config to make sure there is no change of env
-            mybox1=self.lattice[-1,:]
             b1 = Bpos[-1,:]
             x1 = Xpos[-1,:]
-            rf = distance_array(b1,x1,mybox1)
+            rf = distance_matrix_ase_replace(b1,x1,self.at0.cell,self.latmat[-1,:],self.at0.pbc)
             if np.amax(r-rf) > 3.5: 
                 print(f"Warning: The maximum atomic position difference between initial and final configs are too large ({round(np.amax(r-rf),3)} A). ")
             
@@ -2698,8 +2665,7 @@ class Trajectory:
             
             for fr in frread:
                 
-                mybox = lattice[fr,:]
-                r = distance_array(Bpos[fr,:],Xpos[fr,:],mybox)
+                r = distance_matrix_ase_replace(Bpos[fr,:],Xpos[fr,:],self.at0.cell,self.latmat[rf,:],self.at0.pbc)
                 Xcodemaster = np.empty((len(Bindex),Xonehot.shape[1]))
                 for B_site, X_list in enumerate(r): # for each B-site atom
                     Xcoeff = 1/np.power(X_list,1)
@@ -2850,6 +2816,8 @@ class Frame:
                 if not elem in known_elem:
                     raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
             self.st0 = st0
+            at0 = aaa.get_atoms(st0)
+            self.at0 = at0
             self.natom = len(st0)
             self.species_set = st0.symbol_set
             self.formula = chemical_from_formula(st0)
@@ -2947,7 +2915,6 @@ class Frame:
         
         st0Bpos = self.st0.cart_coords[self.Bindex,:]
         st0Xpos = self.st0.cart_coords[self.Xindex,:]
-        mybox = np.array([self.st0.lattice.abc,self.st0.lattice.angles]).reshape(6,)
         mymat = self.st0.lattice.matrix
         
         rotated = False
@@ -2957,10 +2924,12 @@ class Frame:
             align_rotation = np.array(align_rotation)/180*np.pi
             rotmat = sstr.from_rotvec(align_rotation).as_matrix().reshape(3,3)
         
+        rt = distance_matrix_ase(st0Bpos,st0Xpos,self.at0.cell,self.at0.pbc)
+        
         if rotated:
-            neigh_list = fit_octahedral_network_frame(st0Bpos,st0Xpos,mybox,mymat,self._fpg_val_BX,rotated,rotmat)
+            neigh_list = fit_octahedral_network_frame(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,rotated,rotmat)
         else:
-            neigh_list = fit_octahedral_network_frame(st0Bpos,st0Xpos,mybox,mymat,self._fpg_val_BX,rotated,None)
+            neigh_list = fit_octahedral_network_frame(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,rotated,None)
         
         self.rotated = rotated
         self.frame_rotation = rotmat
@@ -2990,13 +2959,11 @@ class Frame:
         """
         
         from scipy.spatial.transform import Rotation as sstr
-        from MDAnalysis.analysis.distances import distance_array
         from pdyna.structural import octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors
         from pdyna.analysis import draw_dist_density_frame
         
         et0 = time.time()
         
-        mybox = np.array([self.st0.lattice.abc,self.st0.lattice.angles]).reshape(6,)
         mymat = self.st0.lattice.matrix
         Bcount = len(self.Bindex)
         neigh_list = self.octahedra
@@ -3037,7 +3004,7 @@ class Frame:
         from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
         
         #default_BB_dist = 6.1
-        r0=distance_array(self.st0.cart_coords[self.Bindex,:],self.st0.cart_coords[self.Bindex,:],mybox)
+        r0=distance_matrix_ase(self.st0.cart_coords[self.Bindex,:],self.st0.cart_coords[self.Bindex,:],self.at0.cell,self.at0.pbc)
         
         search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
         default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
@@ -3249,12 +3216,10 @@ class Dataset:
             Xpos = self.Allpos[f][Xindex,:]
             
             mymat = self.latmat[f]
-            mybox = list(self.lattice[f][0,:])
             
             from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
-            from MDAnalysis.analysis.distances import distance_array
             
-            r0=distance_array(Bpos,Bpos,mybox)
+            r0=distance_matrix(Bpos,Bpos,mymat)
             search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
             default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
             self.default_BB_dist = default_BB_dist
@@ -3285,7 +3250,8 @@ class Dataset:
             from pdyna.structural import fit_octahedral_network_defect_tol, octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors
             from scipy.spatial.transform import Rotation as sstr
             try: 
-                neigh_list = fit_octahedral_network_defect_tol(Bpos,Xpos,mybox,mymat,self._fpg_val_BX,1)
+                rt = distance_matrix(Bpos,Xpos,mymat)
+                neigh_list = fit_octahedral_network_defect_tol(Bpos,Xpos,rt,mymat,self._fpg_val_BX,1)
             except ValueError:
                 skipped += 1
                 continue

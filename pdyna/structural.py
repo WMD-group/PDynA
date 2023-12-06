@@ -18,14 +18,13 @@ except IOError:
     sys.stderr.write('IOError: failed reading from {}.'.format(filename_basis))
     sys.exit(1)
 
-def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial=None,rtr=None):
+def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,latmat,fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial=None,rtr=None):
     """ 
     Compute octahedral tilting and distortion from the trajectory coordinates and octahedral connectivity.
     """
     def frame_wise(fr):
         mymat=latmat[fr,:]
         
-        #R[i,:] = distance_array(Bpos[i,:],Xpos[i,:],mybox)
         disto = np.empty((0,4))
         Rmat = np.zeros((Bcount,3,3))
         Rmsd = np.zeros((Bcount,1))
@@ -76,10 +75,8 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
         
         for subfr in tqdm(range(len(readfr))):
             fr = readfr[subfr]
-            mybox=lattice[fr,:]
             mymat=latmat[fr,:]
             
-            #R[i,:] = distance_array(Bpos[i,:],Xpos[i,:],mybox)
             disto = np.empty((0,4))
             Rmat = np.zeros((Bcount,3,3))
             Rmsd = np.zeros((Bcount,1))
@@ -110,15 +107,15 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
                 
                 Bpos_frame = Bpos[fr,:]     
                 Xpos_frame = Xpos[fr,:]
+                rt = distance_matrix_ase_replace(Bpos_frame,Xpos_frame,at0.cell,latmat[fr,:],at0.pbc)
                 if orthogonal_frame:
                     if rtr is None:
-                        neigh_list = fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type)
+                        neigh_list = fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,rt,mymat,fpg_val_BX,structure_type)
                     else: # non-orthogonal
-                        neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type,np.linalg.inv(rtr))
+                        neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,rt,mymat,fpg_val_BX,structure_type,np.linalg.inv(rtr))
                 else:
-                    neigh_list, ref_initial = fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type)
+                    neigh_list, ref_initial = fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,rt,mymat,fpg_val_BX,structure_type)
 
-                mybox=lattice[fr,:]
                 mymat=latmat[fr,:]
                 
                 # re-calculate distortion values
@@ -172,13 +169,11 @@ def resolve_octahedra(Bpos,Xpos,readfr,enable_refit,multi_thread,lattice,latmat,
     return Di, T, refits
 
 
-def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type):
+def fit_octahedral_network(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,structure_type):
     """ 
     Resolve the octahedral connectivity. 
     """
-    from MDAnalysis.analysis.distances import distance_array
 
-    r=distance_array(Bpos_frame,Xpos_frame,mybox)
     max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
         
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
@@ -209,13 +204,11 @@ def fit_octahedral_network(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structur
         return neigh_list, ref_initial
 
 
-def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,rotated,rotmat):
+def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,rotated,rotmat):
     """ 
     Resolve the octahedral connectivity. 
     """
-    from MDAnalysis.analysis.distances import distance_array
 
-    r=distance_array(Bpos_frame,Xpos_frame,mybox)
     max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
         
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
@@ -240,13 +233,11 @@ def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,ro
 
 
 
-def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type):
+def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,structure_type):
     """ 
     Resolve the octahedral connectivity with a defect tolerance. 
     """
-    from MDAnalysis.analysis.distances import distance_array
 
-    r=distance_array(Bpos_frame,Xpos_frame,mybox)
     max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
     
     bxs = []
@@ -296,17 +287,15 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_
         return neigh_list, ref_initial
     
 
-def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,mybox,mymat,fpg_val_BX,structure_type,rotmat):
+def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,structure_type,rotmat):
     """ 
     Resolve the octahedral connectivity with a defect tolerance. 
     """
-    from MDAnalysis.analysis.distances import distance_array
     
     if structure_type != 1:
         raise TypeError("The non-orthogonal initial structure can only be analysed under the 3C (corner-sharing) connectivity. ")
     #rotmat = np.linalg.inv(rotmat)
         
-    r=distance_array(Bpos_frame,Xpos_frame,mybox)
     max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
     
     bxs = []
@@ -341,11 +330,10 @@ def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,mybox
     return neigh_list
 
 
-def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
+def find_polytype_network(Bpos_frame,Xpos_frame,r,mymat,neigh_list):
     """ 
     Resolve the octahedral connectivity and output the polytype information. 
     """
-    from MDAnalysis.analysis.distances import distance_array
     
     if np.isnan(neigh_list).any():
         raise TypeError("Polytype recognition is not compatible with initial structure with defects at the moment.")
@@ -357,7 +345,7 @@ def find_polytype_network(Bpos_frame,Xpos_frame,mybox,mymat,neigh_list):
         return cat
 
     BBsearch = 10.0  # 8.0
-    r = distance_array(Bpos_frame, Bpos_frame, mybox)
+
     connectivity = []
     conntypeStr = []
     conntypeStrAll = []
@@ -445,7 +433,6 @@ def pseudocubic_lat(traj,  # the main class instance
                
     from scipy.stats import norm
     from scipy.stats import binned_statistic_dd as binstat
-    from MDAnalysis.analysis.distances import distance_array
     
     match_tol = 1.5 # tolerance of the coordinate difference is set to 1.5 angstroms    
     st0 = traj.st0
@@ -453,8 +440,8 @@ def pseudocubic_lat(traj,  # the main class instance
     blist = traj.Bindex
     if len(blist) == 0:
         raise TypeError("Detected zero B site atoms, check B_list")
-    mybox = np.array([traj.st0.lattice.abc,traj.st0.lattice.angles]).reshape(6,)
-    dm = distance_array(Bpos, Bpos, mybox)
+
+    dm = distance_matrix_ase(Bpos, Bpos,traj.at0.cell,traj.at0.pbc)
     dm = dm.reshape((dm.shape[0]**2,1))
     BBdist = np.mean(dm[np.logical_and(dm>0.1,dm<7)]) # default B-B distance
     
@@ -1516,3 +1503,48 @@ def get_volume(lattice):
             Vol.append(vol)
         Vol = np.array(Vol)    
     return Vol
+
+
+def distance_matrix(v1,v2,latmat,get_vec=False):
+    
+    if v1.ndim != 2 or v1.shape[1] != 3 or v2.ndim != 2 or v2.shape[1] != 3:
+        raise TypeError("The input arrays must be in shape N*3. ")
+    
+    f1 = get_frac_from_cart(v1,latmat)[:,np.newaxis,:]
+    f2 = get_frac_from_cart(v2,latmat)[np.newaxis,:,:]
+    
+    m1 = np.repeat(f1,f2.shape[1],axis=1)
+    m2 = np.repeat(f2,f1.shape[0],axis=0)
+    
+    df = m1-m2
+    df = df-np.round(df)
+    dc = np.matmul(df,latmat)
+    
+    if get_vec:
+        return dc
+    else:
+        return np.linalg.norm(dc,axis=2)
+  
+    
+def distance_matrix_ase(v1,v2,cell,pbc,get_vec=False):
+    from ase.geometry import get_distances
+    
+    D, D_len = get_distances(v1,v2,cell=cell, pbc=pbc)
+    
+    if get_vec:
+        return D
+    else:
+        return D_len
+    
+def distance_matrix_ase_replace(v1,v2,asecell,newcell,pbc,get_vec=False):
+    from ase.geometry import get_distances
+    
+    celltemp = asecell.copy()
+    celltemp.array = newcell
+    
+    D, D_len = get_distances(v1,v2,cell=celltemp, pbc=pbc)
+    
+    if get_vec:
+        return D
+    else:
+        return D_len

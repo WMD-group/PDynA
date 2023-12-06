@@ -228,7 +228,7 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
 def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoother = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False, num_crop = 0):
     
     fig_name = f"lattice_evo_{uniname}.png"
-    
+    print(dm.shape[0],len(steps))
     assert dm.shape[0] == len(steps)
     if dm.ndim == 3:
         La, Lb, Lc = np.nanmean(dm[:,:,0],axis=1), np.nanmean(dm[:,:,1],axis=1), np.nanmean(dm[:,:,2],axis=1)
@@ -398,6 +398,68 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim
     plt.show()
     
     return (steps[:(len(steps)-aw+1)],Ta,Tb,Tc)
+
+
+def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim = None):
+    
+    fig_name = f"traj_dist_time_{uniname}.png"
+    
+    assert D.ndim == 3
+    assert D.shape[0] == len(steps)
+    
+    Dline = np.empty((0,4))
+
+    aw = 15
+    
+    for i in range(D.shape[0]-aw+1):
+        temp = D[list(range(i,i+aw)),:,:].reshape(-1,4)
+        #temp1 = temp[np.where(np.logical_and(temp<20,temp>-20))]
+        fitted = np.mean(temp,axis=0)[np.newaxis,:]
+        Dline = np.concatenate((Dline,fitted),axis=0)
+    
+    ts = steps[1] - steps[0]
+    time_window = smoother # picosecond
+    sgw = round(time_window/ts)
+    if sgw<5: sgw = 5
+    if sgw%2==0: sgw+=1
+    if smoother != 0:
+        Da = savitzky_golay(Dline[:,0],window_size=sgw)
+        Db = savitzky_golay(Dline[:,1],window_size=sgw)
+        Dc = savitzky_golay(Dline[:,2],window_size=sgw)
+        Dd = savitzky_golay(Dline[:,3],window_size=sgw)
+    else:
+        Da = Dline[:,0]
+        Db = Dline[:,1]
+        Dc = Dline[:,2]
+        Dd = Dline[:,3]
+    
+    w, h = figaspect(0.8/1.45)
+    plt.subplots(figsize=(w,h))
+    ax = plt.gca()
+    
+    labels = ["Eg","T2g","T1u","T2u"]
+    
+    #for i in range(D.shape[0]):
+    #    plt.scatter(steps[i],D[i,])
+    
+    plt.plot(steps[:(len(steps)-aw+1)],Da,label = labels[0],linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Db,label = labels[1],linewidth=2.5)
+    plt.plot(steps[:(len(steps)-aw+1)],Dc,label = labels[2],linewidth=2.5)    
+    plt.plot(steps[:(len(steps)-aw+1)],Dd,label = labels[3],linewidth=2.5)   
+
+    #ax.set_ylim([-45,45])
+    #ax.set_yticks([-45,-30,-15,0,15,30,45])
+    
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Time (ps)', fontsize=14)
+    plt.ylabel('Tilting (deg)', fontsize=14)
+    plt.legend(prop={'size': 13})
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return (steps[:(len(steps)-aw+1)],Da,Db,Dc,Dd)
 
 
 def compute_tilt_density(T,method = "curve"):
