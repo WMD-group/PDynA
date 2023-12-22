@@ -2168,9 +2168,120 @@ def quantify_tilt_domain(sc,scnorm):
     legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
     legend.get_frame().set_alpha(0.7)
     
-    
-    
     return scdecay
+
+
+def quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures, n_bins = 100):
+    """ 
+    Isolate tilting pattern wrt. the local halide concentration.  
+    """
+    
+    fig_name=f"tilt_domain_halideconc_{uniname}.png"
+    nns = TCconc[0].shape[2]
+    
+    from scipy.optimize import curve_fit
+    def model_func(x, k):
+        return np.exp(-k*x)
+    
+    scdecay = np.empty((len(concent),3,3))
+    for t in range(len(concent)):
+        for i in range(3):
+            for j in range(3):
+                tc = np.abs(np.mean(TCconc[t],axis=0)[i,:,j])
+                p0 = (5) # starting search coeffs
+                opt, pcov = curve_fit(model_func, np.array(list(range(nns))), tc, p0)
+                k= opt
+
+                scdecay[t,i,j] = (1/k)
+        
+    if np.sum(scdecay<0) > 0:
+        print("!Halideconc_tilt_domain: found fitted infinite correlation length. ")
+        scdecay[scdecay<0] = np.nan
+    
+    # assume isotropic
+    diag = (scdecay[:,0,0]+scdecay[:,1,1]+scdecay[:,2,2])/3
+    off_diag = (scdecay[:,0,1]+scdecay[:,1,2]+scdecay[:,0,2]+scdecay[:,1,0]+scdecay[:,2,1]+scdecay[:,2,0])/6
+    
+    data = np.array([np.array(concent),diag,off_diag])
+    
+    fig,ax = plt.subplots()
+    plt.plot(data[0,:],data[1,:],marker='s',markersize=6,linewidth=2.2,label='Normal')
+    plt.plot(data[0,:],data[2,:],marker='s',markersize=6,linewidth=2.2,label='Parallel')
+    plt.title("Tilting Correlation Length",fontsize=15)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Br Content', fontsize=15)
+    plt.ylabel('Correlation Length (unit cell)', fontsize=15)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return data
+
+
+def quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures, n_bins = 100):
+    """ 
+    Isolate tilting pattern wrt. the local halide configuration.  
+    """
+    
+    fig_name=f"tilt_domain_octatype_{uniname}.png"
+    nns = TCtype[0].shape[2]
+    
+    typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
+                 "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
+    typexval = [0,1,1.8,2.2,2.8,3.2,3.8,4.2,5,6]
+    typextick = ['0','1','2c','2t','3f','3m','4c','4t','5','6']
+    
+    config_types = list(config_types)
+    config_involved = []
+    
+    from scipy.optimize import curve_fit
+    def model_func(x, k):
+        return np.exp(-k*x)
+    
+    scdecay = np.empty((len(TCtype),3,3))
+    for t in range(len(TCtype)):
+        for i in range(3):
+            for j in range(3):
+                tc = np.abs(np.mean(TCtype[t],axis=0)[i,:,j])
+                p0 = (5) # starting search coeffs
+                opt, pcov = curve_fit(model_func, np.array(list(range(nns))), tc, p0)
+                k= opt
+
+                scdecay[t,i,j] = (1/k)
+        
+    if np.sum(scdecay<0) > 0:
+        print("!Halideconc_tilt_domain: found fitted infinite correlation length. ")
+        scdecay[scdecay<0] = np.nan
+    
+    # assume isotropic
+    diag = (scdecay[:,0,0]+scdecay[:,1,1]+scdecay[:,2,2])/3
+    off_diag = (scdecay[:,0,1]+scdecay[:,1,2]+scdecay[:,0,2]+scdecay[:,1,0]+scdecay[:,2,1]+scdecay[:,2,0])/6
+    
+    # plot type dependence   
+    plotx = np.array([typexval[i] for i in config_types])
+    plotxlab = [typextick[i] for i in config_types]
+    data = [plotxlab,diag,off_diag]
+    
+    fig,ax = plt.subplots()
+    plt.plot(plotx,data[1],marker='s',markersize=6,linewidth=2.2,label='Normal')
+    plt.plot(plotx,data[2],marker='s',markersize=6,linewidth=2.2,label='Parallel')
+    ax.set_xticks(plotx)
+    ax.set_xticklabels(plotxlab)
+    plt.title("Tilting Correlation Length",fontsize=15)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Br Content', fontsize=15)
+    plt.ylabel('Correlation Length (unit cell)', fontsize=15)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return data
 
 
 def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
@@ -2214,6 +2325,33 @@ def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
     writer = PillowWriter(fps=15)
     anim.save(f"{figname}.gif", writer=writer)
     #anim.save("link-anim.gif", writer=writer)
+    plt.show()
+
+
+def vis3D_domain_frame(cfeat,ss,bin_indices,figname):
+    """ 
+    Visualise tilting in 3D animation.  
+    """
+    from matplotlib.animation import FuncAnimation, PillowWriter
+    from matplotlib.colors import LightSource
+    
+    x1, x2, x3 = np.indices((ss+1,ss+1,ss+1))
+    grids = np.zeros((ss,ss,ss),dtype="bool")
+    selind = list(set(list(np.where(bin_indices[2,:]==ss)[0])+list(np.where(bin_indices[0,:]==ss)[0])+list(np.where(bin_indices[1,:]==1)[0])))
+    sel = bin_indices[:,selind]
+    for i in range(len(selind)):
+        grids[sel[:,i][0]-1,sel[:,i][1]-1,sel[:,i][2]-1] = True
+    
+    cmval = np.empty((ss,ss,ss,4))
+    for j in range(cfeat.shape[0]):
+        cmval[bin_indices[0,j]-1,bin_indices[1,j]-1,bin_indices[2,j]-1,:] = cfeat[j,:]
+
+
+    fig=plt.figure()
+    ax = plt.axes(projection='3d')
+    ax.voxels(x1,x2,x3,grids,facecolors=cmval)
+    ax.axis('off')
+    ax.set_aspect('auto')
     plt.show()
 
 

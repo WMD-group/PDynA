@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pymatgen.io.ase import AseAtomsAdaptor as aaa
 import matplotlib.pyplot as plt
 from pdyna.io import print_time
-from pdyna.structural import distance_matrix_ase_replace, distance_matrix_ase, distance_matrix
+from pdyna.structural import distance_matrix_handler
 import numpy as np
 import time
 import os
@@ -45,8 +45,10 @@ class Trajectory:
     # the first interval should be large enough to cover all the first and second NN of B-X (B-B) pairs, 
     # in the second list, the two elements are 0) approximate first NN distance of B-X (B-B) pairs, and 1) 0) approximate second NN distance of B-X (B-B) pairs
     # These values can be obtained by inspecting the initial configuration or, e.g. in the pair distrition function of the structure
-    _fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
+    _fpg_val_BB = [[3,10], [6.3,9.1]] # empirical values for lead halide perovskites
     _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
+    #_fpg_val_BB = [[2,6], [3.2,5.7]] # WSe2
+    #_fpg_val_BX = [[1,4.6], [2.5,4.1]] # WSe2
     
     def __post_init__(self):
         
@@ -115,9 +117,9 @@ class Trajectory:
                         if line.startswith('NBLOCK'):
                             nblock = int(line.split()[2])
                         if line.startswith('TEBEG'):
-                            Ti = int(line.split()[2])
+                            Ti = float(line.split()[2])
                             if Tf == None:
-                                Tf = int(Ti)
+                                Tf = Ti
                         if line.startswith('TEEND'):
                             Tf = int(line.split()[2])
                         if line.startswith('POTIM'):
@@ -144,14 +146,29 @@ class Trajectory:
             
             from pdyna.io import read_lammps_dump, chemical_from_formula
             
-            if len(self.data_path) != 2:
-                raise TypeError("The input format for lammps must be (dump.out_path, MD setting tuple). ")
-            dump_path, lammps_setting = self.data_path    
+            if len(self.data_path) == 2:
+                with_init = False
+                dump_path, lammps_setting = self.data_path  
+            elif len(self.data_path) == 3:
+                with_init = True
+                dump_path, lammps_setting, initial_path = self.data_path  
+            else:
+                raise TypeError("The input format for lammps must be either (dump.out_path, MD setting tuple) or (dump.out_path, MD setting tuple, lammps.data_path). ")
+              
             
             print("------------------------------------------------------------")
             print("Loading Trajectory files...")
             
             atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path)
+            
+            if with_init:
+                at0 = aaa.get_atoms(st0)
+                atsym = at0.numbers
+                from ase.io.lammpsdata import read_lammps_data
+                atn = read_lammps_data(initial_path,style='atomic')
+                assert len(at0) == len(atn)
+                atn.numbers = atsym
+                st0 = aaa.get_structure(atn)
             
             for elem in st0.symbol_set:
                 if not elem in self._known_elem:
@@ -770,9 +787,6 @@ class Trajectory:
         else:
             raise TypeError("The parameter structure_type must be 1, 2 or 3. ")
         
-        #if orthogonal_frame and self._flag_cubic_cell == False:
-        #    print("!Warning: detected non-cubic cell but orthogonal octahedral reference is used! ")
-        
         if smoother != 0 and read_mode == 2 and self.nframe*self.MDTimestep*0.5 < smoother:
             raise ValueError("The time window for averaging is too large. ")
         
@@ -835,7 +849,12 @@ class Trajectory:
         
         from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
         cell_lat = st0.lattice.abc
-        r0=distance_matrix_ase(st0Bpos,st0Bpos,at0.cell,at0.pbc)
+        angles = st0.lattice.angles
+        if (max(angles) < 100 and min(angles) > 80):
+            r0=distance_matrix_handler(st0Bpos,st0Bpos,mymat)
+        else:
+            r0=distance_matrix_handler(st0Bpos,st0Bpos,None,at0.cell,at0.pbc,True)
+
         search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
         default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
         self.default_BB_dist = default_BB_dist
@@ -843,8 +862,12 @@ class Trajectory:
         #default_BB_dist = 6.1
         Bpos = self.Allpos[:,self.Bindex,:]
         
-        ri=distance_matrix_ase_replace(Bpos[0,:],Bpos[0,:],at0.cell,self.latmat[0,:],at0.pbc)
-        rf=distance_matrix_ase_replace(Bpos[-1,:],Bpos[-1,:],at0.cell,self.latmat[-1,:],at0.pbc)
+        if (max(angles) < 100 and min(angles) > 80):
+            ri=distance_matrix_handler(Bpos[0,:],Bpos[0,:],self.latmat[0,:])
+            rf=distance_matrix_handler(Bpos[-1,:],Bpos[-1,:],self.latmat[-1,:])
+        else:
+            ri=distance_matrix_handler(Bpos[0,:],Bpos[0,:],self.latmat[0,:],at0.cell,at0.pbc,True,True)
+            rf=distance_matrix_handler(Bpos[-1,:],Bpos[-1,:],self.latmat[-1,:],at0.cell,at0.pbc,True,True)
 
         if np.amax(np.abs(ri-rf)) > 3: # confirm that no change in the Pb framework
             print("!Tilt-spatial: The difference between the initial and final distance matrix is above threshold ({} A), check ri and rf. \n".format(round(np.amax(np.abs(ri-rf)),3)))
@@ -871,7 +894,8 @@ class Trajectory:
         if Benv.shape[1] == 6:
             Bcoordenv = np.empty((Benv.shape[0],6,3))
             for i in range(Benv.shape[0]):
-                Bcoordenv[i,:] = Bpos[0,Benv[i,:],:] - Bpos[0,i,:]
+                #Bcoordenv[i,:] = Bpos[0,Benv[i,:],:] - Bpos[0,i,:]
+                Bcoordenv[i,:] = st0Bpos[Benv[i,:],:] - st0Bpos[i,:]
             
             Bcoordenv = apply_pbc_cart_vecs_single_frame(Bcoordenv,mymat)
             self._Bcoordenv = Bcoordenv
@@ -896,6 +920,7 @@ class Trajectory:
                     
                 if self._non_orthogonal:
                     self._flag_cubic_cell = False
+                    self.complex_pbc = True
                     from pdyna.structural import calc_rotation_from_arbitrary_order
                     rots, rtr = calc_rotation_from_arbitrary_order(csum)
                     print(f"Non-orthogonal structure detected, the rotation from the orthogonal reference is: {np.round(rots,3)} degree.")
@@ -906,13 +931,19 @@ class Trajectory:
                     self._rotmat_from_orthogonal = None
                     angles = self.st0.lattice.angles
                     sides = self.st0.lattice.abc
-                    if (max(angles) < 100 and min(angles) > 80) and (max(sides)-min(sides))/6 < 0.8:
-                        self._flag_cubic_cell = True
+                    if (max(angles) < 100 and min(angles) > 80):
+                        self.complex_pbc = False
+                        if  (max(sides)-min(sides))/6 < 0.8:
+                            self._flag_cubic_cell = True
+                        else:
+                            self._flag_cubic_cell = False
                     else:
                         self._flag_cubic_cell = False  
+                        self.complex_pbc = True
             else: # manually input a rotation from reference
                 self._non_orthogonal = True
                 self._flag_cubic_cell = False 
+                self.complex_pbc = True
                 from scipy.spatial.transform import Rotation as sstr
                 tempvec = np.array(rotation_from_orthogonal)/180*np.pi
                 rtr = sstr.from_rotvec(tempvec).as_matrix().reshape(3,3)
@@ -922,11 +953,12 @@ class Trajectory:
         elif Benv.shape[1] == 3:
             self._flag_cubic_cell = True
             self._non_orthogonal = False
-        
-            
+            self.complex_pbc = False
+                   
         else:
             self._flag_cubic_cell = False
             self._non_orthogonal = False
+            self.complex_pbc = True
             print(f"The B-B environment matrix is {Benv.shape[1]}. This indicates a non-3C polytype (3 or 6). ")
         
             #raise TypeError(f"The environment matrix is incorrect. The connectivity is {Benv.shape[1]} instead of 6. ")
@@ -940,7 +972,7 @@ class Trajectory:
         # label the constituent octahedra
         if toggle_tavg or toggle_tilt_distort: 
             from pdyna.structural import fit_octahedral_network_defect_tol, fit_octahedral_network_defect_tol_non_orthogonal, find_polytype_network
-            rt = distance_matrix_ase(st0Bpos,st0Xpos,self.at0.cell,self.at0.pbc)
+            rt = distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             
             if orthogonal_frame:
                 if not self._non_orthogonal:
@@ -954,7 +986,7 @@ class Trajectory:
                 self.octahedra_ref = ref_initial
             
             # determine polytype (experimental)
-            #rt=distance_matrix_ase(st0Bpos,st0Xpos,self.at0.cell,self.at0.pbc)
+            #rt=distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             #conntypeStr, connectivity, conn_category = find_polytype_network(st0Bpos,st0Xpos,rt,mymat,neigh_list)
             #self.octahedral_connectivity = conn_category
         
@@ -969,9 +1001,9 @@ class Trajectory:
             Aindex_fa = []
             Aindex_ma = []
             Aindex_azr = []
-        
-            dm = distance_matrix_ase(st0.cart_coords[Cindex,:],st0.cart_coords[Nindex,:],at0.cell,at0.pbc)
-            dm1 = distance_matrix_ase(st0.cart_coords[Cindex,:],st0.cart_coords[Cindex,:],at0.cell,at0.pbc)
+            
+            dm = distance_matrix_handler(st0.cart_coords[Cindex,:],st0.cart_coords[Nindex,:],mymat,at0.cell,at0.pbc,self.complex_pbc)
+            dm1 = distance_matrix_handler(st0.cart_coords[Cindex,:],st0.cart_coords[Cindex,:],mymat,at0.cell,at0.pbc,self.complex_pbc)
             
             CN_max_distance = 2.5
             
@@ -1367,9 +1399,9 @@ class Trajectory:
         rotation_from_orthogonal = None
         if self._non_orthogonal:
             rotation_from_orthogonal = self._rotmat_from_orthogonal
-            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial,np.linalg.inv(rotation_from_orthogonal))
+            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,self.complex_pbc,ref_initial,np.linalg.inv(rotation_from_orthogonal))
         else:
-            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial)
+            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,self.complex_pbc,ref_initial)
         
         if tilt_recenter:
             recenter = []
@@ -1442,11 +1474,10 @@ class Trajectory:
 #         
 #         b0 = st0.cart_coords[Bindex,:]
 #         x0 = st0.cart_coords[Xindex,:]
-#         r0 = distance_matrix_ase(b0,x0,at0.cell,at0.pbc)
+#         r0 = distance_matrix_handler(b0,x0,mymat,at0.cell,at0.pbc,self.complex_pbc)
 #         b1 = Bpos[-1,:]
 #         x1 = Xpos[-1,:]
-#         rf = distance_matrix_ase_replace(b1,x1,at0.cell,self.latmat[-1,:],at0.pbc)
-#         
+#         rf = distance_matrix_handler(b1,x1,self.latmat[-1,:],at0.cell,at0.pbc,self.complex_pbc)
 #         
 #         diffr = np.abs(rf-r0)
 #         diffb = []
@@ -1758,61 +1789,93 @@ class Trajectory:
             if max(bincount) != min(bincount):
                 raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
             
-            B3denv = np.empty((3,supercell_size**2,supercell_size))
-            for i in range(3):
-                dims = [0,1,2]
-                dims.remove(i)
-                binx = bin_indices[dims,:]
-                
-                binned = [[] for _ in range(supercell_size**2)]
-                for j in range(binx.shape[1]):
-                    binned[(binx[0,j]-1)+supercell_size*(binx[1,j]-1)].append(j)
-                binned = np.array(binned)
+# =============================================================================
+#             B3denv = np.empty((3,supercell_size**2,supercell_size))
+#             for i in range(3):
+#                 dims = [0,1,2]
+#                 dims.remove(i)
+#                 binx = bin_indices[dims,:]
+#                 
+#                 binned = [[] for _ in range(supercell_size**2)]
+#                 for j in range(binx.shape[1]):
+#                     binned[(binx[0,j]-1)+supercell_size*(binx[1,j]-1)].append(j)
+#                 binned = np.array(binned)
+# 
+#                 
+#                 for j in range(binned.shape[0]): # sort each bin in "i" direction coords
+#                     binned[j,:] = np.array([x for _, x in sorted(zip(cc[binned[j,:],i], binned[j,:]))]).reshape(1,supercell_size)
+#                 
+#                 B3denv[i,:] = binned
+#             
+#             B3denv = B3denv.astype(int)
+#             
+#             num_nn = math.ceil((supercell_size-1)/2)
+# 
+# 
+#             spatialnn = []
+#             spatialnorm = []
+#             for space in range(3):
+#                 layernn = []
+#                 layernorm = []
+#                 for layer in range(supercell_size):
+#                     corrnn = np.empty((num_nn+1,3))
+#                     corrnorm = np.empty((num_nn+1,3))
+#                     for nn in range(num_nn+1):
+#                         #pos2 = layer+(nn)
+#                         #if pos2 > supercell_size-1:
+#                         #    pos2 -= (supercell_size)
+#                         pos1 = layer-(nn)
+#                         
+#                         tc1 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos1],:]).reshape(-1,3)
+#                         #tc2 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos2],:]).reshape(-1,3)
+#                         tc = np.nanmean(tc1,axis=0)[np.newaxis,:]
+#                         #tc = np.nanmean(np.concatenate((tc1,tc2),axis=0),axis=0)[np.newaxis,:]
+#                         tcnorm = (np.sqrt(np.abs(tc))*np.sign(tc))
+#                         corrnn[nn,:] = tc
+#                         corrnorm[nn,:] = tcnorm
+#                     layernn.append(corrnn)
+#                     layernorm.append(corrnorm)
+#                 layernn = np.nanmean(np.array(layernn),axis=0)
+#                 layernn = layernn/layernn[0,:]
+#                 spatialnn.append(layernn)
+#                 layernorm = np.nanmean(np.array(layernorm),axis=0)
+#                 layernorm = layernorm/layernorm[0,:]
+#                 spatialnorm.append(layernorm)
+#                 
+#             spatialnn = np.array(spatialnn)
+#             spatialnorm = np.array(spatialnorm)
+# =============================================================================
 
-                
-                for j in range(binned.shape[0]): # sort each bin in "i" direction coords
-                    binned[j,:] = np.array([x for _, x in sorted(zip(cc[binned[j,:],i], binned[j,:]))]).reshape(1,supercell_size)
-                
-                B3denv[i,:] = binned
             
-            B3denv = B3denv.astype(int)
+            bin_indices = bin_indices-1 # 0-indexing
             
             num_nn = math.ceil((supercell_size-1)/2)
-
-
-            spatialnn = []
-            spatialnorm = []
-            for space in range(3):
-                layernn = []
-                layernorm = []
-                for layer in range(supercell_size):
-                    corrnn = np.empty((num_nn+1,3))
-                    corrnorm = np.empty((num_nn+1,3))
-                    for nn in range(num_nn+1):
-                        pos1 = layer+(nn)
-                        if pos1 > supercell_size-1:
-                            pos1 -= (supercell_size)
-                        pos2 = layer-(nn)
+            scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+            scmnorm[:] = np.nan
+            scm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+            scm[:] = np.nan
+            for o in range(bin_indices.shape[1]):
+                si = bin_indices[:,[o]]
+                for space in range(3):
+                    for n in range(num_nn+1):
+                        addit = np.array([[0],[0],[0]])
+                        addit[space,0] = n
+                        pos1 = si + addit
+                        pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
+                        k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+                        tc1 = np.multiply(T[:,o,:],T[:,k1,:])
+                        #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
+                        tc = np.nanmean(tc1,axis=0)
+                        #tcnorm = np.nanmean(tc1norm,axis=0)
+                        tcnorm = np.sqrt(np.abs(tc))*np.sign(tc)
+                        scmnorm[o,space,n,:] = tcnorm
+                        scm[o,space,n,:] = tc
                         
-                        tc1 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos1],:]).reshape(-1,3)
-                        tc2 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos2],:]).reshape(-1,3)
-                        tc = np.nanmean(np.concatenate((tc1,tc2),axis=0),axis=0)[np.newaxis,:]
-                        tcnorm = (np.sqrt(np.abs(tc))*np.sign(tc))
-                        #tc = np.cbrt(tc)
-                        corrnn[nn,:] = tc
-                        corrnorm[nn,:] = tcnorm
-                    layernn.append(corrnn)
-                    layernorm.append(corrnorm)
-                layernn = np.nanmean(np.array(layernn),axis=0)
-                layernn = layernn/layernn[0,:]
-                spatialnn.append(layernn)
-                layernorm = np.nanmean(np.array(layernorm),axis=0)
-                layernorm = layernorm/layernorm[0,:]
-                spatialnorm.append(layernorm)
-                
-            spatialnn = np.array(spatialnn)
-            spatialnorm = np.array(spatialnorm)
-            #self.spatialCorr = spatialnn            
+            scm = scm/scm[:,:,[0],:]
+            scmnorm = scmnorm/scmnorm[:,:,[0],:]
+            spatialnn = np.mean(scm,axis=0)
+            spatialnorm = np.mean(scmnorm,axis=0)
+            self.spatialCorr = {'raw':scm,'norm':scmnorm}           
             
             scdecay = quantify_tilt_domain(spatialnn,spatialnorm) # spatial decay length in 'unit cell'
             self.spatialCorrLength = scdecay  
@@ -2012,8 +2075,8 @@ class Trajectory:
         
         trajnum = list(range(round(self.nframe*allow_equil),self.nframe))
         latmat = self.latmat[trajnum,:]
-        r0=distance_matrix_ase_replace(Cpos[0,:],Npos[0,:],self.at0.cell,self.latmat[0,:],self.at0.pbc)
-        r1=distance_matrix_ase_replace(Cpos[-1,:],Npos[-1,:],self.at0.cell,self.latmat[-1,:],self.at0.pbc)
+        r0=distance_matrix_handler(Cpos[0,:],Npos[0,:],self.latmat[0,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+        r1=distance_matrix_handler(Cpos[-1,:],Npos[-1,:],self.latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
         CNdiff = np.amax(np.abs(r0-r1))
         
         if CNdiff > 5:
@@ -2329,8 +2392,8 @@ class Trajectory:
             CNda = np.empty((0,))
             BXda = np.empty((0,))
             for i,fr in enumerate(trajnum):
-                CNr=distance_matrix_ase_replace(Cpos[fr,:],Npos[fr,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
-                BXr=distance_matrix_ase_replace(Bpos[fr,:],Xpos[fr,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
+                CNr=distance_matrix_handler(Cpos[fr,:],Npos[fr,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+                BXr=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
 
                 CNda = np.concatenate((CNda,CNr[CNr<CNtol]),axis = 0)
                 BXda = np.concatenate((BXda,BXr[BXr<BXtol]),axis = 0)
@@ -2355,7 +2418,7 @@ class Trajectory:
 
             BXda = np.empty((0,))
             for i,fr in enumerate(trajnum):
-                BXr=distance_matrix_ase_replace(Bpos[fr,:],Xpos[fr,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
+                BXr=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
                 BXda = np.concatenate((BXda,BXr[BXr<BXtol]),axis = 0)
 
             draw_RDF(BXda, "BX", uniname, False)
@@ -2390,6 +2453,7 @@ class Trajectory:
         Allpos = self.Allpos
         lattice = self.lattice
         latmat = self.latmat
+        mymat = st0.lattice.matrix
         
         Bindex = self.Bindex
         Hindex = self.Hindex
@@ -2412,12 +2476,12 @@ class Trajectory:
         
         if len(Afa) > 0:
             for i,env in enumerate(Afa):
-                dm = distance_matrix_ase(st0pos[env[0]+env[1],:],st0pos[Hindex,:],self.at0.cell,self.at0.pbc)
+                dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_fa.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_matrix_ase(cent,st0Bpos,self.at0.cell,self.at0.pbc)
+                ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Bs = []
                 for j in range(ri.shape[1]):
                     if ri[0,j] < ABsep:
@@ -2429,7 +2493,8 @@ class Trajectory:
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_matrix_ase_replace(cent[fr,:],Allpos[fr,Bindex,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
+                        ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+
                     ri = np.expand_dims(np.average(ri,axis=0),axis=0)
                     
                     Bs = []
@@ -2441,12 +2506,12 @@ class Trajectory:
         
         if len(Ama) > 0:
             for i,env in enumerate(Ama):
-                dm = distance_matrix_ase(st0pos[env[0]+env[1],:],st0pos[Hindex,:],self.at0.cell,self.at0.pbc)
+                dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_ma.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_matrix_ase(cent,st0Bpos,self.at0.cell,self.at0.pbc)
+                ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
                 
                 Bs = []
                 for j in range(ri.shape[1]):
@@ -2459,7 +2524,8 @@ class Trajectory:
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_matrix_ase_replace(cent[fr,:],Allpos[fr,Bindex,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
+                        ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+
                     ri = np.expand_dims(np.average(ri,axis=0),axis=0)
                     
                     Bs = []
@@ -2471,12 +2537,12 @@ class Trajectory:
         
         if len(Aazr) > 0:
             for i,env in enumerate(Aazr):
-                dm = distance_matrix_ase(st0pos[env[0]+env[1],:], st0pos[Hindex,:],self.at0.cell,self.at0.pbc)
+                dm = distance_matrix_handler(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_azr.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_matrix_ase(cent,st0Bpos,self.at0.cell,self.at0.pbc)
+                ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
                 
                 Bs = []
                 for j in range(ri.shape[1]):
@@ -2489,7 +2555,7 @@ class Trajectory:
                     cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
                     ri = np.empty((Allpos.shape[0],len(Bindex)))
                     for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_matrix_ase_replace(cent[fr,:],Allpos[fr,Bindex,:],self.at0.cell,self.latmat[fr,:],self.at0.pbc)
+                        ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
                     ri = np.expand_dims(np.average(ri,axis=0),axis=0)
                     
                     Bs = []
@@ -2502,7 +2568,7 @@ class Trajectory:
                 
         if len(Aindex_cs) > 0:
             for i,env in enumerate(Aindex_cs):
-                ri=distance_matrix_ase(st0.cart_coords[env,:],st0Bpos,self.at0.cell,self.at0.pbc)
+                ri=distance_matrix_handler(st0.cart_coords[env,:],st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Bs = []
                 for j in range(ri.shape[1]):
                     if ri[0,j] < ABsep:
@@ -2627,12 +2693,13 @@ class Trajectory:
                  else:
                      raise TypeError(f"A X-site element {site.species_string} is found other than I and Br. ")
             
-            r = distance_matrix_ase(b0,x0,self.at0.cell,self.at0.pbc)
+            r = distance_matrix_handler(b0,x0,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             
             # compare with final config to make sure there is no change of env
             b1 = Bpos[-1,:]
             x1 = Xpos[-1,:]
-            rf = distance_matrix_ase_replace(b1,x1,self.at0.cell,self.latmat[-1,:],self.at0.pbc)
+            rf = distance_matrix_handler(b1,x1,self.latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+
             if np.amax(r-rf) > 3.5: 
                 print(f"Warning: The maximum atomic position difference between initial and final configs are too large ({round(np.amax(r-rf),3)} A). ")
             
@@ -2662,8 +2729,7 @@ class Trajectory:
             frread = list(np.round(np.linspace(round(Bpos.shape[0]*allow_equil),Bpos.shape[0]-1,sampling)).astype(int))
             
             for fr in frread:
-                
-                r = distance_matrix_ase_replace(Bpos[fr,:],Xpos[fr,:],self.at0.cell,self.latmat[rf,:],self.at0.pbc)
+                r = distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Xcodemaster = np.empty((len(Bindex),Xonehot.shape[1]))
                 for B_site, X_list in enumerate(r): # for each B-site atom
                     Xcoeff = 1/np.power(X_list,1)
@@ -2731,6 +2797,28 @@ class Trajectory:
                 if read_mode == 1:
                     self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
                     self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
+                    
+                
+                # partition tilting correlation length wrt local config
+                if hasattr(self,"spatialCorrLength"):
+                    TC = self.spatialCorr['norm']
+                    from pdyna.analysis import quantify_octatype_tilt_domain, quantify_halideconc_tilt_domain
+                    
+                    TCtype = []
+                    for ti, types in enumerate(typelib):
+                        TCtype.append(TC[types,:])
+                    
+                    Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
+                    
+                    concent = [] # concentrations recorded
+                    TCconc = []
+                    for ii,item in enumerate(brbins):
+                        if len(item) == 0: continue
+                        concent.append(bincent[ii])
+                        TCconc.append(TC[item,:])
+                    
+                    Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
+
                 
             if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
                 L = self.Lat
@@ -2782,18 +2870,20 @@ class Frame:
     
     # characteristic value of bond length of your material for structure construction 
     # the first interval covers the first and second NN of B-X (B-B) pairs, the second interval covers only the first NN of B-X (B-B) pairs.
-    _fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
-    _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
+    #_fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
+    #_fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
+    _fpg_val_BB = [[4,9.1], [5.8,8.1]] # empirical values for lead halide perovskites
+    _fpg_val_BX = [[2,7.5], [3,6.2]] # empirical values for lead halide perovskites
      
     def __post_init__(self):
         
-        #Xsite_species = ['Cl','Br','I'] # update if needed
-        #Bsite_species = ['Pb','Sn'] # update if needed
-        #known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs") # update if needed
+        Xsite_species = ['Cl','Br','I'] # update if needed
+        Bsite_species = ['Pb','Sn'] # update if needed
+        known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs") # update if needed
         
-        Xsite_species = ['Ba'] # update if needed
-        Bsite_species = ['P'] # update if needed
-        known_elem = ('Ba', 'P', 'Sb') # update if needed
+        #Xsite_species = ['Ba'] # update if needed
+        #Bsite_species = ['P'] # update if needed
+        #known_elem = ('Ba', 'P', 'Sb') # update if needed
         
         et0 = time.time()
 
@@ -2849,6 +2939,61 @@ class Frame:
             
             self.Bindex = Bindex
             self.Xindex = Xindex
+            
+        elif self.data_format == 'cif':
+            
+            from ase.io import read
+            from pdyna.io import chemical_from_formula
+            
+            poscar_path = self.data_path
+            
+            print("------------------------------------------------------------")
+            print("Loading Frame files...")
+            
+            # read files
+            a=read(filename=poscar_path,format='cif')
+            st0 = aaa.get_structure(a)
+            
+            for elem in st0.symbol_set:
+                if not elem in known_elem:
+                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+            self.st0 = st0
+            at0 = aaa.get_atoms(st0)
+            self.at0 = at0
+            self.natom = len(st0)
+            self.species_set = st0.symbol_set
+            self.formula = chemical_from_formula(st0)
+            self.scaled_up = False
+
+            # read the coordinates and save   
+            Xindex = []
+            Bindex = []
+
+            for i,site in enumerate(st0.sites):
+                 if site.species_string in Xsite_species:
+                     Xindex.append(i)
+                 if site.species_string in Bsite_species:
+                     Bindex.append(i)  
+            
+            if len(Bindex) < 16:
+                st0.make_supercell([2,2,2])
+                
+                self.st0 = st0
+                self.natom = len(st0)
+                self.scaled_up = True
+                
+                Xindex = []
+                Bindex = []
+
+                for i,site in enumerate(st0.sites):
+                     if site.species_string in Xsite_species:
+                         Xindex.append(i)
+                     if site.species_string in Bsite_species:
+                         Bindex.append(i)  
+            
+            self.Bindex = Bindex
+            self.Xindex = Xindex
+            
         
         else:
             raise TypeError("Unsupported data format: {}".format(self.data_format))
@@ -2875,7 +3020,9 @@ class Frame:
                  # general parameters
                  uniname = "test", # A unique user-defined name for this trajectory, will be used in printing and figure saving
                  saveFigures = False, # whether to save produced figures
-                 align_rotation = [0,0,0] # rotation of structure to match orthogonal directions
+                 align_rotation = [0,0,0], # rotation of structure to match orthogonal directions
+                 
+                 tilt_corr_spatial = False,
                  ):
         
         """
@@ -2916,13 +3063,23 @@ class Frame:
         mymat = self.st0.lattice.matrix
         
         rotated = False
+        rotmat = None
         if align_rotation != [0,0,0]: 
             rotated = True
             from scipy.spatial.transform import Rotation as sstr
             align_rotation = np.array(align_rotation)/180*np.pi
             rotmat = sstr.from_rotvec(align_rotation).as_matrix().reshape(3,3)
         
-        rt = distance_matrix_ase(st0Bpos,st0Xpos,self.at0.cell,self.at0.pbc)
+        at0 = aaa.get_atoms(self.st0)
+        self.at0 = at0
+        angles = self.st0.lattice.angles
+        
+        if (max(angles) < 100 and min(angles) > 80):
+            self.complex_pbc = False
+            rt=distance_matrix_handler(st0Bpos,st0Xpos,mymat)
+        else:
+            self.complex_pbc = True
+            rt=distance_matrix_handler(st0Bpos,st0Xpos,mymat,at0.cell,at0.pbc,True)
         
         if rotated:
             neigh_list = fit_octahedral_network_frame(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,rotated,rotmat)
@@ -2938,7 +3095,7 @@ class Frame:
         
         
         print("Computing octahedral tilting and distortion...")
-        self.tilting_and_distortion(uniname=uniname,saveFigures=saveFigures)
+        self.tilting_and_distortion(uniname=uniname,saveFigures=saveFigures,tilt_corr_spatial=tilt_corr_spatial)
         print(" ")
 
         # summary
@@ -2949,7 +3106,7 @@ class Frame:
         # end of calculation
         print("------------------------------------------------------------")
     
-    def tilting_and_distortion(self,uniname,saveFigures):
+    def tilting_and_distortion(self,uniname,saveFigures,tilt_corr_spatial):
         
         """
         Octhedral tilting and distribution analysis.
@@ -2976,8 +3133,8 @@ class Frame:
         for B_site in range(Bcount): # for each B-site atom
             raw = Xpos[neigh_list[B_site,:].astype(int),:] - Bpos[B_site,:]
             bx = octahedra_coords_into_bond_vectors(raw,mymat)
-            #if self.rotated:
-            bx = np.matmul(bx,rotmat)
+            if self.rotated:
+                bx = np.matmul(bx,rotmat)
       
             dist_val,rot,rmsd = calc_distortions_from_bond_vectors(bx)
                 
@@ -3002,11 +3159,10 @@ class Frame:
         from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
         
         #default_BB_dist = 6.1
-        r0=distance_matrix_ase(self.st0.cart_coords[self.Bindex,:],self.st0.cart_coords[self.Bindex,:],self.at0.cell,self.at0.pbc)
+        r0=distance_matrix_handler(self.st0.cart_coords[self.Bindex,:],self.st0.cart_coords[self.Bindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
         
         search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
         default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
-
         
         Benv = []
         for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
@@ -3025,13 +3181,13 @@ class Frame:
             #ax.scatter(test_range,test_range)
             #ax.set_xlim([5,10])
             
-            
+        cubic_cell = False    
         if Benv.shape[1] == 3: # indicate a 2*2*2 supercell
             
             raise ValueError("The cell size is too small, PBC can't be analyzed. ")
 
         elif Benv.shape[1] == 6: # indicate a larger supercell
-            
+            cubic_cell = True
             Bcoordenv = np.empty((Benv.shape[0],6,3))
             for i in range(Benv.shape[0]):
                 Bcoordenv[i,:] = Bpos[Benv[i,:],:] - Bpos[i,:]
@@ -3065,14 +3221,143 @@ class Frame:
         self.Tilting_Corr = Corr
         
         tquant, polarity = draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures)
-        print("Tilt angles found:")
-        print(f"a-axis: {tquant[0]}")
-        print(f"b-axis: {tquant[1]}")
-        print(f"c-axis: {tquant[2]}")
+        #print("Tilt angles found:")
+        #print(f"a-axis: {tquant[0]}")
+        #print(f"b-axis: {tquant[1]}")
+        #print(f"c-axis: {tquant[2]}")
         print("tilting correlation:",np.round(np.array(polarity).reshape(3,),3))
         
         self.tilt_peaks = tquant
         self.tilt_corr_polarity = polarity
+        
+        cell_lat = np.array(self.st0.lattice.abc)[np.newaxis,:]
+        cell_diff = np.amax(np.abs(np.repeat(cell_lat,3,axis=0)-np.repeat(cell_lat.T,3,axis=1)))
+        #cubic_cell = True
+        if tilt_corr_spatial and cubic_cell and cell_diff < 2.5:
+            import math
+            from scipy.stats import binned_statistic_dd as binstat
+            from pdyna.analysis import quantify_tilt_domain
+
+            cc = self.st0.frac_coords[self.Bindex,:]
+            supercell_size = round(np.mean(cell_lat)/default_BB_dist)
+            for i in range(3):
+                if abs(np.amax(cc[:,i])-1)<0.01 or abs(np.amin(cc[:,i]))<0.01:
+                    addit = np.zeros((1,3))
+                    addit[0,i] = 1/supercell_size/2
+                    cc = cc+addit
+                    
+            cc[cc>1] = cc[cc>1]-1
+                
+            clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                              [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                              [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+            
+            bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                                  range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                          clims[0,1]+0.5*(1/supercell_size)], 
+                                         [clims[1,0]-0.5*(1/supercell_size), 
+                                          clims[1,1]+0.5*(1/supercell_size)],
+                                         [clims[2,0]-0.5*(1/supercell_size), 
+                                          clims[2,1]+0.5*(1/supercell_size)]],
+                                  expand_binnumbers=True).binnumber
+            # validate the binning
+            atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+            bincount = np.unique(atom_indices, return_counts=True)[1]
+            if len(bincount) != supercell_size**3:
+                raise TypeError("Incorrect number of bins. ")
+            if max(bincount) != min(bincount):
+                raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+            
+            B3denv = np.empty((3,supercell_size**2,supercell_size))
+            for i in range(3):
+                dims = [0,1,2]
+                dims.remove(i)
+                binx = bin_indices[dims,:]
+                
+                binned = [[] for _ in range(supercell_size**2)]
+                for j in range(binx.shape[1]):
+                    binned[(binx[0,j]-1)+supercell_size*(binx[1,j]-1)].append(j)
+                binned = np.array(binned)
+
+                
+                for j in range(binned.shape[0]): # sort each bin in "i" direction coords
+                    binned[j,:] = np.array([x for _, x in sorted(zip(cc[binned[j,:],i], binned[j,:]))]).reshape(1,supercell_size)
+                
+                B3denv[i,:] = binned
+            
+            B3denv = B3denv.astype(int)
+            
+            num_nn = math.ceil((supercell_size-1)/2)
+
+
+            spatialnn = []
+            spatialnorm = []
+            for space in range(3):
+                layernn = []
+                layernorm = []
+                for layer in range(supercell_size):
+                    corrnn = np.empty((num_nn+1,3))
+                    corrnorm = np.empty((num_nn+1,3))
+                    for nn in range(num_nn+1):
+                        pos1 = layer+(nn)
+                        if pos1 > supercell_size-1:
+                            pos1 -= (supercell_size)
+                        pos2 = layer-(nn)
+                        
+                        tc1 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos1],:]).reshape(-1,3)
+                        tc2 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos2],:]).reshape(-1,3)
+                        tc = np.nanmean(np.concatenate((tc1,tc2),axis=0),axis=0)[np.newaxis,:]
+                        tcnorm = (np.sqrt(np.abs(tc))*np.sign(tc))
+                        #tc = np.cbrt(tc)
+                        corrnn[nn,:] = tc
+                        corrnorm[nn,:] = tcnorm
+                    layernn.append(corrnn)
+                    layernorm.append(corrnorm)
+                layernn = np.nanmean(np.array(layernn),axis=0)
+                layernn = layernn/layernn[0,:]
+                spatialnn.append(layernn)
+                layernorm = np.nanmean(np.array(layernorm),axis=0)
+                layernorm = layernorm/layernorm[0,:]
+                spatialnorm.append(layernorm)
+                
+            spatialnn = np.array(spatialnn)
+            spatialnorm = np.array(spatialnorm)      
+            
+            scdecay = quantify_tilt_domain(spatialnn,spatialnorm) # spatial decay length in 'unit cell'
+            self.spatialCorrLength = scdecay 
+            print(f"Tilting spatial correlation length: \n {np.round(scdecay,3)}")
+            
+            from pdyna.analysis import savitzky_golay, vis3D_domain_frame
+
+            axisvis = 2
+            ampfeat = T.copy()
+            ampfeat[np.isnan(ampfeat)] = 0
+            ampfeat[np.logical_or(ampfeat>23,ampfeat<-23)] = 0
+            plotfeat = ampfeat[:,[axisvis]]
+            
+            #plotfeat = np.sqrt(np.abs(plotfeat))*np.sign(plotfeat)
+            clipedges = (np.quantile(plotfeat,0.90)-np.quantile(plotfeat,0.10))/2
+            clipedges1 = [-3,3]
+            plotfeat = np.clip(plotfeat,-clipedges,clipedges)
+            plotfeat[np.logical_and(plotfeat<clipedges1[1],plotfeat>clipedges1[0])] = 0
+            
+            def map_rgb_tilt(x):
+                #x = x/np.amax(np.abs(x))/2+0.5
+                #return plt.cm.coolwarm(x)[:,:,0,:]
+                x = x/np.amax(np.abs(x))
+                p1 = np.array([0.196, 0.031, 0.318])
+                p2 = np.array([0.918, 0.388, 0.161])
+                pw = np.array([1, 1, 1])
+                cx = np.empty((x.shape[0],3))
+                cx[(x>=0)[:,0],:] = np.multiply(p1-pw,np.repeat(x[x>=0][:,np.newaxis],3,axis=1))+pw
+                cx[(x<0)[:,0],:] = np.multiply(p2-pw,np.abs(np.repeat(x[x<0][:,np.newaxis],3,axis=1)))+pw
+                return np.concatenate((cx,np.ones((cx.shape[0],1))),axis=1)
+                
+            
+            cfeat = map_rgb_tilt(plotfeat)
+            figname1 = f"Tilt3D_domain_frame_{uniname}"
+            vis3D_domain_frame(cfeat,supercell_size,bin_indices,figname1)
+
         
         et1 = time.time()
         self.timing["tilt_distort"] = et1-et0
@@ -3170,6 +3455,9 @@ class Dataset:
                  tilt_corr_NN1 = True, # enable first NN correlation of tilting, reflecting the Glazer notation
                  ):
         
+        from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
+        from pdyna.structural import distance_matrix
+        
         # pre-definitions
         print("Current dataset:",uniname)
         print("Configuration count:",self.nframe)
@@ -3215,8 +3503,6 @@ class Dataset:
             
             mymat = self.latmat[f]
             
-            from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
-            
             r0=distance_matrix(Bpos,Bpos,mymat)
             search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
             default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
@@ -3247,6 +3533,7 @@ class Dataset:
             # label the constituent octahedra
             from pdyna.structural import fit_octahedral_network_defect_tol, octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors
             from scipy.spatial.transform import Rotation as sstr
+            from pdyna.structural import distance_matrix
             try: 
                 rt = distance_matrix(Bpos,Xpos,mymat)
                 neigh_list = fit_octahedral_network_defect_tol(Bpos,Xpos,rt,mymat,self._fpg_val_BX,1)

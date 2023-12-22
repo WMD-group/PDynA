@@ -18,7 +18,7 @@ except IOError:
     sys.stderr.write('IOError: failed reading from {}.'.format(filename_basis))
     sys.exit(1)
 
-def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,latmat,fpg_val_BX,neigh_list,orthogonal_frame,structure_type,ref_initial=None,rtr=None):
+def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,latmat,fpg_val_BX,neigh_list,orthogonal_frame,structure_type,complex_pbc,ref_initial=None,rtr=None):
     """ 
     Compute octahedral tilting and distortion from the trajectory coordinates and octahedral connectivity.
     """
@@ -107,7 +107,7 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
                 
                 Bpos_frame = Bpos[fr,:]     
                 Xpos_frame = Xpos[fr,:]
-                rt = distance_matrix_ase_replace(Bpos_frame,Xpos_frame,at0.cell,latmat[fr,:],at0.pbc)
+                rt = distance_matrix_handler(Bpos_frame,Xpos_frame,latmat[fr,:],at0.cell,at0.pbc,complex_pbc)
                 if orthogonal_frame:
                     if rtr is None:
                         neigh_list = fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,rt,mymat,fpg_val_BX,structure_type)
@@ -441,7 +441,7 @@ def pseudocubic_lat(traj,  # the main class instance
     if len(blist) == 0:
         raise TypeError("Detected zero B site atoms, check B_list")
 
-    dm = distance_matrix_ase(Bpos, Bpos,traj.at0.cell,traj.at0.pbc)
+    dm = distance_matrix_handler(Bpos,Bpos,st0.lattice.matrix,traj.at0.cell,traj.at0.pbc,traj.complex_pbc)
     dm = dm.reshape((dm.shape[0]**2,1))
     BBdist = np.mean(dm[np.logical_and(dm>0.1,dm<7)]) # default B-B distance
     
@@ -930,7 +930,7 @@ def calc_rotation_from_arbitrary_order(bx):
         pymatgen_molecule, pymatgen_molecule_ideal)
     
     if rmsd > 0.1:
-        raise ValueError("The RMSD of fitting related to non-orthogonal frame mapping is too large (RMSD = {round(rmsd},4))")
+        raise ValueError(f"The RMSD of fitting related to non-orthogonal frame mapping is too large (RMSD = {round(rmsd,4)})")
     
     rots = sstr.from_matrix(rotmat).as_euler('xyz', degrees=True)
     rots = periodicity_fold(rots)
@@ -993,7 +993,7 @@ def match_bx_orthogonal(bx,mymat):
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-2]] < 0.6):
+        if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > 0.3):
         #if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > 0.25):
             print(bx,fits)
             raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
@@ -1479,6 +1479,8 @@ def find_population_gap(r,find_range,init):
     bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
     
     if y[(np.abs(bincenters - p)).argmin()] != 0:
+        import matplotlib.pyplot as plt
+        plt.hist(r.reshape(-1,),bins=100,range=[1,10])
         raise ValueError("!Structure resolving: Can't separate the different neighbours, please check the fpg_val values are correct according to the guidance at the beginning of the Trajectory class, or check if initial structure is defected or too distorted. ")
 
     return p
@@ -1526,10 +1528,10 @@ def distance_matrix(v1,v2,latmat,get_vec=False):
         return np.linalg.norm(dc,axis=2)
   
     
-def distance_matrix_ase(v1,v2,cell,pbc,get_vec=False):
+def distance_matrix_ase(v1,v2,asecell,pbc,get_vec=False):
     from ase.geometry import get_distances
     
-    D, D_len = get_distances(v1,v2,cell=cell, pbc=pbc)
+    D, D_len = get_distances(v1,v2,cell=asecell, pbc=pbc)
     
     if get_vec:
         return D
@@ -1548,3 +1550,20 @@ def distance_matrix_ase_replace(v1,v2,asecell,newcell,pbc,get_vec=False):
         return D
     else:
         return D_len
+    
+
+def distance_matrix_handler(v1,v2,latmat,asecell=None,pbc=None,complex_pbc=False,replace=True,get_vec=False):
+    
+    if complex_pbc is False:
+        r = distance_matrix(v1,v2,latmat,get_vec=get_vec)
+    else:
+        if replace is False:
+            r = distance_matrix_ase(v1,v2,asecell,pbc,get_vec=get_vec)
+        else:
+            r = distance_matrix_ase_replace(v1,v2,asecell,latmat,pbc,get_vec=get_vec)
+    
+    return r
+    
+
+
+
