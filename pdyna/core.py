@@ -3329,8 +3329,8 @@ class Frame:
                             pos1 -= (supercell_size)
                         pos2 = layer-(nn)
                         
-                        tc1 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos1],:]).reshape(-1,3)
-                        tc2 = np.multiply(T[:,B3denv[space,:,layer],:],T[:,B3denv[space,:,pos2],:]).reshape(-1,3)
+                        tc1 = np.multiply(T[B3denv[space,:,layer],:],T[B3denv[space,:,pos1],:]).reshape(-1,3)
+                        tc2 = np.multiply(T[B3denv[space,:,layer],:],T[B3denv[space,:,pos2],:]).reshape(-1,3)
                         tc = np.nanmean(np.concatenate((tc1,tc2),axis=0),axis=0)[np.newaxis,:]
                         tcnorm = (np.sqrt(np.abs(tc))*np.sign(tc))
                         #tc = np.cbrt(tc)
