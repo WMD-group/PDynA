@@ -87,7 +87,7 @@ def process_lat(m):
     for i in range(3):
         j = (i + 1) % 3
         k = (i + 2) % 3
-        angles[i] = abs_cap(np.dot(m[j], m[k]) / (abc[j] * abc[k]))
+        angles[i] = np.clip(np.dot(m[j], m[k])/(abc[j] * abc[k]),-1,1)
     angles = np.arccos(angles) * 180.0 / np.pi
     return np.concatenate((abc,angles)).reshape(1,6)
 
@@ -412,7 +412,7 @@ def read_lammps_dump(filepath):
     out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=celldisp,cell=cell)
     st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
     
-    return asymb, lattice, latmat, Allpos, st0, framenums[-1], framenums[1]-framenums[0]
+    return asymb, lattice, latmat, Allpos, st0, framenums[-1], framenums[-1]-framenums[-2]
 
 
 def read_xyz(filepath): 

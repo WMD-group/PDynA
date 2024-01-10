@@ -417,33 +417,55 @@ class Trajectory:
             if len(self.data_path) != 3:
                 raise TypeError("The input format for lammps must be (npz_path, MD setting tuple). ")
             npz_path,init_path,lammps_setting = self.data_path 
-            if type(npz_path) is str:
-                npz_path = [npz_path]
-            elif type(npz_path) is list:
-                pass
-            else:
-                raise TypeError("The input npz_path must be either str or list. ")
-            
             print("------------------------------------------------------------")
             print("Loading Trajectory files...")
             
-            carts = []
-            cellmat = []
-            for fp in npz_path:
-                ll = np.load(fp)
-                carts.append(ll['positions'])
-                cellmat.append(ll['cells'])
+            
+            if type(npz_path) is str:
+                
+                ll = np.load(npz_path)
+                carts = ll['positions']
+                cellmat = ll['cells']
                 atomic_numbers = ll['numbers']
-            carts = np.concatenate(carts,axis=0)
-            cellmat = np.concatenate(cellmat,axis=0)
+                
+                if cellmat.ndim == 2:
+                    newmat = np.zeros((cellmat.shape[0],3,3))
+                    for i in range(3):
+                        newmat[:,i,i]=cellmat[:,i]
+                    cellmat = newmat.copy()
+                
+                lattice = np.empty((0,6))
+                for i in range(cellmat.shape[0]):
+                    lattice = np.vstack((lattice,process_lat(cellmat[i,:])))
+                
+                at = rld(init_path, Z_of_type=None, style='atomic', sort_by_id=True, units='metal')
+                at.numbers = list(atomic_numbers)
+                st0 = pia.AseAtomsAdaptor.get_structure(at)
+                
+            elif type(npz_path) is list:
+                carts = []
+                cellmat = []
+                for fp in npz_path:
+                    ll = np.load(fp)
+                    carts.append(ll['positions'])
+                    cellmat.append(ll['cells'])
+                    atomic_numbers = ll['numbers']
+                carts = np.concatenate(carts,axis=0)
+                cellmat = np.concatenate(cellmat,axis=0)
+                
+                lattice = np.empty((0,6))
+                for i in range(cellmat.shape[0]):
+                    lattice = np.vstack((lattice,process_lat(cellmat[i,:])))
+                
+                at = rld(init_path, Z_of_type=None, style='atomic', sort_by_id=True, units='metal')
+                at.numbers = list(atomic_numbers[0,:])
+                st0 = pia.AseAtomsAdaptor.get_structure(at)
+            else:
+                raise TypeError("The input npz_path must be either str or list. ")
             
-            lattice = np.empty((0,6))
-            for i in range(cellmat.shape[0]):
-                lattice = np.vstack((lattice,process_lat(cellmat[i,:])))
             
-            at = rld(init_path, Z_of_type=None, style='atomic', sort_by_id=True, units='metal')
-            at.numbers = list(atomic_numbers[0,:])
-            st0 = pia.AseAtomsAdaptor.get_structure(at)
+            
+            
             
             for elem in st0.symbol_set:
                 if not elem in self._known_elem:
@@ -497,6 +519,9 @@ class Trajectory:
             self.MDTimestep = lammps_setting[2]/1000*lammps_setting[3]  # the timestep between recorded frames
             self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(lammps_setting[3]*lammps_setting[2]/1000)   # temeperature gradient
             
+        
+        
+        
         
         else:
             raise TypeError("Unsupported data format: {}".format(self.data_format))
@@ -2752,7 +2777,7 @@ class Trajectory:
             
             # activate local Br content analysis only if the sample is large enough
             brrange = [np.amin(syscode[:,1]),np.amax(syscode[:,1])]
-            brbinnum = 10 # key parameter
+            brbinnum = 7 # key parameter
             diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
             binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
             if syscode.shape[0] >= 64 and brrange[1]-brrange[0] > 0.12: 
