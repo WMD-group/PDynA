@@ -5,7 +5,6 @@ import re
 from glob import glob
 from ase.atoms import Atoms
 from ase.calculators.lammps import convert
-from pymatgen.util.num import abs_cap
 from collections import deque
 import pymatgen.io.ase as pia
 from ase.quaternions import Quaternions
