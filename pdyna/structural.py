@@ -1017,7 +1017,7 @@ def match_bx_orthogonal_rotated(bx,mymat,rotmat):
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-2]] < 0.5):
+        if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]]) > 0.25:
             print(bx,fits)
             raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
         order.append(np.argmax(fits))
@@ -1479,9 +1479,12 @@ def find_population_gap(r,find_range,init):
     bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
     
     if y[(np.abs(bincenters - p)).argmin()] != 0:
-        import matplotlib.pyplot as plt
-        plt.hist(r.reshape(-1,),bins=100,range=[1,10])
-        raise ValueError("!Structure resolving: Can't separate the different neighbours, please check the fpg_val values are correct according to the guidance at the beginning of the Trajectory class, or check if initial structure is defected or too distorted. ")
+        p1 = centers[0]+(centers[1]-centers[0])/(centers[1]+centers[0])*centers[0]
+        p = p1
+        if y[(np.abs(bincenters - p)).argmin()] != 0:
+            import matplotlib.pyplot as plt
+            plt.hist(r.reshape(-1,),bins=100,range=[1,10])
+            raise ValueError("!Structure resolving: Can't separate the different neighbours, please check the fpg_val values are correct according to the guidance at the beginning of the Trajectory class, or check if initial structure is defected or too distorted. ")
 
     return p
 

@@ -1798,7 +1798,7 @@ def draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures, n_bins
     return tquant, por
 
 
-def draw_tilt_coaxial(T, uniname, saveFigures, n_bins = 71, title = None):
+def draw_tilt_coaxial(T, uniname, saveFigures, n_bins = 171, title = None):
     
     fig_name1=f"traj_tilt_coaxial_xy_{uniname}.png"
     fig_name2=f"traj_tilt_coaxial_xz_{uniname}.png"
@@ -2066,7 +2066,7 @@ def Tilt_correlation(T,MDTimestep,smoother=0):
 # =============================================================================
     
     Tmean = np.mean(T,axis=0)
-    #Tmean=0
+    Tmean=0
     
     for i in range(T.shape[0]-sh): 
         for dt in range(sh): 
@@ -2243,14 +2243,28 @@ def quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures, n_
     
     scdecay = np.empty((len(TCtype),3,3))
     for t in range(len(TCtype)):
+        meantc = np.mean(TCtype[t],axis=0)
         for i in range(3):
             for j in range(3):
-                tc = np.abs(np.mean(TCtype[t],axis=0)[i,:,j])
+                tc = np.abs(meantc[i,:,j])
                 p0 = (5) # starting search coeffs
                 opt, pcov = curve_fit(model_func, np.array(list(range(nns))), tc, p0)
                 k= opt
 
                 scdecay[t,i,j] = (1/k)
+        
+        fig,ax = plt.subplots()
+        plt.plot(list(range(nns)),meantc[0,:,2],linewidth=1.5,label='axis 0')
+        plt.plot(list(range(nns)),meantc[1,:,2],linewidth=1.5,label='axis 1')
+        plt.plot(list(range(nns)),meantc[2,:,2],linewidth=1.5,label='axis 2')
+        plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
+        plt.title(f"{typesname[config_types[t]]} - Along axis 2",fontsize=15)
+        ax.set_ylim([-1,1])
+        ax.tick_params(axis='both', which='major', labelsize=12)
+        plt.xlabel('Distance (unit cell)', fontsize=14)
+        plt.ylabel('Spatial correlation (a.u.)', fontsize=14)
+        legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+        legend.get_frame().set_alpha(0.7)
         
     if np.sum(scdecay<0) > 0:
         print("!Halideconc_tilt_domain: found fitted infinite correlation length. ")
@@ -3038,6 +3052,41 @@ def fit_exp_decay_both(x,y):
     return (1/k1,1/k2,a)
 
 
+def fit_exp_decay_both_correct(x,y):
+    from scipy.optimize import curve_fit
+    def model_func(x, a, k1, k2, c):
+        return a * np.exp(-k1*x) + (1-a) * np.exp(-k2*x) + c
+        #return a * np.exp(-k*x) + b
+        
+    x = np.squeeze(x)
+    y = np.squeeze(y)/np.amax(y)
+    
+    fitrange = 1
+    xc = x[:round(x.shape[0]*fitrange)]
+    yc = y[:round(y.shape[0]*fitrange)]
+    
+    p0 = (0.90,20,0.5,-0.03) # starting search coeffs
+    opt, pcov = curve_fit(model_func, xc, yc, p0)
+    a, k1 ,k2, c= opt
+
+    y2 = model_func(x, a, k1 ,k2, c)
+    fig, ax = plt.subplots()
+    #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
+    ax.plot(x, y2, color='r',label='fitted',linewidth=4)
+    ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    plt.xlabel('Time (ps)', fontsize=14)
+    plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
+    plt.legend(prop={'size': 12})
+    plt.title('Two-component fitting', fontsize=14)
+    plt.show()
+    
+    if abs(c) > 0.2:
+        raise ValueError(f"The correction term c is too far from zero ({round(c,4)}).")
+        
+    return (1/k1,1/k2,a,c)
+
+
 def fit_exp_decay_fixed(x,y,aconst = 0.9):
     from scipy.optimize import curve_fit
     def model_func(x, k1, k2):
@@ -3575,12 +3624,14 @@ def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
     if rdftype == "CN":
         fig_name = f"RDF_CN_{uniname}.png"
         title = 'C-N RDF'
+        histrange = [1.38,1.65]
     elif rdftype == "BX":
         fig_name = f"RDF_BX_{uniname}.png"
         title = 'B-X RDF'
+        histrange = [0,5]
     
     fig, ax = plt.subplots()
-    counts,binedge,_ = ax.hist(da,bins=n_bins)
+    counts,binedge,_ = ax.hist(da,bins=n_bins,range=histrange)
     #mu, std = norm.fit(da)
     
     ax.set_yticks([])

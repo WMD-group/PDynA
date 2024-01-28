@@ -5,6 +5,7 @@ import re
 from glob import glob
 from ase.atoms import Atoms
 from ase.calculators.lammps import convert
+from pymatgen.util.num import abs_cap
 from collections import deque
 import pymatgen.io.ase as pia
 from ase.quaternions import Quaternions
@@ -390,13 +391,16 @@ def read_lammps_dump(filepath):
             break
     
     if Allpos_list[0].shape != Allpos_list[-1].shape: # the last block is incomplete
-        Allpos = np.array(Allpos_list[:-1])
+        for istop in range(len(Allpos_list)):
+            nafr = Allpos_list[istop].shape
+            if nafr != Allpos_list[0].shape: break
+        Allpos = np.array(Allpos_list[:istop])
         # isolate the first frame which is the initial structure as st0
         pos0 = Allpos[0,:]
         cell = latmat[0,:]
-        Allpos = Allpos[1:,:]
-        lattice = lattice[1:-1,:]
-        latmat = latmat[1:-1,:]
+        Allpos = Allpos[1:istop,:]
+        lattice = lattice[1:istop,:]
+        latmat = latmat[1:istop,:]
     else:
         Allpos = np.array(Allpos_list)
         # isolate the first frame which is the initial structure as st0

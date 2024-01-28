@@ -422,11 +422,22 @@ class Trajectory:
             
             
             if type(npz_path) is str:
-                
+                #specorder = [1,82,6,35,7]
                 ll = np.load(npz_path)
                 carts = ll['positions']
                 cellmat = ll['cells']
                 atomic_numbers = ll['numbers']
+                
+# =============================================================================
+#                 ca = []
+#                 an = []
+#                 for spe in specorder:
+#                     ca.append(carts[:,list(np.where(atomic_numbers==spe)[0]),:])
+#                     an.append(atomic_numbers[list(np.where(atomic_numbers==spe)[0])])
+#                 carts = np.concatenate(ca,axis=1)
+#                 atomic_numbers = np.concatenate(an,axis=0)
+# =============================================================================
+                    
                 
                 if cellmat.ndim == 2:
                     newmat = np.zeros((cellmat.shape[0],3,3))
@@ -579,7 +590,7 @@ class Trajectory:
                  toggle_tilt_distort = False, # switch of octahedral tilting and distortion calculation
                  toggle_MO = False, # switch of molecular orientation (MO) calculation (for organic A-site)
                  toggle_RDF = False, # switch of radial distribution function calculation
-                 toggle_A_disp = False, # switch of A-site cation displacement calculation
+                 toggle_site_disp = False, # switch of A-site cation displacement calculation
                  
                  smoother = 0, # whether to use S-G smoothing on outputs, 0: disabled, >0: average window in ps
                  
@@ -656,7 +667,7 @@ class Trajectory:
             True or False
         toggle_RDF          -- switch of radial distribution function calculation
             True or False
-        toggle_A_disp       -- switch of A-site cation displacement calculation
+        toggle_site_disp       -- switch of A-site cation displacement calculation
             True or False
         smoother            -- whether to use S-G smoothing on transient outputs, used with read_mode 2
             0: disabled, 
@@ -744,21 +755,21 @@ class Trajectory:
             toggle_tilt_distort = True
             toggle_MO = False
             toggle_RDF = False
-            toggle_A_disp = False
+            toggle_site_disp = False
         elif preset == 2:
             toggle_lat = True
             toggle_tavg = True
             toggle_tilt_distort = True
             toggle_MO = True
             toggle_RDF = False
-            toggle_A_disp = False
+            toggle_site_disp = False
         elif preset == 3:
             toggle_lat = True
             toggle_tavg = True
             toggle_tilt_distort = True
             toggle_MO = True
             toggle_RDF = True
-            toggle_A_disp = True
+            toggle_site_disp = True
         elif preset == 0:
             pass
         else:
@@ -995,7 +1006,7 @@ class Trajectory:
             self.supercell_size = supercell_size
         
         # label the constituent octahedra
-        if toggle_tavg or toggle_tilt_distort: 
+        if toggle_tavg or toggle_tilt_distort or toggle_site_disp: 
             from pdyna.structural import fit_octahedral_network_defect_tol, fit_octahedral_network_defect_tol_non_orthogonal, find_polytype_network
             rt = distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             
@@ -1016,7 +1027,7 @@ class Trajectory:
             #self.octahedral_connectivity = conn_category
         
         # label the constituent A-sites
-        if toggle_MO or toggle_A_disp:
+        if toggle_MO or toggle_site_disp:
             from pdyna.io import display_A_sites
             
             Nindex = self.Nindex
@@ -1129,8 +1140,8 @@ class Trajectory:
         if toggle_RDF:
             self.radial_distribution(allow_equil=allow_equil,uniname=uniname,saveFigures=saveFigures)
         
-        if toggle_A_disp:
-            self.A_site_displacement(allow_equil=allow_equil,uniname=uniname,saveFigures=saveFigures)
+        if toggle_site_disp:
+            self.site_displacement(allow_equil=allow_equil,uniname=uniname,saveFigures=saveFigures)
         
         if octa_locality:
             self.property_processing(allow_equil=allow_equil,read_mode=read_mode,octa_locality=octa_locality,uniname=uniname,saveFigures=saveFigures)
@@ -1675,11 +1686,17 @@ class Trajectory:
         
         # autocorr
         if tiltautoCorr:
-            from pdyna.analysis import fit_exp_decay_both, Tilt_correlation
+            from pdyna.analysis import fit_exp_decay_both, fit_exp_decay_both_correct, Tilt_correlation
             xt, yt = Tilt_correlation(T,self.Timestep,False)
             kt = []
-            for i in range(3):
-                kt.append(fit_exp_decay_both(xt, yt[:,i]))
+            try:
+                for i in range(3):
+                    kt.append(fit_exp_decay_both(xt, yt[:,i]))
+            except RuntimeError:
+                kt = []
+                for i in range(3):
+                    kt.append(fit_exp_decay_both_correct(xt, yt[:,i]))
+
             kt = np.array(kt)
             self.tilt_autocorr = kt
             self.prop_lib['tilt_autocorr'] = kt
@@ -1906,6 +1923,54 @@ class Trajectory:
             self.spatialCorrLength = scdecay  
             self.prop_lib["spatial_corr_length"] = scdecay 
             print(f"Tilting spatial correlation length: \n {np.round(scdecay,3)}")
+            
+# =============================================================================
+#             # correlation in the 110 directions
+#             scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+#             scmnorm[:] = np.nan
+#             scm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+#             scm[:] = np.nan
+#             for o in range(bin_indices.shape[1]):
+#                 si = bin_indices[:,[o]]
+#                 for space in range(3):
+#                     for n in range(num_nn+1):
+#                         addit = np.array([[n],[n],[n]])
+#                         addit[space,0] = 0
+#                         a1 = addit.copy()
+#                         addit[space-1,0] = addit[space-1,0]*(-1)
+#                         a2 = addit.copy()
+#                         
+#                         pos1 = si + a1
+#                         pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
+#                         pos1[pos1<0] = pos1[pos1<0]+supercell_size
+#                         k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+#                         tc1 = np.multiply(T[:,o,:],T[:,k1,:])
+#                         
+#                         pos2 = si + a2
+#                         pos2[pos2>supercell_size-1] = pos2[pos2>supercell_size-1]-supercell_size
+#                         pos2[pos2<0] = pos2[pos2<0]+supercell_size
+#                         k2 = np.where(np.all(bin_indices==pos2,axis=0))[0][0]
+#                         tc2 = np.multiply(T[:,o,:],T[:,k2,:])
+#                         
+#                         #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
+#                         tc = np.nanmean(np.concatenate((tc1,tc2),axis=0),axis=0)
+#                         #tcnorm = np.nanmean(tc1norm,axis=0)
+#                         tcnorm = np.sqrt(np.abs(tc))*np.sign(tc)
+#                         scmnorm[o,space,n,:] = tcnorm
+#                         scm[o,space,n,:] = tc
+#                         
+#             scm = scm/scm[:,:,[0],:]
+#             scmnorm = scmnorm/scmnorm[:,:,[0],:]
+#             spatialnn = np.mean(scm,axis=0)
+#             spatialnorm = np.mean(scmnorm,axis=0)
+#             #self.spatialCorr110 = {'raw':scm,'norm':scmnorm}           
+#             
+#             scdecay110 = quantify_tilt_domain(spatialnn,spatialnorm)*np.sqrt(2) # spatial decay length in 'unit cell'
+#             self.spatialCorrLength110 = scdecay110  
+#             self.prop_lib["spatial_corr_length_110"] = scdecay110 
+#             print(f"Tilting spatial correlation length in (110) directions: \n {np.round(scdecay110,3)}")
+# =============================================================================
+            
         
         if vis3D_domain != 0 and vis3D_domain in (1,2):
             import matplotlib.pyplot as plt
@@ -2108,6 +2173,7 @@ class Trajectory:
             print(f"!MO: A change of C-N connectivity is detected (ref value {round(CNdiff,3)} A).")
 
         MOvecs = {}
+        MOcenter = {}
         
         if len(Ama) > 0:
             Clist = [i[0][0] for i in Ama]
@@ -2123,6 +2189,7 @@ class Trajectory:
             MOvecs["MA"] = cn
             MA_MOvecnorm = CN
             MA_center = Cpos - 7/13*cn
+            MOcenter["MA"] = MA_center
             
             orientation_density(CN,"MA",saveFigures,uniname,title=title)
             if draw_MO_anime and saveFigures:
@@ -2158,6 +2225,7 @@ class Trajectory:
             FA_MOvec1norm = CN
             FA_MOvec2norm = NN
             FA_center = Cpos - 7/10*cn
+            MOcenter["FA"] = FA_center
             
             orientation_density_2pan(CN,NN,"FA",saveFigures,uniname,title=title)
             if draw_MO_anime and saveFigures:
@@ -2194,6 +2262,7 @@ class Trajectory:
             Azr_MOvec1norm = CN
             Azr_MOvec2norm = NN
             Azr_center = Npos + 12/19*cn
+            MOcenter["Azr"] = Azr_center
             
             orientation_density_2pan(CN,NN,"Azr",saveFigures,uniname,title=title)
             if draw_MO_anime and saveFigures:
@@ -2202,6 +2271,7 @@ class Trajectory:
         
         # save the MO vectors together
         self.MOvector = MOvecs
+        self.MOcenter = MOcenter
         
         # total polarization
         if not (len(Afa) > 0 and len(Ama) > 0 and len(Aazr) > 0):
@@ -2263,6 +2333,7 @@ class Trajectory:
                     
                 tconst["Azr"] = [tconst_Azr1,tconst_Azr2]
             
+            self.MOlifetime = tconst
             self.prop_lib['reorientation'] = tconst
             print(" ")
        
@@ -2324,7 +2395,6 @@ class Trajectory:
             bincount = np.unique(atom_indices, return_counts=True)[1]
             if len(bincount) != supercell_size**3:
                 raise TypeError("Incorrect number of bins. ")
-                
                 
             if max(bincount) != min(bincount):
                 raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
@@ -2427,7 +2497,7 @@ class Trajectory:
             draw_RDF(CNda, "CN", uniname, False)
             ccn,bcn1 = np.histogram(CNda,bins=100,range=[1.38,1.65])
             bcn = 0.5*(bcn1[1:]+bcn1[:-1])
-            cbx,bbx1 = np.histogram(BXda,bins=300,range=[0,12])
+            cbx,bbx1 = np.histogram(BXda,bins=300,range=[0,5])
             bbx = 0.5*(bbx1[1:]+bbx1[:-1])
             BXRDF = bbx,cbx
             CNRDF = bcn,ccn
@@ -2447,7 +2517,7 @@ class Trajectory:
                 BXda = np.concatenate((BXda,BXr[BXr<BXtol]),axis = 0)
 
             draw_RDF(BXda, "BX", uniname, False)
-            cbx,bbx1 = np.histogram(BXda,bins=300,range=[0,12])
+            cbx,bbx1 = np.histogram(BXda,bins=300,range=[0,5])
             bbx = 0.5*(bbx1[1:]+bbx1[:-1])
             BXRDF = bbx,cbx
             
@@ -2458,7 +2528,7 @@ class Trajectory:
         self.timing["RDF"] = et1-et0
     
 
-    def A_site_displacement(self,allow_equil,uniname,saveFigures):
+    def site_displacement(self,allow_equil,uniname,saveFigures):
         
         """
         A-site cation displacement analysis.
@@ -2468,7 +2538,7 @@ class Trajectory:
 
         """
 
-        from pdyna.structural import centmass_organic, centmass_organic_vec, find_B_cage_and_disp
+        from pdyna.structural import centmass_organic, centmass_organic_vec, find_B_cage_and_disp, get_frac_from_cart
         from pdyna.analysis import fit_3D_disp_atomwise, fit_3D_disp_total, peaks_3D_scatter
         
         et0 = time.time()
@@ -2476,12 +2546,15 @@ class Trajectory:
         st0 = self.st0
         st0pos = self.st0.cart_coords
         Allpos = self.Allpos
-        lattice = self.lattice
         latmat = self.latmat
         mymat = st0.lattice.matrix
         
         Bindex = self.Bindex
+        Xindex = self.Xindex
         Hindex = self.Hindex
+        
+        
+        # A-site displacements
         
         Afa = self.A_sites["FA"]
         Ama = self.A_sites["MA"]
@@ -2511,6 +2584,7 @@ class Trajectory:
                 for j in range(ri.shape[1]):
                     if ri[0,j] < ABsep:
                         Bs.append(Bindex[j])
+
                 try:
                     assert len(Bs) == 8
                     B8envs[env[0][0]] = Bs
@@ -2665,6 +2739,240 @@ class Trajectory:
             peaks_cs = fit_3D_disp_atomwise(disp_cs,readTimestep,uniname,moltype,saveFigures,title=moltype)
             fit_3D_disp_total(dispvec_cs,uniname,moltype,saveFigures,title=moltype)
             peaks_3D_scatter(peaks_cs,uniname,moltype,saveFigures)
+            
+            
+        
+        # B-site displacement
+        from pdyna.structural import apply_pbc_cart_vecs
+        neigh_list = self.octahedra.astype(int)
+        
+        Bdisp = []
+        for i,b in enumerate(Bindex):
+            temp = Allposfr[:,[b],:] - Allposfr[:,np.array(Xindex)[list(neigh_list[i,:])],:]
+            Bdisppbc = apply_pbc_cart_vecs(temp, latmatfr)
+            
+            disp = np.mean(Bdisppbc,axis=1)[:,np.newaxis,:]
+            Bdisp.append(disp)
+        
+        Bdisp = np.concatenate(Bdisp,axis=1)
+        
+        # A-B displacement corr
+        ABdisp_corrcoeff = {}
+        if len(Aindex_fa) > 0:
+            ad = []
+            bd = []
+            for ai, a in enumerate(Afa):
+                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
+                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                ad.append(disp_fa[:,[ai],:].reshape(-1,3))
+                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                
+            ad = np.concatenate(ad,axis=0)
+            bd = np.concatenate(bd,axis=0)
+            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+            ABdisp_corrcoeff['FA'] = cco
+            
+        if len(Aindex_ma) > 0:
+            ad = []
+            bd = []
+            for ai, a in enumerate(Ama):
+                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
+                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                ad.append(disp_ma[:,[ai],:].reshape(-1,3))
+                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                
+            ad = np.concatenate(ad,axis=0)
+            bd = np.concatenate(bd,axis=0)
+            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+            ABdisp_corrcoeff['MA'] = cco
+        
+        if len(Aindex_azr) > 0:
+            ad = []
+            bd = []
+            for ai, a in enumerate(Aazr):
+                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
+                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                ad.append(disp_azr[:,[ai],:].reshape(-1,3))
+                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                
+            ad = np.concatenate(ad,axis=0)
+            bd = np.concatenate(bd,axis=0)
+            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+            ABdisp_corrcoeff['Azr'] = cco
+            
+        if len(Aindex_cs) > 0:
+            ad = []
+            bd = []
+            for ai, a in enumerate(Aindex_cs):
+                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
+                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                ad.append(disp_cs[:,[ai],:].reshape(-1,3))
+                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                
+            ad = np.concatenate(ad,axis=0)
+            bd = np.concatenate(bd,axis=0)
+            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+            ABdisp_corrcoeff['Cs'] = cco
+        
+        self.ABdisp_corrcoeff = ABdisp_corrcoeff
+        self.prop_lib['AB_disp_corr'] = self.ABdisp_corrcoeff
+        
+        
+        # B-B displacement corr
+        import math
+        from scipy.stats import binned_statistic_dd as binstat
+
+        cc = self.st0.frac_coords[self.Bindex,:]
+        
+        supercell_size = self.supercell_size
+        
+        clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                          [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                          [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+        
+        bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                              range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                      clims[0,1]+0.5*(1/supercell_size)], 
+                                     [clims[1,0]-0.5*(1/supercell_size), 
+                                      clims[1,1]+0.5*(1/supercell_size)],
+                                     [clims[2,0]-0.5*(1/supercell_size), 
+                                      clims[2,1]+0.5*(1/supercell_size)]],
+                              expand_binnumbers=True).binnumber
+        # validate the binning
+        atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+        bincount = np.unique(atom_indices, return_counts=True)[1]
+        if len(bincount) != supercell_size**3:
+            raise TypeError("Incorrect number of bins. ")
+        if max(bincount) != min(bincount):
+            raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+       
+        bin_indices = bin_indices-1 # 0-indexing
+        
+        num_nn = math.ceil((supercell_size-1)/2)
+        
+        bb1 = []
+        bb2 = []
+        for o in range(bin_indices.shape[1]):
+            si = bin_indices[:,[o]]
+            b2d = []
+            for space in range(3):
+                addit = np.array([[0],[0],[0]])
+                addit[space,0] = 1
+                pos1 = si + addit
+                pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
+                k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+                
+                b2d.append(Bdisp[:,[k1],:])
+            b1d = Bdisp[:,[o],:]
+            b2d = np.concatenate(b2d,axis=1)
+            bb1.append(b1d)
+            bb2.append(b2d)
+        bb1 = np.array(bb1)
+        bb2 = np.array(bb2)
+        
+        BBdisp_corrcoeff = np.empty((3,3))
+        for tax in range(3):
+            for corrax in range(3):
+                BBdisp_corrcoeff[corrax,tax] = np.corrcoef(bb1[:,:,0,tax].reshape(-1,),bb2[:,:,corrax,tax].reshape(-1,))[0,1]
+        
+        self.BBdisp_corrcoeff = BBdisp_corrcoeff
+        self.prop_lib['BB_disp_corr'] = self.BBdisp_corrcoeff
+        
+        
+        # A-A displacement corr
+        MOcents=self.MOcenter
+        if len(MOcents) == 1: # only run with pure A-site case
+            MOcent = MOcents[list(MOcents.keys())[0]]
+            if len(Aindex_fa) > 0:
+                Adisp = self.disp_fa
+            if len(Aindex_ma) > 0:
+                Adisp = self.disp_ma
+            if len(Aindex_cs) > 0:
+                Adisp = self.disp_cs
+            if len(Aindex_azr) > 0:
+                Adisp = self.disp_azr
+            
+            safety_margin = np.array([1-1/supercell_size,1])
+            
+            cc = get_frac_from_cart(MOcent, latmatfr)[0,:]
+            
+            rect = [0,0,0]
+            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,0])-np.amin(cc[:,0])))): 
+                cc[:,0] = cc[:,0]-(np.amax(cc[:,0])-(1-1/supercell_size/2))
+                rect[0] = 1
+            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,1])-np.amin(cc[:,1])))): 
+                cc[:,1] = cc[:,1]-(np.amax(cc[:,1])-(1-1/supercell_size/2))
+                rect[1] = 1
+            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,2])-np.amin(cc[:,2])))): 
+                cc[:,2] = cc[:,2]-(np.amax(cc[:,2])-(1-1/supercell_size/2))
+                rect[2] = 1
+            
+            for i in range(3):
+                if rect[i] == 0:
+                    if np.amin(cc[:,i]) < 1/supercell_size/4:
+                        cc[:,i] = cc[:,i] + 1/supercell_size/8*3
+                    if np.amin(cc[:,i]) > 1-1/supercell_size/4:
+                        cc[:,i] = cc[:,i] - 1/supercell_size/8*3
+            
+            for i in range(cc.shape[0]):
+                for j in range(cc.shape[1]):
+                    if cc[i,j] > 1:
+                        cc[i,j] = cc[i,j]-1
+                    if cc[i,j] < 0:
+                        cc[i,j] = cc[i,j]+1
+            
+            clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                              [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                              [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+            
+            bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                                  range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                          clims[0,1]+0.5*(1/supercell_size)], 
+                                         [clims[1,0]-0.5*(1/supercell_size), 
+                                          clims[1,1]+0.5*(1/supercell_size)],
+                                         [clims[2,0]-0.5*(1/supercell_size), 
+                                          clims[2,1]+0.5*(1/supercell_size)]],
+                                  expand_binnumbers=True).binnumber
+            # validate the binning
+            atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+            bincount = np.unique(atom_indices, return_counts=True)[1]
+            if len(bincount) != supercell_size**3:
+                raise TypeError("Incorrect number of bins. ")
+                
+            if max(bincount) != min(bincount):
+                raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+           
+            bin_indices = bin_indices-1 # 0-indexing
+            
+            num_nn = math.ceil((supercell_size-1)/2)
+            
+            aa1 = []
+            aa2 = []
+            for o in range(bin_indices.shape[1]):
+                si = bin_indices[:,[o]]
+                a2d = []
+                for space in range(3):
+                    addit = np.array([[0],[0],[0]])
+                    addit[space,0] = 1
+                    pos1 = si + addit
+                    pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
+                    k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+                    
+                    a2d.append(Adisp[:,[k1],:])
+                a1d = Adisp[:,[o],:]
+                a2d = np.concatenate(a2d,axis=1)
+                aa1.append(a1d)
+                aa2.append(a2d)
+            aa1 = np.array(aa1)
+            aa2 = np.array(aa2)
+            
+            AAdisp_corrcoeff = np.empty((3,3))
+            for tax in range(3):
+                for corrax in range(3):
+                    AAdisp_corrcoeff[corrax,tax] = np.corrcoef(aa1[:,:,0,tax].reshape(-1,),aa2[:,:,corrax,tax].reshape(-1,))[0,1]
+            
+            self.AAdisp_corrcoeff = AAdisp_corrcoeff
+            self.prop_lib['AA_disp_corr'] = self.AAdisp_corrcoeff
         
         
         et1 = time.time()
@@ -2757,7 +3065,7 @@ class Trajectory:
                 r = distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Xcodemaster = np.empty((len(Bindex),Xonehot.shape[1]))
                 for B_site, X_list in enumerate(r): # for each B-site atom
-                    Xcoeff = 1/np.power(X_list,1)
+                    Xcoeff = 1/np.power(X_list,1.2)
                     Xcode = Xonehot.copy()
                     Xcode = Xcode[Xcoeff>(1/env_BX_distance),:]
                     Xcoeff = Xcoeff[Xcoeff>(1/env_BX_distance)]
@@ -2777,17 +3085,25 @@ class Trajectory:
             
             # activate local Br content analysis only if the sample is large enough
             brrange = [np.amin(syscode[:,1]),np.amax(syscode[:,1])]
-            brbinnum = 7 # key parameter
-            diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
-            binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
+            brbinnum = 12 # key parameter
+            #diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
+            #binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
             if syscode.shape[0] >= 64 and brrange[1]-brrange[0] > 0.12: 
-                Bins = np.linspace(binrange[0],binrange[1],brbinnum+1)
+                #Bins = np.linspace(binrange[0],binrange[1],brbinnum+1)
+                qus = np.linspace(0,1,brbinnum+1)
+                Bins = []
+                for q in qus:
+                    Bins.append(np.quantile(syscode[:,1],q))
+                Bins = np.array(Bins)
+                deltab = 0.0001
+                Bins[0] = Bins[0] - deltab
+                Bins[-1] = Bins[-1] + deltab
                 bininds = np.digitize(syscode[:,1],Bins)-1
                 brbins = [[] for kk in range(brbinnum)] # global index of B atoms that are in each bin of Bins
                 for ibin, binnum in enumerate(bininds):
                     brbins[binnum].append(ibin)
                     
-            bincent = (Bins[1:]+Bins[:-1])/2
+                bincent = (Bins[1:]+Bins[:-1])/2
             
             # partition properties
             if hasattr(self,"Tilting"):
@@ -2822,16 +3138,21 @@ class Trajectory:
                 if read_mode == 1:
                     self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
                     self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
-                    
+                
+                
                 
                 # partition tilting correlation length wrt local config
                 if hasattr(self,"spatialCorrLength"):
-                    TC = self.spatialCorr['norm']
+                    TC = self.spatialCorr['raw']
+                    TC = np.sqrt(np.abs(TC))*np.sign(TC)
+
                     from pdyna.analysis import quantify_octatype_tilt_domain, quantify_halideconc_tilt_domain
                     
                     TCtype = []
                     for ti, types in enumerate(typelib):
-                        TCtype.append(TC[types,:])
+                        temp = TC[types,:]
+                        temp = temp/temp[:,:,[0],:]
+                        TCtype.append(temp)
                     
                     Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
                     
@@ -2840,7 +3161,9 @@ class Trajectory:
                     for ii,item in enumerate(brbins):
                         if len(item) == 0: continue
                         concent.append(bincent[ii])
-                        TCconc.append(TC[item,:])
+                        temp = TC[item,:]
+                        temp = temp/temp[:,:,[0],:]
+                        TCconc.append(temp)
                     
                     Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
 
@@ -2867,6 +3190,14 @@ class Trajectory:
                 
             # get distribution of partitioning
             from pdyna.analysis import print_partition
+            brrange = [np.amin(syscode[:,1]),np.amax(syscode[:,1])]
+            diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
+            binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
+            Bins = np.linspace(binrange[0],binrange[1],brbinnum+1)
+            bininds = np.digitize(syscode[:,1],Bins)-1
+            brbins = [[] for kk in range(brbinnum)]
+            for ibin, binnum in enumerate(bininds):
+                brbins[binnum].append(ibin)
             print_partition(typelib,config_types,brbins,Bins,halcounts)
             
         et1 = time.time()
@@ -2894,7 +3225,9 @@ class Frame:
     data_path: str = field(repr=False)
     
     # characteristic value of bond length of your material for structure construction 
-    # the first interval covers the first and second NN of B-X (B-B) pairs, the second interval covers only the first NN of B-X (B-B) pairs.
+    # the first interval should be large enough to cover all the first and second NN of B-X (B-B) pairs, 
+    # in the second list, the two elements are 0) approximate first NN distance of B-X (B-B) pairs, and 1) approximate second NN distance of B-X (B-B) pairs
+    # These values can be obtained by inspecting the initial configuration or, e.g. in the pair distrition function of the structure
     #_fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
     #_fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
     _fpg_val_BB = [[4,9.1], [5.8,8.1]] # empirical values for lead halide perovskites
@@ -3197,14 +3530,76 @@ class Frame:
         try:
             aa = Benv.shape[1] # if some of the rows in Benv don't have 6 neighbours.
         except IndexError:
-            print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
-            print("See the gap between the populations. \n")
-            test_range = r0.reshape((1,r0.shape[0]**2))
-            import matplotlib.pyplot as plt
-            fig,ax = plt.subplots(1,1)
-            plt.hist(test_range.reshape(-1,),range=[5.3,9.0],bins=100)
-            #ax.scatter(test_range,test_range)
-            #ax.set_xlim([5,10])
+            
+            try: 
+                cell_lat = np.array(self.st0.lattice.abc)[np.newaxis,:]
+                cell_diff = np.amax(np.abs(np.repeat(cell_lat,3,axis=0)-np.repeat(cell_lat.T,3,axis=1)))
+                #cubic_cell = True
+                if cell_diff < 2.5:
+                    import math
+                    from scipy.stats import binned_statistic_dd as binstat
+                    from pdyna.analysis import quantify_tilt_domain
+
+                    cc = self.st0.frac_coords[self.Bindex,:]
+                    supercell_size = round(np.mean(cell_lat)/default_BB_dist)
+                    for i in range(3):
+                        if abs(np.amax(cc[:,i])-1)<0.01 or abs(np.amin(cc[:,i]))<0.01:
+                            addit = np.zeros((1,3))
+                            addit[0,i] = 1/supercell_size/2
+                            cc = cc+addit
+                            
+                    cc[cc>1] = cc[cc>1]-1
+                        
+                    clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                                      [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                                      [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+                    
+                    bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                                          range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                                  clims[0,1]+0.5*(1/supercell_size)], 
+                                                 [clims[1,0]-0.5*(1/supercell_size), 
+                                                  clims[1,1]+0.5*(1/supercell_size)],
+                                                 [clims[2,0]-0.5*(1/supercell_size), 
+                                                  clims[2,1]+0.5*(1/supercell_size)]],
+                                          expand_binnumbers=True).binnumber
+                    # validate the binning
+                    atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+                    bincount = np.unique(atom_indices, return_counts=True)[1]
+                    if len(bincount) != supercell_size**3:
+                        raise ValueError("Incorrect number of bins. ")
+                    if max(bincount) != min(bincount):
+                        raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+                    
+                    Benv = []
+                    indmap = np.array([[1,0,0],[0,1,0],[0,0,1],[-1,0,0],[0,-1,0],[0,0,-1]])
+                    for B1 in range(bin_indices.shape[1]):
+                        temp = bin_indices[:,[B1]].T+indmap
+                        temp[temp>supercell_size] = temp[temp>supercell_size] - supercell_size
+                        temp[temp<1] = temp[temp<1] + supercell_size
+                        kt = []
+                        for j in range(6):
+                            kt.append(np.where(np.all(bin_indices==temp[[j],:].T,axis=0))[0][0])
+                        kt = sorted(kt)
+                        Benv.append(kt)
+                        
+                    Benv = np.array(Benv)
+                    aa = Benv.shape[1]
+
+            except ValueError:
+                print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
+                print("See the gap between the populations. \n")
+                test_range = r0.reshape((1,r0.shape[0]**2))
+                import matplotlib.pyplot as plt
+                fig,ax = plt.subplots(1,1)
+                plt.hist(test_range.reshape(-1,),range=[5,9],bins=100)
+            except IndexError:
+                print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
+                print("See the gap between the populations. \n")
+                test_range = r0.reshape((1,r0.shape[0]**2))
+                import matplotlib.pyplot as plt
+                fig,ax = plt.subplots(1,1)
+                plt.hist(test_range.reshape(-1,),range=[5,9],bins=100)
+                    
             
         cubic_cell = False    
         if Benv.shape[1] == 3: # indicate a 2*2*2 supercell
@@ -3348,6 +3743,37 @@ class Frame:
             spatialnn = np.array(spatialnn)
             spatialnorm = np.array(spatialnorm)      
             
+# =============================================================================
+#             bin_indices = bin_indices-1 # 0-indexing
+#             
+#             num_nn = math.ceil((supercell_size-1)/2)
+#             scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+#             scmnorm[:] = np.nan
+#             scm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+#             scm[:] = np.nan
+#             for o in range(bin_indices.shape[1]):
+#                 si = bin_indices[:,[o]]
+#                 for space in range(3):
+#                     for n in range(num_nn+1):
+#                         addit = np.array([[0],[0],[0]])
+#                         addit[space,0] = n
+#                         pos1 = si + addit
+#                         pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
+#                         k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+#                         tc1 = np.multiply(T[o,:],T[k1,:])
+#                         #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
+#                         #tc = np.nanmean(tc1,axis=0)
+#                         #tcnorm = np.nanmean(tc1norm,axis=0)
+#                         tcnorm = np.sqrt(np.abs(tc1))*np.sign(tc1)
+#                         scmnorm[o,space,n,:] = tcnorm
+#                         scm[o,space,n,:] = tc1
+#                         
+#             scm = scm/scm[:,:,[0],:]
+#             scmnorm = scmnorm/scmnorm[:,:,[0],:]
+#             spatialnn = np.mean(scm,axis=0)
+#             spatialnorm = np.mean(scmnorm,axis=0)
+# =============================================================================
+
             scdecay = quantify_tilt_domain(spatialnn,spatialnorm) # spatial decay length in 'unit cell'
             self.spatialCorrLength = scdecay 
             print(f"Tilting spatial correlation length: \n {np.round(scdecay,3)}")
