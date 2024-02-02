@@ -225,30 +225,16 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
 
 
 
-def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoother = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False, num_crop = 0):
+def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
     
     fig_name = f"lattice_evo_{uniname}.png"
-    print(dm.shape[0],len(steps))
+    #print(dm.shape[0],len(steps))
     assert dm.shape[0] == len(steps)
     if dm.ndim == 3:
         La, Lb, Lc = np.nanmean(dm[:,:,0],axis=1), np.nanmean(dm[:,:,1],axis=1), np.nanmean(dm[:,:,2],axis=1)
         
     elif dm.ndim == 2:
         La, Lb, Lc = dm[:,0], dm[:,1], dm[:,2]
-    
-    if smoother:
-        Nwindows = round(dm.shape[0]*0.04)
-        if Nwindows%2 == 0:
-            Nwindows+=1
-        La = savitzky_golay(La,window_size=Nwindows)
-        Lb = savitzky_golay(Lb,window_size=Nwindows)
-        Lc = savitzky_golay(Lc,window_size=Nwindows)
-    
-    if num_crop != 0:
-        La = La[num_crop:-num_crop]
-        Lb = Lb[num_crop:-num_crop]
-        Lc = Lc[num_crop:-num_crop]
-        steps = steps[num_crop:-num_crop]
     
     plt.subplots(1,1)
     if steps[0] == steps[-1] and xaxis_type == 'T':
@@ -263,14 +249,14 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, smoot
     ax = plt.gca()
     if xaxis_type == 'T':
         if steps[0] > steps[-1]:
-            ax.text(0.2, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+            ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
         elif steps[0] < steps[-1]:
-            ax.text(0.2, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+            ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
         else:
-            ax.text(0.2, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+            ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
     
     
-    plt.legend()
+    plt.legend(loc=4)
     if xaxis_type == 'N':
         plt.xlabel("MD step")
     elif xaxis_type == 't':
@@ -343,6 +329,63 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0
     return (steps,La,Lb,Lc)
 
 
+def draw_tilt_evolution(T, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
+    
+    fig_name = f"tilt_evo_{uniname}.png"
+    #print(dm.shape[0],len(steps))
+
+    aw = round(T.shape[0]/40)
+    
+    Tm = []
+    for i in range(T.shape[0]):
+        f1 = max(0,i-aw)
+        f2 = min(i+aw,T.shape[0])
+        #print(list(range(f1,f2)))
+        Tm.append(compute_tilt_density(T[list(range(f1,f2)),:,:]))
+    Tm = np.array(Tm)
+    
+    
+    plt.subplots(1,1)
+    
+    plt.plot(steps,Tm[:,0],label = r'$\mathit{a}$')
+    plt.plot(steps,Tm[:,1],label = r'$\mathit{b}$')
+    plt.plot(steps,Tm[:,2],label = r'$\mathit{c}$')
+        
+    ax = plt.gca()
+    if xaxis_type == 'T':
+        if steps[0] > steps[-1]:
+            ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+        elif steps[0] < steps[-1]:
+            ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+        else:
+            ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+    
+    
+    plt.legend()
+    if xaxis_type == 'N':
+        plt.xlabel("MD step")
+    elif xaxis_type == 't':
+        ax.set_xlim(left=0)
+        plt.xlabel("Time (ps)")
+    elif xaxis_type == 'T':
+        plt.xlabel("Temperature (K)")
+    plt.ylabel('Tilting (deg)')
+
+    if not x_lims is None:
+        ax.set_xlim(x_lims)
+    
+    if not y_lims is None:
+        ax.set_ylim(y_lims)
+        
+    if invert_x:
+        ax.set_xlim([ax.get_xlim()[1],ax.get_xlim()[0]])
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    
+    plt.show()
+
+
 def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim = None):
     
     fig_name = f"traj_tilt_time_{uniname}.png"
@@ -400,6 +443,54 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim
     return (steps[:(len(steps)-aw+1)],Ta,Tb,Tc)
 
 
+def draw_dist_evolution(D, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
+    
+    fig_name = f"dist_evo_{uniname}.png"
+    #print(dm.shape[0],len(steps))
+    
+    Dm = np.nanmean(D,axis=1)
+
+    plt.subplots(1,1)
+    labels = ["Eg","T2g","T1u","T2u"]
+    
+    for i in range(4):
+        plt.plot(steps,Dm[:,i],label = labels[i],linewidth=1.2)
+
+
+    ax = plt.gca()
+    if xaxis_type == 'T':
+        if steps[0] > steps[-1]:
+            ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+        elif steps[0] < steps[-1]:
+            ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+        else:
+            ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+
+    plt.legend()
+    if xaxis_type == 'N':
+        plt.xlabel("MD step")
+    elif xaxis_type == 't':
+        ax.set_xlim(left=0)
+        plt.xlabel("Time (ps)")
+    elif xaxis_type == 'T':
+        plt.xlabel("Temperature (K)")
+    plt.ylabel('Distortion')
+
+    if not x_lims is None:
+        ax.set_xlim(x_lims)
+    
+    if not y_lims is None:
+        ax.set_ylim(y_lims)
+        
+    if invert_x:
+        ax.set_xlim([ax.get_xlim()[1],ax.get_xlim()[0]])
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    
+    plt.show()
+
+
 def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim = None):
     
     fig_name = f"traj_dist_time_{uniname}.png"
@@ -452,7 +543,7 @@ def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim
     
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel('Time (ps)', fontsize=14)
-    plt.ylabel('Tilting (deg)', fontsize=14)
+    plt.ylabel('Distortion', fontsize=14)
     plt.legend(prop={'size': 13})
     
     if saveFigures:
@@ -3157,13 +3248,17 @@ def fit_exp_decay_single(x,y):
 
 def fit_damped_oscillator(x,y):
     from scipy.optimize import curve_fit
-    def model_func1(x, omega, gamma):
-        tau = 2/gamma
-        omega_e = np.sqrt(omega**2-gamma**2/4)
-        return np.exp(-x/tau) * (np.cos(omega_e*x)+gamma/(2*omega_e)*np.sin(omega_e*x))
+    #def model_func1(x, omega, gamma):
+    #    tau = 2/gamma
+    #    omega_e = np.sqrt(omega**2-gamma**2/4)
+    #    return np.exp(-x/tau) * (np.cos(omega_e*x)+gamma/(2*omega_e)*np.sin(omega_e*x))    
+    #def model_func2(x, tau_l, tau_s):
+    #    return 1/(tau_l-tau_s)*(tau_l*np.exp(-x/tau_l)-tau_s*np.exp(-x/tau_s))
     
-    def model_func2(x, tau_l, tau_s):
-        return 1/(tau_l-tau_s)*(tau_l*np.exp(-x/tau_l)-tau_s*np.exp(-x/tau_s))
+    def model_func1(t, A, omega, gamma):
+        return A * np.exp(-gamma * t / 2) * (np.cos(omega * t) + (gamma / (2 * omega)) * np.sin(omega * t))  
+    def model_func2(t, A, omega, gamma):
+        return A * np.exp(-gamma * t / 2) * (np.cosh(np.abs(omega) * t) + (gamma / (2 * np.abs(omega))) * np.sinh(np.abs(omega) * t))
     
     
     x = np.squeeze(x)
@@ -3173,28 +3268,30 @@ def fit_damped_oscillator(x,y):
     xc = x[:round(x.shape[0]*fitrange)]
     yc = y[:round(y.shape[0]*fitrange)]
     
-    p0 = (0.2,0.01) # starting search coeffs
+    p0 = (1,3,2) # starting search coeffs
     opt, pcov = curve_fit(model_func1, xc, yc, p0)
-    omega, gamma= opt
-    
-    p1 = (50,0.5) # starting search coeffs
+    A1, omega1, gamma1 = opt
     opt, pcov = curve_fit(model_func2, xc, yc, p0)
-    tau_l, tau_s = opt
+    A2, omega2, gamma2 = opt
 
-    y1 = model_func1(x, omega, gamma)
-    y2 = model_func2(x, tau_l, tau_s)
+    y1 = model_func1(x, A1, omega1, gamma1)
+    y2 = model_func2(x, A2, omega2, gamma2)
     fig, ax = plt.subplots()
-    #ax.plot(x, y2, color='r', label='Fit. func: $f(x) = %.3f e^{%.3f x} %+.3f$' % (a,k,b))
-    ax.plot(x, y2, color='r',label='fitted',linewidth=4)
-    ax.plot(x, y, 'bo', label='raw data',alpha=0.13,markersize=4)
+    ax.plot(x, y1, color='C0',label='underdamped',linewidth=4)
+    ax.plot(x, y2, color='C1',label='overdamped',linewidth=4)
+    ax.plot(x, y, 'bo', label='raw data',alpha=0.5,markersize=4)
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel('Time (ps)', fontsize=14)
     plt.ylabel('Autocorrelation (a.u.)', fontsize=14)
     plt.legend(prop={'size': 12})
-    plt.title('Damped Oscillator Fitting', fontsize=14)
+    plt.title('Damped Harmonic Oscillator Fitting', fontsize=14)
     plt.show()
-        
-    return tau
+    
+    if np.sum(np.abs(y1-y)) > np.sum(np.abs(y2-y)):
+        return np.sqrt(omega2**2+(gamma2**2)/4)
+    else:
+        return np.sqrt(omega1**2+(gamma1**2)/4)
+    
 
 
 def draw_MO_spatial_corr_time(C, steps, uniname, saveFigures, smoother = 0, n_bins = 50):

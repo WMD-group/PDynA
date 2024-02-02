@@ -1241,15 +1241,19 @@ class Trajectory:
         
         # data visualization
         if read_mode == 1:
-            if self.Tgrad == 0: # constant-T MD
-                from pdyna.analysis import draw_lattice_density
-                if self._flag_cubic_cell:
-                    Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop,screen = [5,8], title=title) 
-                else:
-                    Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
-                    
-            else: # changing-T MD
-                if self.nframe*self.MDsetting["nblock"] > self.MDsetting["nsw"]*0.99: # with tolerance
+            from pdyna.analysis import draw_lattice_density
+            if self._flag_cubic_cell:
+                Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop,screen = [5,8], title=title) 
+            else:
+                Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
+            # update property lib
+            self.prop_lib['lattice'] = [Lmu,Lstd]
+            
+        else: #quench mode
+            if self.Tgrad != 0: 
+                Ti = self.MDsetting["Ti"]
+                Tf = self.MDsetting["Tf"]
+                if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
                     print("Lattice: Incomplete run detected! \n")
                     Ti = self.MDsetting["Ti"]
                     Tf = self.MDsetting["Ti"]+(self.MDsetting["Tf"]-self.MDsetting["Ti"])*(self.nframe*self.MDsetting["nblock"]/self.MDsetting["nsw"])
@@ -1260,18 +1264,16 @@ class Trajectory:
                     invert_x = True
                 
                 from pdyna.analysis import draw_lattice_evolution
-                draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, smoother = smoother, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+     
+            else: 
+                timeline = np.linspace(1,Lat.shape[0],Lat.shape[0])*self.MDTimestep
+                self.Ltimeline = timeline
+                
+                from pdyna.analysis import draw_lattice_evolution_time
+                self.Lobj = draw_lattice_evolution_time(Lat, timeline, self.MDsetting["Ti"],uniname = uniname, saveFigures = False, smoother = smoother) 
             
-            # update property lib
-            self.prop_lib['lattice'] = [Lmu,Lstd]
-            
-        else: #quench mode
-            timeline = np.linspace(1,Lat.shape[0],Lat.shape[0])*self.MDTimestep
-            self.Ltimeline = timeline
-            
-            from pdyna.analysis import draw_lattice_evolution_time
-            self.Lobj = draw_lattice_evolution_time(Lat, timeline, self.MDsetting["Ti"],uniname = uniname, saveFigures = False, smoother = smoother) 
-        
+
         if vis3D_lat != 0 and vis3D_lat in (1,2):
             from scipy.stats import binned_statistic_dd as binstat
             from pdyna.analysis import savitzky_golay, vis3D_domain_anime
@@ -1371,12 +1373,13 @@ class Trajectory:
             et1 = time.time()
             print(round((et1-et0)/60,2))
         
-        if read_mode == 1:
+        if read_mode == 1 and self.Tgrad == 0:
             if lat_method == 1:
                 print("Lattice parameter: ",np.round(Lmu,4))
             elif lat_method == 2:
                 print("Pseudo-cubic lattice parameter: ",np.round(Lmu,4))
             print("")
+            
         et1 = time.time()
         self.timing["lattice"] = et1-et0
         
@@ -1643,27 +1646,40 @@ class Trajectory:
         
         # data visualization
         if read_mode == 2:
-            from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time, draw_dist_evolution_time
-            self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures=False, smoother=smoother)
-            self.Dobj = draw_dist_evolution_time(Di, timeline,uniname, saveFigures=False, smoother=smoother)
+            if self.Tgrad == 0:
+                from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time, draw_dist_evolution_time
+                self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures=False, smoother=smoother)
+                self.Dobj = draw_dist_evolution_time(Di, timeline,uniname, saveFigures=False, smoother=smoother)
             
-        elif self.Tgrad != 0: # read_mode 1 and changing-T MD
-            from pdyna.analysis import draw_distortion_evolution_sca, draw_tilt_evolution_sca
-        
-            steps = np.linspace(self.MDsetting["Ti"],self.MDsetting["Tf"],Bpos.shape[0])
-            if read_every != 0:
-                temp_list = []
-                for i,temp in enumerate(steps):
-                    if i%read_every == 0:
-                        temp_list.append(temp)
-                steps = np.array(temp_list)
+            else:
+                from pdyna.analysis import draw_dist_evolution, draw_tilt_evolution
+                Ti = self.MDsetting["Ti"]
+                Tf = self.MDsetting["Tf"]
+                if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
+                    print("Tilt & Dist: Incomplete MD run detected! \n")
+                    Ti = self.MDsetting["Ti"]
+                    Tf = self.MDsetting["Ti"]+(self.MDsetting["Tf"]-self.MDsetting["Ti"])*(self.nframe*self.MDsetting["nblock"]/self.MDsetting["nsw"])
+                steps = np.linspace(self.MDsetting["Ti"],self.MDsetting["Tf"],self.nframe)
                 
-                assert steps.shape[0] == Di.shape[0]
-                assert steps.shape[0] == T.shape[0]
-            
-            draw_distortion_evolution_sca(Di, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
-            draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
+                if read_every != 0:
+                    temp_list = []
+                    for i,temp in enumerate(steps):
+                        if i%read_every == 0:
+                            temp_list.append(temp)
+                    steps = np.array(temp_list)
+                    
+                    assert steps.shape[0] == Di.shape[0]
+                    assert steps.shape[0] == T.shape[0]
 
+                invert_x = False
+                if Tf<Ti:
+                    invert_x = True
+                
+                #draw_distortion_evolution_sca(Di, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
+                #draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
+                draw_dist_evolution(Di, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                draw_tilt_evolution(T, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                
         else: # read_mode 1, constant-T MD (equilibration)
             from pdyna.analysis import draw_dist_density, draw_tilt_density, draw_conntype_tilt_density
             Dmu,Dstd = draw_dist_density(Di, uniname, saveFigures, n_bins = 100, title=None)
@@ -1678,12 +1694,12 @@ class Trajectory:
                     else:
                         title = "mixed, "+title
                         draw_conntype_tilt_density(T, oc, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
-                        
-        if read_mode == 1:
+            
             Tval = np.array(compute_tilt_density(T)).reshape((3,1))
             self.prop_lib['distortion'] = [Dmu,Dstd]
             self.prop_lib['tilting'] = Tval
-        
+            
+            
         # autocorr
         if tiltautoCorr:
             from pdyna.analysis import fit_exp_decay_both, fit_exp_decay_both_correct, Tilt_correlation
@@ -1788,11 +1804,12 @@ class Trajectory:
                 draw_tilt_and_corr_density_full(T,Cf,uniname,saveFigures,title=title)
                 draw_tilt_coaxial(T,uniname,saveFigures,title=title)
                 
-            if read_mode == 2:
+            if read_mode == 2 and self.Tgrad == 0:
                 self.Cobj = draw_tilt_corr_density_time(T, self.Tilting_Corr, timeline, uniname, saveFigures=False, smoother=smoother)
             
-            if self.Tgrad != 0:
-                draw_tilt_corr_evolution_sca(Corr, steps, uniname, saveFigures, xaxis_type = 'T') 
+            elif self.Tgrad != 0:
+                pass
+                #draw_tilt_corr_evolution_sca(Corr, steps, uniname, saveFigures, xaxis_type = 'T') 
                 
             else:
                 polarity = draw_tilt_and_corr_density_shade(T,Corr, uniname, saveFigures,title=title)
@@ -3513,7 +3530,7 @@ class Frame:
         
         
         # NN1 correlation function of tilting (Glazer notation)
-        from pdyna.analysis import abs_sqrt, draw_tilt_corr_evolution_sca, draw_tilt_and_corr_density_shade_frame
+        from pdyna.analysis import abs_sqrt, draw_tilt_and_corr_density_shade_frame
         from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
         
         #default_BB_dist = 6.1
