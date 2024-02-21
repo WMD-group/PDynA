@@ -80,6 +80,8 @@ The second example is a larger LAMMPS trajectory (about 20,000 atoms), covering 
 
 Copy all the files under `examples/lammps` to your working directory, unzip `lammps_example_mapbbr3.out.gz` and run the script `example_lammps.py`. 
 
+For your own LAMMPS trajectory, please use a custom dump style with this command: `dump dump_name all custom dump_frequency ./dump.out id element x y z`
+
 
 **3. XYZ/PDB/ASE trajectory**
 
