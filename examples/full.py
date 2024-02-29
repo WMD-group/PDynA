@@ -23,7 +23,7 @@ traj.dynamics(read_mode = no_default,      # key parameter, 1: equilibration mod
                   toggle_tilt_distort = False, # switch of octahedral tilting and distortion calculation
                   toggle_MO = False,           # switch of molecular orientation (MO) calculation (for organic A-site)
                   toggle_RDF = False,          # switch of radial distribution function calculation
-                  toggle_A_disp = False,       # switch of A-site cation displacement calculation 
+                  toggle_site_disp = False,       # switch of A-site cation displacement calculation 
 		  
                   smoother = 0,  # whether to use S-G smoothing on outputs (used in read_mode 2), 0: disabled, >0: average window in ps
 
