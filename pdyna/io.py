@@ -324,7 +324,7 @@ def read_xdatcar(filename,natom):
     return atomic_symbols, lattice, latmat, Allpos
 
 
-def read_lammps_dump(filepath): 
+def read_lammps_dump(filepath,specorder=None): 
     """
     Modified from ASE lammps reading functions
     """
@@ -377,7 +377,7 @@ def read_lammps_dump(filepath):
             colnames = line.split()[2:]
             datarows = [lines.popleft() for _ in range(n_atoms)]
             data = np.loadtxt(datarows, dtype=str)
-            atomic_symbols, lm, l6, frac_coords, cart_coords = process_lammps_data(data,colnames,cell,celldisp)
+            atomic_symbols, lm, l6, frac_coords, cart_coords = process_lammps_data(data,colnames,cell,celldisp,specorder=specorder)
             if asymb == 0:
                 asymb = atomic_symbols
             framenums.append(stepnum)
@@ -414,7 +414,11 @@ def read_lammps_dump(filepath):
     out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=celldisp,cell=cell)
     st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
     
-    return asymb, lattice, latmat, Allpos, st0, framenums[-1], framenums[-1]-framenums[-2]
+    maxframe = framenums[-1]
+    if framenums[1]-framenums[0] > framenums[2]-framenums[1]:
+        maxframe -= (framenums[1]-framenums[0])
+    
+    return asymb, lattice, latmat, Allpos, st0, maxframe, framenums[-1]-framenums[-2]
 
 
 def read_xyz(filepath): 

@@ -159,7 +159,10 @@ class Trajectory:
             print("------------------------------------------------------------")
             print("Loading Trajectory files...")
             
-            atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path)
+            if len(lammps_setting) == 3:
+                atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path)
+            elif len(lammps_setting) == 4:
+                atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path,lammps_setting[3])
             
             if with_init:
                 at0 = aaa.get_atoms(st0)
@@ -217,7 +220,7 @@ class Trajectory:
             self.MDsetting["Tf"] = lammps_setting[1]
             self.MDsetting["tstep"] = lammps_setting[2]
             self.MDTimestep = lammps_setting[2]/1000*stepsize  # the timestep between recorded frames
-            self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(stepsize*lammps_setting[2]/1000)   # temeperature gradient
+            self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(stepsize*lammps_setting[2])   # temeperature gradient
         
         
         elif self.data_format == 'xyz':
@@ -1208,23 +1211,25 @@ class Trajectory:
             Lat[:] = np.NaN
             
             st0lat = self.st0.lattice
-            std_param = [np.std(np.array([st0lat.a,st0lat.b,st0lat.c])),
-                         np.std(np.array([st0lat.a/np.sqrt(2),st0lat.b/np.sqrt(2),st0lat.c/2]))]
-
-            if std_param.index(min(std_param)) == 1:
-                temp = self.lattice[round(self.nframe*allow_equil):,:3]
-                temp[:,:2] = temp[:,:2]/np.sqrt(2)
-                temp[:,2] = temp[:,2]/2
-                Lat = temp
-                    
-            elif std_param.index(min(std_param)) == 0:
-                Lat = self.lattice[round(self.nframe*allow_equil):,:3]
-            
+# =============================================================================
+#             std_param = [np.std(np.array([st0lat.a,st0lat.b,st0lat.c])),
+#                          np.std(np.array([st0lat.a/np.sqrt(2),st0lat.b/np.sqrt(2),st0lat.c/2]))]
+# 
+#             if std_param.index(min(std_param)) == 1:
+#                 temp = self.lattice[round(self.nframe*allow_equil):,:3]
+#                 temp[:,:2] = temp[:,:2]/np.sqrt(2)
+#                 temp[:,2] = temp[:,2]/2
+#                 Lat = temp
+#                     
+#             elif std_param.index(min(std_param)) == 0:
+#                 Lat = self.lattice[round(self.nframe*allow_equil):,:3]
+# =============================================================================
+            Lat = self.lattice[round(self.nframe*allow_equil):,:3]
             if self._flag_cubic_cell: # if cubic cell
                 Lat_scale = round(np.nanmean(Lat[0,:3])/self.default_BB_dist)
                 Lat = Lat/Lat_scale
             else:
-                print("!lattice_parameter: detected non-cubic geometry, use direct cell dimension as output. ")
+                print("!lattice_parameter: detected non-cubic cell, use direct cell dimension as output. ")
             
             self.Lat = Lat
               
@@ -1240,38 +1245,81 @@ class Trajectory:
         num_crop = round(self.nframe*(1-self.allow_equil)*leading_crop)      
         
         # data visualization
-        if read_mode == 1:
-            from pdyna.analysis import draw_lattice_density
-            if self._flag_cubic_cell:
-                Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop,screen = [5,8], title=title) 
-            else:
-                Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
-            # update property lib
-            self.prop_lib['lattice'] = [Lmu,Lstd]
-            
-        else: #quench mode
-            if self.Tgrad != 0: 
-                Ti = self.MDsetting["Ti"]
-                Tf = self.MDsetting["Tf"]
-                if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
-                    print("Lattice: Incomplete run detected! \n")
-                    Ti = self.MDsetting["Ti"]
-                    Tf = self.MDsetting["Ti"]+(self.MDsetting["Tf"]-self.MDsetting["Ti"])*(self.nframe*self.MDsetting["nblock"]/self.MDsetting["nsw"])
-                steps1 = np.linspace(Ti,Tf,self.nframe)
+        if type(Lat) is list:
+            for sublat in Lat:
+                if read_mode == 1:
+                    from pdyna.analysis import draw_lattice_density
+                    if self._flag_cubic_cell:
+                        Lmu, Lstd = draw_lattice_density(sublat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop,screen = [5,8], title=title) 
+                    else:
+                        Lmu, Lstd = draw_lattice_density(sublat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
+                    
+                else: #quench mode
+                    if self.Tgrad != 0: 
+                        Ti = self.MDsetting["Ti"]
+                        Tf = self.MDsetting["Tf"]
+                        if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
+                            print("Lattice: Incomplete run detected! \n")
+                            Ti = self.MDsetting["Ti"]
+                            Tf = self.MDsetting["Ti"]+(self.MDsetting["Tf"]-self.MDsetting["Ti"])*(self.nframe*self.MDsetting["nblock"]/self.MDsetting["nsw"])
+                        if sublat.shape[0] != self.nframe: # read_every is not 1
+                            steps1 = np.linspace(Ti,Tf,sublat.shape[0])
+                        else:
+                            steps1 = np.linspace(Ti,Tf,self.nframe)
 
-                invert_x = False
-                if Tf<Ti:
-                    invert_x = True
+                        invert_x = False
+                        if Tf<Ti:
+                            invert_x = True
+                        
+                        self.Ltempline = steps1
+                        
+                        from pdyna.analysis import draw_lattice_evolution
+                        draw_lattice_evolution(sublat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+             
+                    else: 
+                        timeline = np.linspace(1,sublat.shape[0],sublat.shape[0])*self.MDTimestep
+                        self.Ltimeline = timeline
+                        
+                        from pdyna.analysis import draw_lattice_evolution_time
+                        _ = draw_lattice_evolution_time(sublat, timeline, self.MDsetting["Ti"],uniname = uniname, saveFigures = False, smoother = smoother) 
+            
+        else: 
+            if read_mode == 1:
+                from pdyna.analysis import draw_lattice_density
+                if self._flag_cubic_cell:
+                    Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop,screen = [5,8], title=title) 
+                else:
+                    Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
+                # update property lib
+                self.prop_lib['lattice'] = [Lmu,Lstd]
                 
-                from pdyna.analysis import draw_lattice_evolution
-                draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
-     
-            else: 
-                timeline = np.linspace(1,Lat.shape[0],Lat.shape[0])*self.MDTimestep
-                self.Ltimeline = timeline
-                
-                from pdyna.analysis import draw_lattice_evolution_time
-                self.Lobj = draw_lattice_evolution_time(Lat, timeline, self.MDsetting["Ti"],uniname = uniname, saveFigures = False, smoother = smoother) 
+            else: #quench mode
+                if self.Tgrad != 0: 
+                    Ti = self.MDsetting["Ti"]
+                    Tf = self.MDsetting["Tf"]
+                    if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
+                        print("Lattice: Incomplete run detected! \n")
+                        Ti = self.MDsetting["Ti"]
+                        Tf = self.MDsetting["Ti"]+(self.MDsetting["Tf"]-self.MDsetting["Ti"])*(self.nframe*self.MDsetting["nblock"]/self.MDsetting["nsw"])
+                    if Lat.shape[0] != self.nframe: # read_every is not 1
+                        steps1 = np.linspace(Ti,Tf,Lat.shape[0])
+                    else:
+                        steps1 = np.linspace(Ti,Tf,self.nframe)
+
+                    invert_x = False
+                    if Tf<Ti:
+                        invert_x = True
+                        
+                    self.Ltempline = steps1
+                    from pdyna.analysis import draw_lattice_evolution
+                    draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+         
+                else: 
+                    timeline = np.linspace(1,Lat.shape[0],Lat.shape[0])*self.MDTimestep
+                    self.Ltimeline = timeline
+                    
+                    from pdyna.analysis import draw_lattice_evolution_time
+                    self.Lobj = draw_lattice_evolution_time(Lat, timeline, self.MDsetting["Ti"],uniname = uniname, saveFigures = False, smoother = smoother) 
             
 
         if vis3D_lat != 0 and vis3D_lat in (1,2):
@@ -1675,10 +1723,11 @@ class Trajectory:
                 if Tf<Ti:
                     invert_x = True
                 
+                self.TDtempline = steps
                 #draw_distortion_evolution_sca(Di, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
                 #draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
-                draw_dist_evolution(Di, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
-                draw_tilt_evolution(T, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                self.Dobj = draw_dist_evolution(Di, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                self.Tobj = draw_tilt_evolution(T, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
                 
         else: # read_mode 1, constant-T MD (equilibration)
             from pdyna.analysis import draw_dist_density, draw_tilt_density, draw_conntype_tilt_density
@@ -1695,8 +1744,8 @@ class Trajectory:
                         title = "mixed, "+title
                         draw_conntype_tilt_density(T, oc, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
             
-            Tval = np.array(compute_tilt_density(T)).reshape((3,1))
             self.prop_lib['distortion'] = [Dmu,Dstd]
+            Tval = np.array(compute_tilt_density(T,plot_fitting=False)).reshape((3,-1))
             self.prop_lib['tilting'] = Tval
             
             
@@ -1814,6 +1863,10 @@ class Trajectory:
             else:
                 polarity = draw_tilt_and_corr_density_shade(T,Corr, uniname, saveFigures,title=title)
                 self.prop_lib["tilt_corr_polarity"] = polarity
+                
+                # justify if there is a true split of tilting peaks with TCP
+                Tval = np.array(compute_tilt_density(T,plot_fitting=True,corr_vals=polarity)).reshape((3,-1))
+                self.prop_lib['tilting'] = Tval
         
         if tilt_domain:
             from pdyna.analysis import compute_tilt_domain
@@ -1827,6 +1880,12 @@ class Trajectory:
             cc = self.st0.frac_coords[self.Bindex,:]
             
             supercell_size = self.supercell_size
+            
+            boost = list(np.where(np.logical_or(np.abs(np.amin(cc,axis=0))*supercell_size<0.1,np.abs(np.amax(cc,axis=0))*supercell_size>supercell_size-0.1))[0])
+            if len(boost) > 0:
+                for b in boost:
+                    cc[:,b] = cc[:,b]+1/supercell_size/2
+            cc[cc>1] = cc[cc>1]-1
             
             clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
                               [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
@@ -1905,7 +1964,7 @@ class Trajectory:
 #             spatialnorm = np.array(spatialnorm)
 # =============================================================================
 
-            
+            #thr = 3
             bin_indices = bin_indices-1 # 0-indexing
             
             num_nn = math.ceil((supercell_size-1)/2)
@@ -1923,12 +1982,15 @@ class Trajectory:
                         pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
                         k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
                         tc1 = np.multiply(T[:,o,:],T[:,k1,:])
+                        #if thr != 0:
+                        #    tc1[np.abs(T[:,o,:])<thr] = np.nan
                         #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
                         tc = np.nanmean(tc1,axis=0)
                         #tcnorm = np.nanmean(tc1norm,axis=0)
                         tcnorm = np.sqrt(np.abs(tc))*np.sign(tc)
                         scmnorm[o,space,n,:] = tcnorm
                         scm[o,space,n,:] = tc
+                    
                         
             scm = scm/scm[:,:,[0],:]
             scmnorm = scmnorm/scmnorm[:,:,[0],:]
@@ -2065,7 +2127,7 @@ class Trajectory:
                 ampfeat[np.logical_or(ampfeat>23,ampfeat<-23)] = 0
                 plotfeat = ampfeat[:,:,[axisvis]]
                 
-                time_window = 5 # picosecond
+                time_window = 2 # picosecond
                 sgw = round(time_window/self.Timestep)
                 if sgw<5: sgw = 5
                 if sgw%2==0: sgw+=1
@@ -2076,8 +2138,8 @@ class Trajectory:
                     plotfeat[:,i,0] = temp
                 
                 #plotfeat = np.sqrt(np.abs(plotfeat))*np.sign(plotfeat)
-                clipedges = (np.quantile(plotfeat,0.90)-np.quantile(plotfeat,0.10))/2
-                clipedges1 = [-3,3]
+                clipedges = (np.quantile(plotfeat,0.92)-np.quantile(plotfeat,0.08))/2
+                clipedges1 = [-2,2]
                 plotfeat = np.clip(plotfeat,-clipedges,clipedges)
                 plotfeat[np.logical_and(plotfeat<clipedges1[1],plotfeat>clipedges1[0])] = 0
                 
@@ -2091,7 +2153,7 @@ class Trajectory:
             cfeat = map_rgb_tilt(plotfeat)
             
             readtime = 60 # ps
-            readfreq = 0.6 # ps
+            readfreq = 0.2 # ps
             fstart = round(cfeat.shape[0]*0.1)
             fend = min(fstart+round(readtime/self.Timestep),round(cfeat.shape[0]*0.9))
             frs = list(np.round(np.linspace(fstart,fend,round((fend-fstart)*self.Timestep/readfreq)+1)).astype(int))
@@ -2187,7 +2249,7 @@ class Trajectory:
         CNdiff = np.amax(np.abs(r0-r1))
         
         if CNdiff > 5:
-            print(f"!MO: A change of C-N connectivity is detected (ref value {round(CNdiff,3)} A).")
+            print(f"!MO: A change of C-N connectivity is detected (ref value {np.round(CNdiff,3)} A).")
 
         MOvecs = {}
         MOcenter = {}
@@ -3015,15 +3077,13 @@ class Trajectory:
             from pdyna.structural import octahedra_coords_into_bond_vectors, match_mixed_halide_octa_dot
             
             st0 = self.st0
-            lattice = self.lattice
-            latmat = self.latmat
             Bindex = self.Bindex
             Xindex = self.Xindex
             Bpos = self.Allpos[:,self.Bindex,:]
             Xpos = self.Allpos[:,self.Xindex,:]
             neigh_list = self.octahedra
             
-            mymat=st0.lattice.matrix
+            mymat = st0.lattice.matrix
             
             b0 = st0.cart_coords[Bindex,:]
             x0 = st0.cart_coords[Xindex,:]
@@ -3092,7 +3152,7 @@ class Trajectory:
                 syscode = np.concatenate((syscode,np.expand_dims(Xcodemaster,axis=0)),axis=0)
         
             syscode = np.average(syscode,axis=0) # label each B atom with its neighbouring halide density in one-hot manner, key output
-
+            brconc = syscode[:,1]
 
             # categorize the octa into different configs
             config_types = set(octa_halide_code_single)
@@ -3126,6 +3186,13 @@ class Trajectory:
             if hasattr(self,"Tilting"):
                 Di = self.Distortion
                 T = self.Tilting
+                TCNtype = []
+                TCNconc = []
+                if hasattr(self,"Tilting_Corr"):
+                    from pdyna.analysis import get_tcp_from_list
+                    TCN = self.Tilting_Corr
+                    #TCN = get_norm_corr(TCN,T)
+                    
                 from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density
                 
                 Dtype = []
@@ -3133,8 +3200,14 @@ class Trajectory:
                 for ti, types in enumerate(typelib):
                     Dtype.append(Di[:,types,:])
                     Ttype.append(T[:,types,:])
+                if hasattr(self,"Tilting_Corr"):
+                    for ti, types in enumerate(typelib):
+                        TCNtype.append(TCN[:,types,:])
+                    tcptype = get_tcp_from_list(TCNtype)
+                if len(TCNtype) == 0:
+                    tcptype = None
                 
-                Tmaxs_type = draw_octatype_tilt_density(Ttype, config_types, uniname, saveFigures)
+                Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
                 Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
                 
                 concent = [] # concentrations recorded
@@ -3145,8 +3218,14 @@ class Trajectory:
                     concent.append(bincent[ii])
                     Dconc.append(Di[:,item,:])
                     Tconc.append(T[:,item,:])
+                if hasattr(self,"Tilting_Corr"):
+                    for ii,item in enumerate(brbins):
+                        TCNconc.append(TCN[:,item,:])
+                    tcoconc = get_tcp_from_list(TCNconc)
+                if len(TCNconc) == 0:
+                    tcoconc = None
                 
-                Tmaxs_conc = draw_halideconc_tilt_density(Tconc, concent, uniname, saveFigures)
+                Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures)
                 Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
                 
                 self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
@@ -3207,15 +3286,15 @@ class Trajectory:
                 
             # get distribution of partitioning
             from pdyna.analysis import print_partition
-            brrange = [np.amin(syscode[:,1]),np.amax(syscode[:,1])]
-            diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
-            binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
-            Bins = np.linspace(binrange[0],binrange[1],brbinnum+1)
-            bininds = np.digitize(syscode[:,1],Bins)-1
-            brbins = [[] for kk in range(brbinnum)]
-            for ibin, binnum in enumerate(bininds):
-                brbins[binnum].append(ibin)
-            print_partition(typelib,config_types,brbins,Bins,halcounts)
+            #brrange = [np.amin(syscode[:,1]),np.amax(syscode[:,1])]
+            #diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
+            #binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
+            #Bins = np.linspace(binrange[0],binrange[1],brbinnum+1)
+            #bininds = np.digitize(syscode[:,1],Bins)-1
+            #brbins = [[] for kk in range(brbinnum)]
+            #for ibin, binnum in enumerate(bininds):
+            #    brbins[binnum].append(ibin)
+            print_partition(typelib,config_types,brconc,halcounts)
             
         et1 = time.time()
         self.timing["property_processing"] = et1-et0
@@ -3536,86 +3615,105 @@ class Frame:
         #default_BB_dist = 6.1
         r0=distance_matrix_handler(self.st0.cart_coords[self.Bindex,:],self.st0.cart_coords[self.Bindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
         
-        search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
-        default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
-        
-        Benv = []
-        for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
-            Benv.append([i for i,B2 in enumerate(B2_list) if (B2 > 0.1 and B2 < search_NN1)])
-        Benv = np.array(Benv)
-        
-        try:
-            aa = Benv.shape[1] # if some of the rows in Benv don't have 6 neighbours.
-        except IndexError:
+        try: # the old way
+            search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
+            default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
             
-            try: 
-                cell_lat = np.array(self.st0.lattice.abc)[np.newaxis,:]
-                cell_diff = np.amax(np.abs(np.repeat(cell_lat,3,axis=0)-np.repeat(cell_lat.T,3,axis=1)))
-                #cubic_cell = True
-                if cell_diff < 2.5:
-                    import math
-                    from scipy.stats import binned_statistic_dd as binstat
-                    from pdyna.analysis import quantify_tilt_domain
+            Benv = []
+            for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
+                Benv.append([i for i,B2 in enumerate(B2_list) if (B2 > 0.1 and B2 < search_NN1)])
+            Benv = np.array(Benv)
+            
+            aa = Benv.shape[1] # if some of the rows in Benv don't have 6 neighbours.
+    
+        except (IndexError, ValueError) as e: # solve env through 3D binning
+            print("!Normal fitting of initial B-B structure failed (B sites are displaced too much), trying a secondary binning fit. ")
+            cell_lat = np.array(self.st0.lattice.abc)[np.newaxis,:]
+            cell_diff = np.amax(np.abs(np.repeat(cell_lat,3,axis=0)-np.repeat(cell_lat.T,3,axis=1)))
+            #cubic_cell = True
+            if cell_diff < 2.5:
+                import math
+                from scipy.stats import binned_statistic_dd as binstat
+                from pdyna.structural import apply_pbc_cart_vecs_single_frame
+                from pdyna.analysis import quantify_tilt_domain
 
-                    cc = self.st0.frac_coords[self.Bindex,:]
-                    supercell_size = round(np.mean(cell_lat)/default_BB_dist)
-                    for i in range(3):
-                        if abs(np.amax(cc[:,i])-1)<0.01 or abs(np.amin(cc[:,i]))<0.01:
-                            addit = np.zeros((1,3))
-                            addit[0,i] = 1/supercell_size/2
-                            cc = cc+addit
-                            
-                    cc[cc>1] = cc[cc>1]-1
-                        
-                    clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
-                                      [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
-                                      [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+                cc = self.st0.frac_coords[self.Bindex,:]
+                if not np.cbrt(len(self.Bindex)).is_integer():
+                    raise ValueError(f"The number of B sites is {len(self.Bindex)}, which is not a cubed number, indicating a non-cubic cell. ")
                     
-                    bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
-                                          range=[[clims[0,0]-0.5*(1/supercell_size), 
-                                                  clims[0,1]+0.5*(1/supercell_size)], 
-                                                 [clims[1,0]-0.5*(1/supercell_size), 
-                                                  clims[1,1]+0.5*(1/supercell_size)],
-                                                 [clims[2,0]-0.5*(1/supercell_size), 
-                                                  clims[2,1]+0.5*(1/supercell_size)]],
-                                          expand_binnumbers=True).binnumber
-                    # validate the binning
-                    atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
-                    bincount = np.unique(atom_indices, return_counts=True)[1]
-                    if len(bincount) != supercell_size**3:
-                        raise ValueError("Incorrect number of bins. ")
-                    if max(bincount) != min(bincount):
-                        raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
-                    
-                    Benv = []
-                    indmap = np.array([[1,0,0],[0,1,0],[0,0,1],[-1,0,0],[0,-1,0],[0,0,-1]])
-                    for B1 in range(bin_indices.shape[1]):
-                        temp = bin_indices[:,[B1]].T+indmap
-                        temp[temp>supercell_size] = temp[temp>supercell_size] - supercell_size
-                        temp[temp<1] = temp[temp<1] + supercell_size
-                        kt = []
-                        for j in range(6):
-                            kt.append(np.where(np.all(bin_indices==temp[[j],:].T,axis=0))[0][0])
-                        kt = sorted(kt)
-                        Benv.append(kt)
+                supercell_size = int(np.cbrt(len(self.Bindex)))
+                
+                for i in range(3):
+                    if abs(np.amax(cc[:,i])-1)<0.01 or abs(np.amin(cc[:,i]))<0.01:
+                        addit = np.zeros((1,3))
+                        addit[0,i] = 1/supercell_size/2
+                        cc = cc+addit
                         
-                    Benv = np.array(Benv)
-                    aa = Benv.shape[1]
+                cc[cc>1] = cc[cc>1]-1
+                    
+                clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                                  [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                                  [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+                
+                bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                                      range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                              clims[0,1]+0.5*(1/supercell_size)], 
+                                             [clims[1,0]-0.5*(1/supercell_size), 
+                                              clims[1,1]+0.5*(1/supercell_size)],
+                                             [clims[2,0]-0.5*(1/supercell_size), 
+                                              clims[2,1]+0.5*(1/supercell_size)]],
+                                      expand_binnumbers=True).binnumber
+                # validate the binning
+                atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+                bincount = np.unique(atom_indices, return_counts=True)[1]
+                if len(bincount) != supercell_size**3:
+                    raise ValueError("Incorrect number of bins. ")
+                if max(bincount) != min(bincount):
+                    raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+                
+                Benv = []
+                indmap = np.array([[1,0,0],[0,1,0],[0,0,1],[-1,0,0],[0,-1,0],[0,0,-1]])
+                for B1 in range(bin_indices.shape[1]):
+                    temp = bin_indices[:,[B1]].T+indmap
+                    temp[temp>supercell_size] = temp[temp>supercell_size] - supercell_size
+                    temp[temp<1] = temp[temp<1] + supercell_size
+                    kt = []
+                    for j in range(6):
+                        kt.append(np.where(np.all(bin_indices==temp[[j],:].T,axis=0))[0][0])
+                    kt = sorted(kt)
+                    Benv.append(kt)
+                    
+                Benv = np.array(Benv)
+                
+                Bpos = self.st0.cart_coords[self.Bindex,:]
+                
+                bbvecs = []
+                for o in range(Benv.shape[0]):
+                    bbvecs.append(Bpos[[o],:]-Bpos[Benv[o,:],:])
+                bv = np.concatenate(bbvecs,axis=0)
+                default_BB_dist = np.mean(np.linalg.norm(apply_pbc_cart_vecs_single_frame(bv, mymat),axis=1))
+                
+            
+            else:
+                raise ValueError("The cell is not in cubic shape. ")
+        
 
-            except ValueError:
-                print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
-                print("See the gap between the populations. \n")
-                test_range = r0.reshape((1,r0.shape[0]**2))
-                import matplotlib.pyplot as plt
-                fig,ax = plt.subplots(1,1)
-                plt.hist(test_range.reshape(-1,),range=[5,9],bins=100)
-            except IndexError:
-                print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
-                print("See the gap between the populations. \n")
-                test_range = r0.reshape((1,r0.shape[0]**2))
-                import matplotlib.pyplot as plt
-                fig,ax = plt.subplots(1,1)
-                plt.hist(test_range.reshape(-1,),range=[5,9],bins=100)
+# =============================================================================
+#             except ValueError:
+#                 print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
+#                 print("See the gap between the populations. \n")
+#                 test_range = r0.reshape((1,r0.shape[0]**2))
+#                 import matplotlib.pyplot as plt
+#                 fig,ax = plt.subplots(1,1)
+#                 plt.hist(test_range.reshape(-1,),range=[5,9],bins=100)
+#             except IndexError:
+#                 print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
+#                 print("See the gap between the populations. \n")
+#                 test_range = r0.reshape((1,r0.shape[0]**2))
+#                 import matplotlib.pyplot as plt
+#                 fig,ax = plt.subplots(1,1)
+#                 plt.hist(test_range.reshape(-1,),range=[5,9],bins=100)
+# =============================================================================
                     
             
         cubic_cell = False    
@@ -3670,6 +3768,7 @@ class Frame:
         cell_lat = np.array(self.st0.lattice.abc)[np.newaxis,:]
         cell_diff = np.amax(np.abs(np.repeat(cell_lat,3,axis=0)-np.repeat(cell_lat.T,3,axis=1)))
         #cubic_cell = True
+        
         if tilt_corr_spatial and cubic_cell and cell_diff < 2.5:
             import math
             from scipy.stats import binned_statistic_dd as binstat
@@ -3807,7 +3906,8 @@ class Frame:
             clipedges = (np.quantile(plotfeat,0.90)-np.quantile(plotfeat,0.10))/2
             clipedges1 = [-3,3]
             plotfeat = np.clip(plotfeat,-clipedges,clipedges)
-            plotfeat[np.logical_and(plotfeat<clipedges1[1],plotfeat>clipedges1[0])] = 0
+            if clipedges>4:
+                plotfeat[np.logical_and(plotfeat<clipedges1[1],plotfeat>clipedges1[0])] = 0
             
             def map_rgb_tilt(x):
                 #x = x/np.amax(np.abs(x))/2+0.5

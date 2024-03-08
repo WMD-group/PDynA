@@ -434,7 +434,187 @@ def pseudocubic_lat(traj,  # the main class instance
     from scipy.stats import norm
     from scipy.stats import binned_statistic_dd as binstat
     
-    match_tol = 1.5 # tolerance of the coordinate difference is set to 1.5 angstroms    
+    def run_pcl(zi,):
+        
+        dims = [0,1,2]
+        dims.remove(zi)
+        grided = bin_indices[dims,:].T
+        
+        ma = np.array([[[0,1,1],[0,1,-1],[2,0,0]],
+                       [[-1,0,1],[1,0,1],[0,2,0]],
+                       [[-1,1,0],[1,1,0],[0,0,2]]]) # setting of pseuso-cubic lattice parameter vectors
+        
+        mappings = BBdist*ma
+        maps = mappings[zdrc,:,:] # select out of x,y,z
+        maps_frac = ma[zdrc,:,:]
+        
+        if not lattice_tilt is None:
+            maps = np.dot(maps,lattice_tilt)
+        
+        match_tol = 1.5 # tolerance of the coordinate difference is set to 1.5 angstroms    
+        
+        if len(blist) <= 8:
+            Im = np.empty((0,3))
+            for i in range(-1,2): # create images of all surrounding cells
+                for j in range(-1,2):
+                    for k in range(-1,2):
+                        Im = np.concatenate((Im,np.array([[i,j,k]])),axis=0) 
+            
+            Bfc = st0.frac_coords[blist,:] # frac_coords of B site atoms
+
+            Bnet = np.zeros((Bfc.shape[0],3,2)) # find the corresponding atoms (with image) for lattice parameter calc.
+            # dim0: for each B atom, dim1: a,b,c vector of that atom, dim2: [B atom number, image]
+            Bnet[:] = np.nan
+            for B1 in range(Bfc.shape[0]):
+                for im in range(Im.shape[0]):
+                    for B2 in range(Bfc.shape[0]):
+                        vec = st0.lattice.get_cartesian_coords(Im[im,:] + Bfc[B1,:] - Bfc[B2,:])
+                        for i in range(3):
+                            if np.linalg.norm(vec-maps[i,:]) < match_tol: 
+
+                                if np.isnan(Bnet[B1,i,0]) and np.isnan(Bnet[B1,i,1]):
+                                    Bnet[B1,i,0] = B2
+                                    Bnet[B1,i,1] = im
+                                else:
+                                    raise ValueError("A second fitted neighbour is written to the site. Decrease match_tol")
+                        
+            if np.isnan(Bnet).any():
+                raise TypeError("Some of the neightbours are not found (still nan). Increase match_tol")
+            Bnet = Bnet.astype(int)
+            
+            # find the correct a and b vectors
+            #code = np.remainder(np.sum(grided,axis=1),2)
+            code = np.remainder(grided[:,1],2)
+            
+            Bfrac = get_frac_from_cart(traj.Allpos[:,traj.Bindex,:],traj.latmat)
+            lats = traj.latmat
+            
+            Lati_on = np.zeros((len(range(round(traj.nframe*allow_equil),traj.nframe)),Bfc.shape[0],3))
+            
+            for ite, fr in enumerate(range(round(traj.nframe*allow_equil),traj.nframe)):
+                Bfc = Bfrac[fr,:,:]
+                templat = np.empty((Bfc.shape[0],3))
+                for B1 in range(Bfc.shape[0]):
+                    for i in range(3):
+                        if i == 2: # identified z-axis
+                            templat[B1,i] = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/2
+                        else: # x- and y-axis
+                            temp = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/np.sqrt(2)
+                            templat[B1,i] = temp
+                Lati_on[ite,:] = templat
+            
+            if zi != 2:
+                l0 = np.expand_dims(Lati_on[:,:,0], axis=2)
+                l1 = np.expand_dims(Lati_on[:,:,1], axis=2)
+                l2 = np.expand_dims(Lati_on[:,:,2], axis=2)
+                if zi == 0:
+                    Lati_on = np.concatenate((l2,l1,l0),axis=2)
+                if zi == 1:
+                    Lati_on = np.concatenate((l0,l2,l1),axis=2)
+            
+            Lati_off = np.zeros((len(range(round(traj.nframe*allow_equil),traj.nframe)),Bfc.shape[0],3))
+            
+            for ite, fr in enumerate(range(round(traj.nframe*allow_equil),traj.nframe)):
+                Bfc = Bfrac[fr,:,:]
+                templat = np.empty((Bfc.shape[0],3))
+                for B1 in range(Bfc.shape[0]):
+                    for i in range(3):
+                        if i == 2: # identified z-axis
+                            templat[B1,i] = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/2
+                        else: # x- and y-axis
+                            temp = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/np.sqrt(2)
+                            if code[B1] == 1:
+                                i = (i+1)%2
+                            templat[B1,i] = temp
+                Lati_off[ite,:] = templat
+            
+            if zi != 2:
+                l0 = np.expand_dims(Lati_off[:,:,0], axis=2)
+                l1 = np.expand_dims(Lati_off[:,:,1], axis=2)
+                l2 = np.expand_dims(Lati_off[:,:,2], axis=2)
+                if zi == 0:
+                    Lati_off = np.concatenate((l2,l1,l0),axis=2)
+                if zi == 1:
+                    Lati_off = np.concatenate((l0,l2,l1),axis=2)
+                    
+            std_off = norm.fit(Lati_off.reshape(-1,3)[:,0])[1]+norm.fit(Lati_off.reshape(-1,3)[:,1])[1]
+            std_on = norm.fit(Lati_on.reshape(-1,3)[:,0])[1]+norm.fit(Lati_on.reshape(-1,3)[:,1])[1]
+            
+            if std_off > std_on:
+                return Lati_on
+            else:
+                return Lati_off
+        
+        else:
+            
+            #Bcart = st0.cart_coords[blist,:]
+            Bnet = np.zeros((len(blist),3))
+            
+            for B1 in range(len(blist)):
+                for v in range(3):
+                    pos1 = bin_indices[:,B1]+maps_frac[v,:]
+                    pos1[pos1>tss] = pos1[pos1>tss]-tss
+                    pos1[pos1<1] = pos1[pos1<1]+tss
+                    Bnet[B1,v] = np.where(~(bin_indices-pos1[:,np.newaxis]).any(axis=0))[0][0]
+            Bnet = Bnet.astype(int)
+            
+            # find the correct a and b vectors
+            #code = np.remainder(np.sum(grided,axis=1),2)
+            code = np.remainder(grided[:,1],2)
+            trajnum = list(range(round(traj.nframe*allow_equil),traj.nframe,traj.read_every))
+            lats = traj.latmat[trajnum,:]
+            Bpos = traj.Allpos[trajnum,:,:][:,traj.Bindex,:]
+            
+            # filtering direction 1
+            Lati_off = np.empty((len(trajnum),len(blist),3))
+            for B1 in range(len(blist)):
+                for i in range(3):
+                    if i == 2: # identified z-axis
+                        Lati_off[:,B1,i] = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/2).reshape(-1,)
+                    else: # x- and y-axis
+                        temp = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/np.sqrt(2)).reshape(-1,)
+                        if code[B1] == 1:
+                            i = (i+1)%2
+                        Lati_off[:,B1,i] = temp
+
+            
+            if zi != 2:
+                l0 = np.expand_dims(Lati_off[:,:,0], axis=2)
+                l1 = np.expand_dims(Lati_off[:,:,1], axis=2)
+                l2 = np.expand_dims(Lati_off[:,:,2], axis=2)
+                if zi == 0:
+                    Lati_off = np.concatenate((l2,l1,l0),axis=2)
+                if zi == 1:
+                    Lati_off = np.concatenate((l0,l2,l1),axis=2)
+            
+            # filtering direction 2
+            Lati_on = np.empty((len(trajnum),len(blist),3))
+            for B1 in range(len(blist)):
+                for i in range(3):
+                    if i == 2: # identified z-axis
+                        Lati_on[:,B1,i] = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/2).reshape(-1,)
+                    else: # x- and y-axis
+                        temp = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/np.sqrt(2)).reshape(-1,)
+                        Lati_on[:,B1,i] = temp
+            
+            if zi != 2:
+                l0 = np.expand_dims(Lati_on[:,:,0], axis=2)
+                l1 = np.expand_dims(Lati_on[:,:,1], axis=2)
+                l2 = np.expand_dims(Lati_on[:,:,2], axis=2)
+                if zi == 0:
+                    Lati_on = np.concatenate((l2,l1,l0),axis=2)
+                if zi == 1:
+                    Lati_on = np.concatenate((l0,l2,l1),axis=2)
+            
+            std_off = norm.fit(Lati_off.reshape(-1,3)[:,0])[1]+norm.fit(Lati_off.reshape(-1,3)[:,1])[1]
+            std_on = norm.fit(Lati_on.reshape(-1,3)[:,0])[1]+norm.fit(Lati_on.reshape(-1,3)[:,1])[1]
+            
+            if std_off > std_on:
+                return Lati_on
+            else:
+                return Lati_off
+    
+    # begin of main function
     st0 = traj.st0
     Bpos = st0.cart_coords[traj.Bindex,:]
     blist = traj.Bindex
@@ -472,195 +652,15 @@ def pseudocubic_lat(traj,  # the main class instance
         raise TypeError("Incorrect number of bins. ")
     if max(bincount) != min(bincount):
         raise ValueError("Not all bins contain exactly the same number of atoms (1). ")    
-        
-    dims = [0,1,2]
-    dims.remove(zdrc)
-    grided = bin_indices[dims,:].T
-    
-    ma = np.array([[[0,1,1],[0,1,-1],[2,0,0]],
-                   [[-1,0,1],[1,0,1],[0,2,0]],
-                   [[-1,1,0],[1,1,0],[0,0,2]]]) # setting of pseuso-cubic lattice parameter vectors
-    
-    mappings = BBdist*ma
-    maps = mappings[zdrc,:,:] # select out of x,y,z
-    maps_frac = ma[zdrc,:,:]
-    
-    if not lattice_tilt is None:
-        maps = np.dot(maps,lattice_tilt)
 
-    if len(blist) <= 8:
-        Im = np.empty((0,3))
-        for i in range(-1,2): # create images of all surrounding cells
-            for j in range(-1,2):
-                for k in range(-1,2):
-                    Im = np.concatenate((Im,np.array([[i,j,k]])),axis=0) 
-        
-        Bfc = st0.frac_coords[blist,:] # frac_coords of B site atoms
-
-        Bnet = np.zeros((Bfc.shape[0],3,2)) # find the corresponding atoms (with image) for lattice parameter calc.
-        # dim0: for each B atom, dim1: a,b,c vector of that atom, dim2: [B atom number, image]
-        Bnet[:] = np.nan
-        for B1 in range(Bfc.shape[0]):
-            for im in range(Im.shape[0]):
-                for B2 in range(Bfc.shape[0]):
-                    vec = st0.lattice.get_cartesian_coords(Im[im,:] + Bfc[B1,:] - Bfc[B2,:])
-                    for i in range(3):
-                        if np.linalg.norm(vec-maps[i,:]) < match_tol: 
-
-                            if np.isnan(Bnet[B1,i,0]) and np.isnan(Bnet[B1,i,1]):
-                                Bnet[B1,i,0] = B2
-                                Bnet[B1,i,1] = im
-                            else:
-                                raise ValueError("A second fitted neighbour is written to the site. Decrease match_tol")
-                    
-        if np.isnan(Bnet).any():
-            raise TypeError("Some of the neightbours are not found (still nan). Increase match_tol")
-        Bnet = Bnet.astype(int)
-        
-        # find the correct a and b vectors
-        #code = np.remainder(np.sum(grided,axis=1),2)
-        code = np.remainder(grided[:,1],2)
-        
-        Bfrac = get_frac_from_cart(traj.Allpos[:,traj.Bindex,:],traj.latmat)
-        lats = traj.latmat
-        
-        Lati_on = np.zeros((len(range(round(traj.nframe*allow_equil),traj.nframe)),Bfc.shape[0],3))
-        
-        for ite, fr in enumerate(range(round(traj.nframe*allow_equil),traj.nframe)):
-            Bfc = Bfrac[fr,:,:]
-            templat = np.empty((Bfc.shape[0],3))
-            for B1 in range(Bfc.shape[0]):
-                for i in range(3):
-                    if i == 2: # identified z-axis
-                        templat[B1,i] = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/2
-                    else: # x- and y-axis
-                        temp = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/np.sqrt(2)
-                        templat[B1,i] = temp
-            Lati_on[ite,:] = templat
-        
-        if zdrc != 2:
-            l0 = np.expand_dims(Lati_on[:,:,0], axis=2)
-            l1 = np.expand_dims(Lati_on[:,:,1], axis=2)
-            l2 = np.expand_dims(Lati_on[:,:,2], axis=2)
-            if zdrc == 0:
-                Lati_on = np.concatenate((l2,l1,l0),axis=2)
-            if zdrc == 1:
-                Lati_on = np.concatenate((l0,l2,l1),axis=2)
-        
-        Lati_off = np.zeros((len(range(round(traj.nframe*allow_equil),traj.nframe)),Bfc.shape[0],3))
-        
-        for ite, fr in enumerate(range(round(traj.nframe*allow_equil),traj.nframe)):
-            Bfc = Bfrac[fr,:,:]
-            templat = np.empty((Bfc.shape[0],3))
-            for B1 in range(Bfc.shape[0]):
-                for i in range(3):
-                    if i == 2: # identified z-axis
-                        templat[B1,i] = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/2
-                    else: # x- and y-axis
-                        temp = np.linalg.norm(np.dot((Im[Bnet[B1,i,1],:] + Bfc[B1,:] - Bfc[Bnet[B1,i,0]]),lats[fr,:,:]))/np.sqrt(2)
-                        if code[B1] == 1:
-                            i = (i+1)%2
-                        templat[B1,i] = temp
-            Lati_off[ite,:] = templat
-        
-        if zdrc != 2:
-            l0 = np.expand_dims(Lati_off[:,:,0], axis=2)
-            l1 = np.expand_dims(Lati_off[:,:,1], axis=2)
-            l2 = np.expand_dims(Lati_off[:,:,2], axis=2)
-            if zdrc == 0:
-                Lati_off = np.concatenate((l2,l1,l0),axis=2)
-            if zdrc == 1:
-                Lati_off = np.concatenate((l0,l2,l1),axis=2)
-                
-        std_off = norm.fit(Lati_off.reshape(-1,3)[:,0])[1]+norm.fit(Lati_off.reshape(-1,3)[:,1])[1]
-        std_on = norm.fit(Lati_on.reshape(-1,3)[:,0])[1]+norm.fit(Lati_on.reshape(-1,3)[:,1])[1]
-        
-        if std_off > std_on:
-            return Lati_on
-        else:
-            return Lati_off
-    
+    if zdrc == -1:
+        Lat = []
+        for zi in [0,1,2]:
+            Lat.append(run_pcl(zi))
+        return Lat
     else:
-        
-        #Bcart = st0.cart_coords[blist,:]
-        Bnet = np.zeros((len(blist),3))
-        
-        for B1 in range(len(blist)):
-            for v in range(3):
-                pos1 = bin_indices[:,B1]+maps_frac[v,:]
-                pos1[pos1>tss] = pos1[pos1>tss]-tss
-                pos1[pos1<1] = pos1[pos1<1]+tss
-                Bnet[B1,v] = np.where(~(bin_indices-pos1[:,np.newaxis]).any(axis=0))[0][0]
-        Bnet = Bnet.astype(int)
-        
-# =============================================================================
-#         mymat = st0.lattice.matrix
-#         for B1 in range(Bcart.shape[0]):
-#             bond1 = apply_pbc_cart_vecs_single_frame(Bcart[B1,:]-Bcart, mymat)
-#             for v in range(3):
-#                 matching = np.where(np.linalg.norm(bond1-maps[v,:],axis=1)<match_tol)[0]
-#                 if matching.shape[0] != 1:
-#                     raise ValueError(f"Pseudo-cubic: The pc-neighbour of B-site no.{B1} is not found, please check if the initial structure contains defects. ")
-#                 Bnet[B1,v] = matching[0]
-#         Bnet = Bnet.astype(int)
-# =============================================================================
-        
-        # find the correct a and b vectors
-        #code = np.remainder(np.sum(grided,axis=1),2)
-        code = np.remainder(grided[:,1],2)
-        trajnum = list(range(round(traj.nframe*allow_equil),traj.nframe,traj.read_every))
-        lats = traj.latmat[trajnum,:]
-        Bpos = traj.Allpos[trajnum,:,:][:,traj.Bindex,:]
-        
-        # filtering direction 1
-        Lati_off = np.empty((len(trajnum),len(blist),3))
-        for B1 in range(len(blist)):
-            for i in range(3):
-                if i == 2: # identified z-axis
-                    Lati_off[:,B1,i] = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/2).reshape(-1,)
-                else: # x- and y-axis
-                    temp = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/np.sqrt(2)).reshape(-1,)
-                    if code[B1] == 1:
-                        i = (i+1)%2
-                    Lati_off[:,B1,i] = temp
+        return run_pcl(zdrc)         
 
-        
-        if zdrc != 2:
-            l0 = np.expand_dims(Lati_off[:,:,0], axis=2)
-            l1 = np.expand_dims(Lati_off[:,:,1], axis=2)
-            l2 = np.expand_dims(Lati_off[:,:,2], axis=2)
-            if zdrc == 0:
-                Lati_off = np.concatenate((l2,l1,l0),axis=2)
-            if zdrc == 1:
-                Lati_off = np.concatenate((l0,l2,l1),axis=2)
-        
-        # filtering direction 2
-        Lati_on = np.empty((len(trajnum),len(blist),3))
-        for B1 in range(len(blist)):
-            for i in range(3):
-                if i == 2: # identified z-axis
-                    Lati_on[:,B1,i] = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/2).reshape(-1,)
-                else: # x- and y-axis
-                    temp = (np.linalg.norm(apply_pbc_cart_vecs((Bpos[:,B1,:]-Bpos[:,Bnet[B1,i],:])[:,np.newaxis,:],lats),axis=2)/np.sqrt(2)).reshape(-1,)
-                    Lati_on[:,B1,i] = temp
-        
-        if zdrc != 2:
-            l0 = np.expand_dims(Lati_on[:,:,0], axis=2)
-            l1 = np.expand_dims(Lati_on[:,:,1], axis=2)
-            l2 = np.expand_dims(Lati_on[:,:,2], axis=2)
-            if zdrc == 0:
-                Lati_on = np.concatenate((l2,l1,l0),axis=2)
-            if zdrc == 1:
-                Lati_on = np.concatenate((l0,l2,l1),axis=2)
-        
-        std_off = norm.fit(Lati_off.reshape(-1,3)[:,0])[1]+norm.fit(Lati_off.reshape(-1,3)[:,1])[1]
-        std_on = norm.fit(Lati_on.reshape(-1,3)[:,0])[1]+norm.fit(Lati_on.reshape(-1,3)[:,1])[1]
-        
-        if std_off > std_on:
-            return Lati_on
-        else:
-            return Lati_off
-    
 
 def structure_time_average(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None):
     """ 
@@ -1512,23 +1512,22 @@ def get_volume(lattice):
 
 def distance_matrix(v1,v2,latmat,get_vec=False):
     
+    dprec = np.float32
+    
     if v1.ndim != 2 or v1.shape[1] != 3 or v2.ndim != 2 or v2.shape[1] != 3:
         raise TypeError("The input arrays must be in shape N*3. ")
     
-    f1 = get_frac_from_cart(v1,latmat)[:,np.newaxis,:]
-    f2 = get_frac_from_cart(v2,latmat)[np.newaxis,:,:]
+    f1 = get_frac_from_cart(v1,latmat)[:,np.newaxis,:].astype(dprec)
+    f2 = get_frac_from_cart(v2,latmat)[np.newaxis,:,:].astype(dprec)
     
-    m1 = np.repeat(f1,f2.shape[1],axis=1)
-    m2 = np.repeat(f2,f1.shape[0],axis=0)
-    
-    df = m1-m2
+    df = np.repeat(f1,f2.shape[1],axis=1)-np.repeat(f2,f1.shape[0],axis=0)
     df = df-np.round(df)
-    dc = np.matmul(df,latmat)
+    df = np.matmul(df,latmat.astype(dprec))
     
     if get_vec:
-        return dc
+        return df
     else:
-        return np.linalg.norm(dc,axis=2)
+        return np.linalg.norm(df,axis=2)
   
     
 def distance_matrix_ase(v1,v2,asecell,pbc,get_vec=False):
