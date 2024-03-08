@@ -3904,6 +3904,7 @@ class Frame:
             
             #plotfeat = np.sqrt(np.abs(plotfeat))*np.sign(plotfeat)
             clipedges = (np.quantile(plotfeat,0.90)-np.quantile(plotfeat,0.10))/2
+            print(f"The max tilting value of the supercell plot is +/- {round(clipedges,3)} degrees.")
             clipedges1 = [-3,3]
             plotfeat = np.clip(plotfeat,-clipedges,clipedges)
             if clipedges>4:
