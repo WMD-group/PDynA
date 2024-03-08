@@ -3895,6 +3895,7 @@ class Frame:
             print(f"Tilting spatial correlation length: \n {np.round(scdecay,3)}")
             
             from pdyna.analysis import savitzky_golay, vis3D_domain_frame
+            from matplotlib.colors import LinearSegmentedColormap
 
             axisvis = 2
             ampfeat = T.copy()
@@ -3917,15 +3918,19 @@ class Frame:
                 p1 = np.array([0.196, 0.031, 0.318])
                 p2 = np.array([0.918, 0.388, 0.161])
                 pw = np.array([1, 1, 1])
+                colors = [p1, pw, p2]
+                positions = [0.0, 0.5, 1.0]  # Position of colors in the colormap
+                custom_cmap = LinearSegmentedColormap.from_list("custom_colormap", list(zip(positions, colors)))  
+                
                 cx = np.empty((x.shape[0],3))
                 cx[(x>=0)[:,0],:] = np.multiply(p1-pw,np.repeat(x[x>=0][:,np.newaxis],3,axis=1))+pw
                 cx[(x<0)[:,0],:] = np.multiply(p2-pw,np.abs(np.repeat(x[x<0][:,np.newaxis],3,axis=1)))+pw
-                return np.concatenate((cx,np.ones((cx.shape[0],1))),axis=1)
+                return np.concatenate((cx,np.ones((cx.shape[0],1))),axis=1), custom_cmap
                 
             
-            cfeat = map_rgb_tilt(plotfeat)
+            cfeat, cmap = map_rgb_tilt(plotfeat)
             figname1 = f"Tilt3D_domain_frame_{uniname}"
-            vis3D_domain_frame(cfeat,supercell_size,bin_indices,figname1)
+            vis3D_domain_frame(cfeat,supercell_size,bin_indices,cmap,clipedges,figname1,saveFigures)
 
         
         et1 = time.time()

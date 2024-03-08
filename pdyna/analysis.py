@@ -1227,7 +1227,7 @@ def draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigure
     plt.show()
     
 # =============================================================================
-#     if corr_vals:
+#     if not (corr_vals is None):
 #         from matplotlib.colors import LinearSegmentedColormap, Normalize
 #         from matplotlib.cm import ScalarMappable
 #         scasize = 80
@@ -2814,12 +2814,10 @@ def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
     plt.show()
 
 
-def vis3D_domain_frame(cfeat,ss,bin_indices,figname):
+def vis3D_domain_frame(cfeat,ss,bin_indices,cmap,clbedge,figname,saveFigures):
     """ 
     Visualise tilting in 3D animation.  
     """
-    from matplotlib.animation import FuncAnimation, PillowWriter
-    from matplotlib.colors import LightSource
     
     x1, x2, x3 = np.indices((ss+1,ss+1,ss+1))
     grids = np.zeros((ss,ss,ss),dtype="bool")
@@ -2832,12 +2830,15 @@ def vis3D_domain_frame(cfeat,ss,bin_indices,figname):
     for j in range(cfeat.shape[0]):
         cmval[bin_indices[0,j]-1,bin_indices[1,j]-1,bin_indices[2,j]-1,:] = cfeat[j,:]
 
-
-    fig=plt.figure()
+    plt.figure()
     ax = plt.axes(projection='3d')
     ax.voxels(x1,x2,x3,grids,facecolors=cmval)
     ax.axis('off')
     ax.set_aspect('auto')
+    clb=plt.colorbar(mappable=plt.cm.ScalarMappable(cmap=cmap,norm=plt.Normalize(vmin=-clbedge, vmax=clbedge)),ax=ax)
+    clb.set_label(label="Tilting (degree)")
+    if saveFigures:
+        plt.savefig(figname, dpi=350,bbox_inches='tight')
     plt.show()
 
 
