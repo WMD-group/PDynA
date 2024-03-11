@@ -3221,11 +3221,11 @@ class Trajectory:
                 if hasattr(self,"Tilting_Corr"):
                     for ii,item in enumerate(brbins):
                         TCNconc.append(TCN[:,item,:])
-                    tcoconc = get_tcp_from_list(TCNconc)
+                    tcpconc = get_tcp_from_list(TCNconc)
                 if len(TCNconc) == 0:
-                    tcoconc = None
+                    tcpconc = None
                 
-                Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures)
+                Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals=tcpconc)
                 Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
                 
                 self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
@@ -3477,6 +3477,7 @@ class Frame:
                  align_rotation = [0,0,0], # rotation of structure to match orthogonal directions
                  
                  tilt_corr_spatial = False,
+                 max_tilt_of_plot = None,
                  ):
         
         """
@@ -3549,7 +3550,7 @@ class Frame:
         
         
         print("Computing octahedral tilting and distortion...")
-        self.tilting_and_distortion(uniname=uniname,saveFigures=saveFigures,tilt_corr_spatial=tilt_corr_spatial)
+        self.tilting_and_distortion(uniname=uniname,saveFigures=saveFigures,tilt_corr_spatial=tilt_corr_spatial,max_tilt_of_plot=max_tilt_of_plot)
         print(" ")
 
         # summary
@@ -3560,7 +3561,7 @@ class Frame:
         # end of calculation
         print("------------------------------------------------------------")
     
-    def tilting_and_distortion(self,uniname,saveFigures,tilt_corr_spatial):
+    def tilting_and_distortion(self,uniname,saveFigures,tilt_corr_spatial,max_tilt_of_plot):
         
         """
         Octhedral tilting and distribution analysis.
@@ -3904,7 +3905,10 @@ class Frame:
             plotfeat = ampfeat[:,[axisvis]]
             
             #plotfeat = np.sqrt(np.abs(plotfeat))*np.sign(plotfeat)
-            clipedges = (np.quantile(plotfeat,0.90)-np.quantile(plotfeat,0.10))/2
+            if max_tilt_of_plot is None:
+                clipedges = (np.quantile(plotfeat,0.90)-np.quantile(plotfeat,0.10))/2
+            else:
+                clipedges = max_tilt_of_plot
             print(f"The max tilting value of the supercell plot is +/- {round(clipedges,3)} degrees.")
             clipedges1 = [-3,3]
             plotfeat = np.clip(plotfeat,-clipedges,clipedges)

@@ -1368,7 +1368,6 @@ def draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigure
 #             plt.show()
 # =============================================================================
         
-    
     return maxs
 
 
@@ -1633,13 +1632,14 @@ def print_partition(typelib,config_types,brconc,halcounts):
 
     
 
-def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, n_bins = 100, symm_n_fold = 4):
+def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals = None, n_bins = 100, symm_n_fold = 4):
     """ 
     Isolate tilting pattern wrt. the local halide concentration.  
     """
     
     from pdyna.structural import periodicity_fold
     fig_name=f"tilt_halideconc_density_{uniname}.png"
+    fig_name1=f"tilt_halideconc_density_tcp_{uniname}.png"
     
     if symm_n_fold == 2:
         hrange = [-90,90]
@@ -1742,6 +1742,137 @@ def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, n
     if saveFigures:
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
     plt.show()
+    
+# =============================================================================
+#     if not (corr_vals is None):
+#         from matplotlib.colors import LinearSegmentedColormap, Normalize
+#         from matplotlib.cm import ScalarMappable
+#         scasize = 80
+#         cross_zero = False
+#         # check if tcp values have +ve and -ve terms at the same time, if so abort this plotting
+#         signs = []
+#         for i in range(3):
+#             arr = corr_vals[:,i]
+#             same_sign = np.all(np.sign(arr) == np.sign(arr[0]))
+#             if not same_sign:
+#                 cross_zero = True
+#                 signs.append(0)
+#             else:
+#                 signs.append(np.sign(arr[0]))
+#         signs = np.array(signs).astype(int)
+#         
+#         if not cross_zero and not np.all(np.sign(signs) == np.sign(signs[0])): # all TCP values are 'belign' and does not cross zero AND different signs of TCP
+#             cmname = 'cividis'
+#             cividis_cmap = plt.cm.get_cmap('cividis')
+#             
+#             # Define custom colormaps for each range
+#             colors_neg = cividis_cmap(np.linspace(0.5, 0, 128))[::-1]  # Reverse colors for the first half
+#             colors_pos = cividis_cmap(np.linspace(0.5, 1, 128))
+#             cmap_neg = LinearSegmentedColormap.from_list("cividis_neg", colors_neg)
+#             cmap_pos = LinearSegmentedColormap.from_list("cividis_pos", colors_pos)
+#             
+#             negs = []
+#             poss = []
+#             for j in range(3):
+#                 if signs[j] == 1:
+#                     poss.extend(list(corr_vals[:,j]))
+#                 else:
+#                     negs.extend(list(corr_vals[:,j]))
+#             
+#             norm1 = Normalize(vmin=min(poss), vmax=max(poss))  # Normalization from 0 to 1
+#             norm2 = Normalize(vmin=min(negs), vmax=max(negs))  # Set vmin to -1 and vmax to 0 for negative range
+# 
+#             fig, axs = plt.subplots(2,1,figsize=(8.0,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+#             
+#             for j in range(3):
+#                 if signs[j] == 1:
+#                     axs[0].scatter(plotx,maxs[:,j],alpha=scaalpha,s=scasize,c=corr_vals[:,j],cmap=cmap_pos,norm=norm1)
+#                 else:
+#                     axs[0].scatter(plotx,maxs[:,j],alpha=scaalpha,s=scasize,c=corr_vals[:,j],cmap=cmap_neg,norm=norm2)
+#             
+#             # Add colorbars
+#             cblin = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmap_pos),ax=axs[0], pad=-0.01)
+#             cblout= plt.colorbar(ScalarMappable(norm=norm2, cmap=cmap_neg),ax=axs[0], pad=0.015)
+#             cblin.set_label(label='TCP (a.u.)', size=13)
+#             
+#             axs[1].hist(brconc, bins=100, range=[0,1], color='grey')
+#             
+#             axs[0].tick_params(axis='both', which='major', labelsize=14)
+#             axs[1].tick_params(axis='both', which='major', labelsize=14)
+#             axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+#             axs[1].set_ylabel('Count', fontsize = 15) 
+#             axs[1].set_xlabel('Br content', fontsize = 15) # X label
+#             #axs[0].set_xticks(plotx)
+#             #axs[0].set_xticks(typexval)
+#             #axs[0].set_xticklabels(typextick)
+#             axs[1].set_yticks([])
+#             axs[1].set_yticklabels([])
+#             axs[0].set_ylim(bottom=0)
+#             axs[1].set_xlim(axs[0].get_xlim())
+#             
+#             newwid = axs[0].get_position().width
+#             pax1 = axs[1].get_position()
+#             new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+#             axs[1].set_position(new_position)
+# 
+#             #plt.tight_layout()
+#             #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+#             
+#             if saveFigures:
+#                 plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+#             plt.show()
+# 
+#         else: # cross zero OR all TCP the same sign, use one color axis instead
+#             cmname = 'cividis'
+#             cividis_cmap = plt.cm.get_cmap('cividis')
+#             
+#             posneg = corr_vals.reshape(-1,)
+#             
+#             fig, axs = plt.subplots(2,1,figsize=(7.4,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+#             norm = Normalize(vmin=np.amin(posneg), vmax=np.amax(posneg))
+#             sm = ScalarMappable(norm=norm, cmap=cmname)
+#             sm.set_array([])  # dummy array to make it work
+#             
+#             axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmname,norm=norm)
+#             axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmname,norm=norm)
+#             axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmname,norm=norm)
+#             
+#             # Set vmin and vmax to match the range of values
+#             clb = plt.colorbar(sm, ax=axs[0], pad=0.04)
+#             clb.set_label(label='TCP (a.u.)', size = 13)
+#             
+#             #axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c='C0')
+#             #axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c='C1')
+#             #axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c='C2')
+#             
+#             axs[1].hist(brconc, bins=100, range=[0,1], color='grey')
+#             
+#             axs[0].tick_params(axis='both', which='major', labelsize=14)
+#             axs[1].tick_params(axis='both', which='major', labelsize=14)
+#             axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+#             axs[1].set_ylabel('Count', fontsize = 15) 
+#             axs[1].set_xlabel('Br content', fontsize = 15) # X label
+# 
+#             #axs[0].set_xticks(typexval)
+#             #axs[0].set_xticklabels(typextick)
+# 
+#             axs[1].set_yticks([])
+#             axs[1].set_yticklabels([])
+#             axs[0].set_ylim(bottom=0)
+#             axs[1].set_xlim(axs[0].get_xlim())
+#             
+#             newwid = axs[0].get_position().width
+#             pax1 = axs[1].get_position()
+#             new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+#             axs[1].set_position(new_position)
+# 
+#             #plt.tight_layout()
+#             #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+#             
+#             if saveFigures:
+#                 plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+#             plt.show()
+# =============================================================================
     
     return maxs
 
