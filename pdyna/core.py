@@ -3333,7 +3333,7 @@ class Frame:
         
         Xsite_species = ['Cl','Br','I'] # update if needed
         Bsite_species = ['Pb','Sn'] # update if needed
-        known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs") # update if needed
+        known_elem = ("I", "Br", "Cl", "Pb", "Sn", "C", "H", "N", "Cs", "K", "Mn") # update if needed
         
         #Xsite_species = ['Ba'] # update if needed
         #Bsite_species = ['P'] # update if needed
@@ -3905,11 +3905,14 @@ class Frame:
             plotfeat = ampfeat[:,[axisvis]]
             
             #plotfeat = np.sqrt(np.abs(plotfeat))*np.sign(plotfeat)
+            dmax = np.amax(np.abs(plotfeat))
             if max_tilt_of_plot is None:
                 clipedges = (np.quantile(plotfeat,0.90)-np.quantile(plotfeat,0.10))/2
+                print(f"The max tilting value is {round(dmax,3)} degrees, and is capped for the supercell plot at +/- {round(clipedges,3)} degrees.")
             else:
                 clipedges = max_tilt_of_plot
-            print(f"The max tilting value of the supercell plot is +/- {round(clipedges,3)} degrees.")
+                print(f"The max tilting value is {round(dmax,3)} degrees, and is manually capped for the supercell plot at +/- {round(clipedges,3)} degrees.")
+            
             clipedges1 = [-3,3]
             plotfeat = np.clip(plotfeat,-clipedges,clipedges)
             if clipedges>4:
