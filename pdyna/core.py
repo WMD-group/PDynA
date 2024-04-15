@@ -613,7 +613,7 @@ class Trajectory:
                  full_NN1_corr = False, # include off-diagonal correlation terms 
                  tilt_corr_spatial = False, # enable spatial correlation beyond NN1
                  tiltautoCorr = False, # compute Tilting decorrelation time constant
-                 octa_locality = False, # compute differentiated properties within mixed-halide sample
+                 octa_locality = False, # compute differentiated properties within mixed-halide sample, False turns it off, "homo" is homogeneous mixing of X-sites, "hetero" is for segregated grains of X-sites.
                  enable_refit = False, # refit the octahedral network in case of change of geometry
                  symm_n_fold = 0, # tilting range, 0: auto, 2: [-90,90], 4: [-45,45], 8: [0,45]
                  tilt_recenter = False, # whether to eliminate the shift in tilting values according to the mean value of population
@@ -708,7 +708,9 @@ class Trajectory:
         tiltautoCorr      -- compute time-dependent self-correlation of tilting
             True or False
         octa_locality     -- compute differentiated properties within mixed-halide sample
-            True or False
+            "homo": homogeneous mixing of X-sites
+            "hetero": segregated grains of X-sites
+            False: off
         enable_refit      -- refit the octahedral connectivity in case of change of geometry, use with care
             True or False
         symm_n_fold       -- tilting angle symmetry range
@@ -860,6 +862,8 @@ class Trajectory:
         if not tilt_corr_NN1: 
             tilt_domain = False
         
+        if not octa_locality in [False,'homo','hetero']:
+            raise TypeError("The option octa_locality must be either False, 'homo' or 'hetero'. ")
         hal_count = 0
         for sp in self.st0.symbol_set:
             if sp in self._Xsite_species:
@@ -3323,118 +3327,230 @@ class Trajectory:
                 bincent = (Bins[1:]+Bins[:-1])/2
             
             # partition properties
-            if hasattr(self,"Tilting"):
-                Di = self.Distortion
-                T = self.Tilting
-                TCNtype = []
-                TCNconc = []
-                if hasattr(self,"Tilting_Corr"):
-                    from pdyna.analysis import get_tcp_from_list
-                    TCN = self.Tilting_Corr
-                    #TCN = get_norm_corr(TCN,T)
-                    
-                from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density
+            if octa_locality == 'homo':
                 
-                Dtype = []
-                Ttype = []
-                for ti, types in enumerate(typelib):
-                    Dtype.append(Di[:,types,:])
-                    Ttype.append(T[:,types,:])
-                if hasattr(self,"Tilting_Corr"):
+                if hasattr(self,"Tilting"):
+                    Di = self.Distortion
+                    T = self.Tilting
+                    TCNtype = []
+                    TCNconc = []
+                    if hasattr(self,"Tilting_Corr"):
+                        from pdyna.analysis import get_tcp_from_list
+                        TCN = self.Tilting_Corr
+                        #TCN = get_norm_corr(TCN,T)
+                        
+                    from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density
+                    
+                    Dtype = []
+                    Ttype = []
                     for ti, types in enumerate(typelib):
-                        TCNtype.append(TCN[:,types,:])
-                    tcptype = get_tcp_from_list(TCNtype)
-                if len(TCNtype) == 0:
-                    tcptype = None
-                
-                Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
-                Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
-                
-                concent = [] # concentrations recorded
-                Dconc = []
-                Tconc = []
-                for ii,item in enumerate(brbins):
-                    if len(item) == 0: continue
-                    concent.append(bincent[ii])
-                    Dconc.append(Di[:,item,:])
-                    Tconc.append(T[:,item,:])
-                if hasattr(self,"Tilting_Corr"):
-                    for ii,item in enumerate(brbins):
-                        TCNconc.append(TCN[:,item,:])
-                    tcpconc = get_tcp_from_list(TCNconc)
-                if len(TCNconc) == 0:
-                    tcpconc = None
-                
-                Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals=tcpconc)
-                Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
-                
-                self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
-                self.dist_wrt_halideconc = [concent,Dgauss_conc]
-                
-                if read_mode == 1:
-                    self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
-                    self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
-                
-                
-                
-                # partition tilting correlation length wrt local config
-                if hasattr(self,"spatialCorrLength"):
-                    TC = self.spatialCorr['raw']
-                    TC = np.sqrt(np.abs(TC))*np.sign(TC)
-
-                    from pdyna.analysis import quantify_octatype_tilt_domain, quantify_halideconc_tilt_domain
+                        Dtype.append(Di[:,types,:])
+                        Ttype.append(T[:,types,:])
+                    if hasattr(self,"Tilting_Corr"):
+                        for ti, types in enumerate(typelib):
+                            TCNtype.append(TCN[:,types,:])
+                        tcptype = get_tcp_from_list(TCNtype)
+                    if len(TCNtype) == 0:
+                        tcptype = None
                     
-                    TCtype = []
-                    for ti, types in enumerate(typelib):
-                        temp = TC[types,:]
-                        temp = temp/temp[:,:,[0],:]
-                        TCtype.append(temp)
-                    
-                    Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
+                    Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
+                    Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
                     
                     concent = [] # concentrations recorded
-                    TCconc = []
+                    Dconc = []
+                    Tconc = []
                     for ii,item in enumerate(brbins):
                         if len(item) == 0: continue
                         concent.append(bincent[ii])
-                        temp = TC[item,:]
-                        temp = temp/temp[:,:,[0],:]
-                        TCconc.append(temp)
+                        Dconc.append(Di[:,item,:])
+                        Tconc.append(T[:,item,:])
+                    if hasattr(self,"Tilting_Corr"):
+                        for ii,item in enumerate(brbins):
+                            TCNconc.append(TCN[:,item,:])
+                        tcpconc = get_tcp_from_list(TCNconc)
+                    if len(TCNconc) == 0:
+                        tcpconc = None
                     
-                    Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
-
-                
-            if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
-                L = self.Lat
-                Ltype = []
-                for ti, types in enumerate(typelib):
-                    Ltype.append(L[:,types,:])
-                
-                concent = [] # concentrations recorded
-                Lconc = []
-                for ii,item in enumerate(brbins):
-                    if len(item) == 0: continue
-                    concent.append(bincent[ii])
-                    Lconc.append(L[:,item,:])
+                    Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals=tcpconc)
+                    Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
                     
-                Lgauss_conc, Lgaussstd_conc = draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures)
-                Lgauss_type, Lgaussstd_type = draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures)
+                    self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
+                    self.dist_wrt_halideconc = [concent,Dgauss_conc]
+                    
+                    if read_mode == 1:
+                        self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
+                        self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
+                    
+                    
+                    
+                    # partition tilting correlation length wrt local config
+                    if hasattr(self,"spatialCorrLength"):
+                        TC = self.spatialCorr['raw']
+                        TC = np.sqrt(np.abs(TC))*np.sign(TC)
 
-                self.lat_wrt_halideconc = [concent,Lgauss_conc]
-                if read_mode == 1:
-                    self.prop_lib['lattice_halideconc'] = self.lat_wrt_halideconc
+                        from pdyna.analysis import quantify_octatype_tilt_domain, quantify_halideconc_tilt_domain
+                        
+                        TCtype = []
+                        for ti, types in enumerate(typelib):
+                            temp = TC[types,:]
+                            temp = temp/temp[:,:,[0],:]
+                            TCtype.append(temp)
+                        
+                        Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
+                        
+                        concent = [] # concentrations recorded
+                        TCconc = []
+                        for ii,item in enumerate(brbins):
+                            if len(item) == 0: continue
+                            concent.append(bincent[ii])
+                            temp = TC[item,:]
+                            temp = temp/temp[:,:,[0],:]
+                            TCconc.append(temp)
+                        
+                        Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
+
+                    
+                if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
+                    L = self.Lat
+                    Ltype = []
+                    for ti, types in enumerate(typelib):
+                        Ltype.append(L[:,types,:])
+                    
+                    concent = [] # concentrations recorded
+                    Lconc = []
+                    for ii,item in enumerate(brbins):
+                        if len(item) == 0: continue
+                        concent.append(bincent[ii])
+                        Lconc.append(L[:,item,:])
+                        
+                    Lgauss_conc, Lgaussstd_conc = draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures)
+                    Lgauss_type, Lgaussstd_type = draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures)
+
+                    self.lat_wrt_halideconc = [concent,Lgauss_conc]
+                    if read_mode == 1:
+                        self.prop_lib['lattice_halideconc'] = self.lat_wrt_halideconc
+                    
+                # get distribution of partitioning
+                from pdyna.analysis import print_partition
+                #brrange = [np.amin(syscode[:,1]),np.amax(syscode[:,1])]
+                #diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
+                #binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
+                #Bins = np.linspace(binrange[0],binrange[1],brbinnum+1)
+                #bininds = np.digitize(syscode[:,1],Bins)-1
+                #brbins = [[] for kk in range(brbinnum)]
+                #for ibin, binnum in enumerate(bininds):
+                #    brbins[binnum].append(ibin)
+                print_partition(typelib,config_types,brconc,halcounts)
+            
+            elif octa_locality == 'hetero':
+                if list(config_types)[0] != 0 or list(config_types)[-1] != 9:
+                    raise TypeError("The structure does not contain both types of octahedra that is purely attached to X-site endpoints, please use octa_locality = 'homo'.")
                 
-            # get distribution of partitioning
-            from pdyna.analysis import print_partition
-            #brrange = [np.amin(syscode[:,1]),np.amax(syscode[:,1])]
-            #diffbin = (brrange[1]-brrange[0])/brbinnum*0.5
-            #binrange = [np.amin(syscode[:,1])-diffbin,np.amax(syscode[:,1])+diffbin]
-            #Bins = np.linspace(binrange[0],binrange[1],brbinnum+1)
-            #bininds = np.digitize(syscode[:,1],Bins)-1
-            #brbins = [[] for kk in range(brbinnum)]
-            #for ibin, binnum in enumerate(bininds):
-            #    brbins[binnum].append(ibin)
-            print_partition(typelib,config_types,brconc,halcounts)
+                if len(typelib[0]) > len(typelib[-1])*2: 
+                    print("hetero-structure: the bulk is I. ")
+                    ibulk = 0
+                elif len(typelib[-1]) > len(typelib[0])*2: 
+                    print("hetero-structure: the bulk is Br. ")
+                    ibulk = 1
+                else:
+                    raise TypeError("!hetero-structure: the difference between the two pure endpoints is not significant enough and thus no bulk can be found. ")
+                    
+                occs = [[],[],[]] # [bulk, grain boundary, grain]
+                for ti,tn in enumerate(typelib):
+                    if list(config_types)[ti] == 0:
+                        if ibulk:
+                            occs[2].extend(tn)
+                        else:
+                            occs[0].extend(tn)
+                    elif list(config_types)[ti] == 9:
+                        if ibulk:
+                            occs[0].extend(tn)
+                        else:
+                            occs[2].extend(tn)
+                    else:
+                        occs[1].extend(tn)
+                
+                print(f"hetero-structure octahedral categories: (bulk: {len(occs[0])}, g.b.: {len(occs[1])}, grain: {len(occs[2])}). ")
+                    
+                if hasattr(self,"Tilting"):
+                    Di = self.Distortion
+                    T = self.Tilting
+                    TCNcls = []
+                    if hasattr(self,"Tilting_Corr"):
+                        from pdyna.analysis import get_tcp_from_list
+                        TCN = self.Tilting_Corr
+                        #TCN = get_norm_corr(TCN,T)
+                        
+                    from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density
+                    
+                    Dcls = []
+                    Tcls = []
+                    for ti, types in enumerate(typelib):
+                        Dtype.append(Di[:,types,:])
+                        Ttype.append(T[:,types,:])
+                    if hasattr(self,"Tilting_Corr"):
+                        for ti, types in enumerate(typelib):
+                            TCNtype.append(TCN[:,types,:])
+                        tcptype = get_tcp_from_list(TCNtype)
+                    if len(TCNtype) == 0:
+                        tcptype = None
+                    
+                    Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
+                    Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
+                    
+                    if read_mode == 1:
+                        self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
+                        self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
+                    
+                    
+                    
+                    # partition tilting correlation length wrt local config
+                    if hasattr(self,"spatialCorrLength"):
+                        TC = self.spatialCorr['raw']
+                        TC = np.sqrt(np.abs(TC))*np.sign(TC)
+
+                        from pdyna.analysis import quantify_octatype_tilt_domain, quantify_halideconc_tilt_domain
+                        
+                        TCtype = []
+                        for ti, types in enumerate(typelib):
+                            temp = TC[types,:]
+                            temp = temp/temp[:,:,[0],:]
+                            TCtype.append(temp)
+                        
+                        Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
+                        
+                        concent = [] # concentrations recorded
+                        TCconc = []
+                        for ii,item in enumerate(brbins):
+                            if len(item) == 0: continue
+                            concent.append(bincent[ii])
+                            temp = TC[item,:]
+                            temp = temp/temp[:,:,[0],:]
+                            TCconc.append(temp)
+                        
+                        Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
+
+                    
+                if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
+                    L = self.Lat
+                    Ltype = []
+                    for ti, types in enumerate(typelib):
+                        Ltype.append(L[:,types,:])
+                    
+                    concent = [] # concentrations recorded
+                    Lconc = []
+                    for ii,item in enumerate(brbins):
+                        if len(item) == 0: continue
+                        concent.append(bincent[ii])
+                        Lconc.append(L[:,item,:])
+                        
+                    Lgauss_conc, Lgaussstd_conc = draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures)
+                    Lgauss_type, Lgaussstd_type = draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures)
+
+                    self.lat_wrt_halideconc = [concent,Lgauss_conc]
+                    if read_mode == 1:
+                        self.prop_lib['lattice_halideconc'] = self.lat_wrt_halideconc
+                    
             
         et1 = time.time()
         self.timing["property_processing"] = et1-et0
@@ -3903,7 +4019,8 @@ class Frame:
         #print(f"c-axis: {tquant[2]}")
         print("tilting correlation:",np.round(np.array(polarity).reshape(3,),3))
         
-        self.tilt_peaks = tquant
+        if len(tquant[0]+tquant[1]+tquant[2]) < 12:
+            self.tilt_peaks = tquant
         self.tilt_corr_polarity = polarity
         
         cell_lat = np.array(self.st0.lattice.abc)[np.newaxis,:]

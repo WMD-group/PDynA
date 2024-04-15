@@ -647,13 +647,15 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
             maxs.append(m)
         #print(maxs)
         
+        override=[False,False,False]
         if corr_vals:
             for i in range(3):
                 if abs(corr_vals[i]) < 0.42 and maxs[i] < 6:
                     maxs[i] = 0
+                    override[i] = True
         
         if plot_fitting:
-            draw_tilt_prediction(c,pred,preds,yc,maxs)
+            draw_tilt_prediction(c,pred,preds,yc,maxs,override=override)
             
     elif method == 'both':
         
@@ -715,20 +717,22 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
             maxs2.append(m)
         #print(maxs2)
         
+        override=[False,False,False]
         if corr_vals:
             for i in range(3):
                 if abs(corr_vals[i]) < 0.42 and maxs1[i] < 6:
                     maxs1[i] = 0
+                    override[i] = True
         
         if plot_fitting:
-            draw_tilt_prediction(c,pred,preds,yc,maxs2)
+            draw_tilt_prediction(c,pred,preds,yc,maxs2,override=override)
             
         maxs = [maxs1,maxs2]
                 
     return maxs
 
 
-def draw_tilt_prediction(c,pred,preds,yc,maxs):
+def draw_tilt_prediction(c,pred,preds,yc,maxs,override=[False,False,False]):
     
     figs, axs = plt.subplots(3, 1)
     labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
@@ -736,8 +740,9 @@ def draw_tilt_prediction(c,pred,preds,yc,maxs):
     for i in range(3):
         axs[i].plot(yc,c[:,i],label='raw',linewidth=5,alpha=0.9,color='grey')
         axs[i].plot(yc,pred[i],label='total',linewidth=3,alpha=0.7,color='C2')
-        axs[i].plot(yc,preds[i][:,0],label='peaks',linewidth=1,alpha=0.7,color='C5')
-        axs[i].plot(yc,preds[i][:,1],linewidth=1,alpha=0.7,color='C5')
+        if not override[i]:
+            axs[i].plot(yc,preds[i][:,0],linewidth=1,alpha=0.7,color='C5')
+            axs[i].plot(yc,preds[i][:,1],linewidth=1,alpha=0.7,color='C5')
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
         axs[i].text(0.08, 0.52, str(maxs[i])+r'$\degree$', horizontalalignment='center', fontsize=13.6, verticalalignment='center', transform=axs[i].transAxes)
         
@@ -750,6 +755,8 @@ def draw_tilt_prediction(c,pred,preds,yc,maxs):
     
     axs[2].set_xlabel(r'Tilt Angle ($\degree$)', fontsize=15)
     axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
+    if sum(override) != 3:
+        axs[2].plot([0],[0],label='peaks',linewidth=1,alpha=0.7,color='C5')
     axs[2].legend(loc=4,prop={'size': 10.5})
     
     axs[0].xaxis.set_ticklabels([])
