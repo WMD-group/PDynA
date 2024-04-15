@@ -568,6 +568,7 @@ def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim
 def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = None): #"curve"
 
     tup_T = (T[:,:,0].reshape((-1,)),T[:,:,1].reshape((-1,)),T[:,:,2].reshape((-1,)))
+    zero_threshold = 1
     
     if method == "auto":
         if T.shape[1] > 200:
@@ -631,14 +632,18 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
         
         maxs = []
         pred = []
+        preds = []
         for i in range(3):
             #dtemp = d.copy()
             #dtemp = dtemp*(np.amax(c[:,[i]])/np.amax(d,axis=0)[np.newaxis,:])
             diffmat = np.sum(np.power(np.abs(dmat-c[:,[i]][np.newaxis,:,:]),2),axis=1)
             m = round(float(scanx[0,0,:][np.argmin(np.amin(diffmat,axis=0))]),3)
             pred.append(dmat[np.where(diffmat==np.amin(diffmat))[0].astype(int),:,np.where(diffmat==np.amin(diffmat))[1].astype(int)][0,:])
+            temp1 = d1[np.where(diffmat==np.amin(diffmat))[0].astype(int),:,np.where(diffmat==np.amin(diffmat))[1].astype(int)][0,:][:,np.newaxis]
+            temp2 = d2[np.where(diffmat==np.amin(diffmat))[0].astype(int),:,np.where(diffmat==np.amin(diffmat))[1].astype(int)][0,:][:,np.newaxis]
+            preds.append(np.concatenate((temp1,temp2),axis=1))
             
-            if m<3: m = 0
+            if m<zero_threshold: m = 0
             maxs.append(m)
         #print(maxs)
         
@@ -648,7 +653,7 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
                     maxs[i] = 0
         
         if plot_fitting:
-            draw_tilt_prediction(c,pred,yc,maxs)
+            draw_tilt_prediction(c,pred,preds,yc,maxs)
             
     elif method == 'both':
         
@@ -695,14 +700,18 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
         
         maxs2 = []
         pred = []
+        preds = []
         for i in range(3):
             #dtemp = d.copy()
             #dtemp = dtemp*(np.amax(c[:,[i]])/np.amax(d,axis=0)[np.newaxis,:])
             diffmat = np.sum(np.power(np.abs(dmat-c[:,[i]][np.newaxis,:,:]),2),axis=1)
             m = round(float(scanx[0,0,:][np.argmin(np.amin(diffmat,axis=0))]),3)
             pred.append(dmat[np.where(diffmat==np.amin(diffmat))[0].astype(int),:,np.where(diffmat==np.amin(diffmat))[1].astype(int)][0,:])
+            temp1 = d1[np.where(diffmat==np.amin(diffmat))[0].astype(int),:,np.where(diffmat==np.amin(diffmat))[1].astype(int)][0,:][:,np.newaxis]
+            temp2 = d2[np.where(diffmat==np.amin(diffmat))[0].astype(int),:,np.where(diffmat==np.amin(diffmat))[1].astype(int)][0,:][:,np.newaxis]
+            preds.append(np.concatenate((temp1,temp2),axis=1))
             
-            if m<3: m = 0
+            if m<zero_threshold: m = 0
             maxs2.append(m)
         #print(maxs2)
         
@@ -712,21 +721,23 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
                     maxs1[i] = 0
         
         if plot_fitting:
-            draw_tilt_prediction(c,pred,yc,maxs2)
+            draw_tilt_prediction(c,pred,preds,yc,maxs2)
             
         maxs = [maxs1,maxs2]
                 
     return maxs
 
 
-def draw_tilt_prediction(c,pred,yc,maxs):
+def draw_tilt_prediction(c,pred,preds,yc,maxs):
     
     figs, axs = plt.subplots(3, 1)
     labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
     tlabel = [-45,-30,-15,0,15,30,45]
     for i in range(3):
-        axs[i].plot(yc,c[:,i],label='raw',linewidth=4,alpha=0.9,color='grey')
-        axs[i].plot(yc,pred[i],label='fitted',linewidth=1,alpha=0.7,color='C2')
+        axs[i].plot(yc,c[:,i],label='raw',linewidth=5,alpha=0.9,color='grey')
+        axs[i].plot(yc,pred[i],label='total',linewidth=3,alpha=0.7,color='C2')
+        axs[i].plot(yc,preds[i][:,0],label='peaks',linewidth=1,alpha=0.7,color='C5')
+        axs[i].plot(yc,preds[i][:,1],linewidth=1,alpha=0.7,color='C5')
         axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
         axs[i].text(0.08, 0.52, str(maxs[i])+r'$\degree$', horizontalalignment='center', fontsize=13.6, verticalalignment='center', transform=axs[i].transAxes)
         
@@ -739,7 +750,7 @@ def draw_tilt_prediction(c,pred,yc,maxs):
     
     axs[2].set_xlabel(r'Tilt Angle ($\degree$)', fontsize=15)
     axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
-    axs[0].legend()
+    axs[2].legend(loc=4,prop={'size': 10.5})
     
     axs[0].xaxis.set_ticklabels([])
     axs[1].xaxis.set_ticklabels([])
@@ -937,6 +948,31 @@ def draw_dist_density_frame(D, uniname, saveFigures, n_bins = 100, xrange = [0,0
         
     plt.show()
     return Mu
+
+
+def if_arrays_are_different(arr,tol=0.2):
+    arrmaxs = np.amax(arr,axis=0)
+    arrmins = np.amin(arr,axis=0)
+    
+    sdmax = sorted([(abs(arrmaxs[0]-arrmaxs[1]),0,1), (abs(arrmaxs[0]-arrmaxs[2]),0,2), (abs(arrmaxs[1]-arrmaxs[2]),1,2)])
+    sdmin = sorted([(abs(arrmins[0]-arrmins[1]),0,1), (abs(arrmins[0]-arrmins[2]),0,2), (abs(arrmins[1]-arrmins[2]),1,2)])
+    
+    # Case 1: All three numbers are different
+    if (sdmax[0][0] > tol or sdmin[0][0] > tol):
+        return (3,)
+    
+    # Case 2: Two numbers are close together, one is different
+    elif (sdmax[0][0] <= tol and sdmin[0][0] <= tol) and (sdmax[1][0] > tol or sdmin[1][0] > tol):
+        return (2,sdmax[0][1:])
+    
+    # Case 3: All three numbers are close together
+    elif (sdmax[2][0] <= tol and sdmin[2][0] <= tol):
+        return (1,)
+    
+    else: # the values are more or less close
+        print("The TCP values do not fall into the preset categories, treated as the same range. ")
+        return (1,)
+        #raise TypeError("Fatal: unexpected category")
 
 
 def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, title = None):
@@ -1226,147 +1262,164 @@ def draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigure
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
     plt.show()
     
-# =============================================================================
-#     if not (corr_vals is None):
-#         from matplotlib.colors import LinearSegmentedColormap, Normalize
-#         from matplotlib.cm import ScalarMappable
-#         scasize = 80
-#         cross_zero = False
-#         # check if tcp values have +ve and -ve terms at the same time, if so abort this plotting
-#         signs = []
-#         for i in range(3):
-#             arr = corr_vals[:,i]
-#             same_sign = np.all(np.sign(arr) == np.sign(arr[0]))
-#             if not same_sign:
-#                 cross_zero = True
-#                 signs.append(0)
-#             else:
-#                 signs.append(np.sign(arr[0]))
-#         signs = np.array(signs).astype(int)
-#         
-#         if not cross_zero and not np.all(np.sign(signs) == np.sign(signs[0])): # all TCP values are 'belign' and does not cross zero AND different signs of TCP
-#             cmname = 'cividis'
-#             cividis_cmap = plt.cm.get_cmap('cividis')
-#             
-#             # Define custom colormaps for each range
-#             colors_neg = cividis_cmap(np.linspace(0.5, 0, 128))[::-1]  # Reverse colors for the first half
-#             colors_pos = cividis_cmap(np.linspace(0.5, 1, 128))
-#             cmap_neg = LinearSegmentedColormap.from_list("cividis_neg", colors_neg)
-#             cmap_pos = LinearSegmentedColormap.from_list("cividis_pos", colors_pos)
-#             
-#             negs = []
-#             poss = []
-#             for j in range(3):
-#                 if signs[j] == 1:
-#                     poss.extend(list(corr_vals[:,j]))
-#                 else:
-#                     negs.extend(list(corr_vals[:,j]))
-#             
-#             norm1 = Normalize(vmin=min(poss), vmax=max(poss))  # Normalization from 0 to 1
-#             norm2 = Normalize(vmin=min(negs), vmax=max(negs))  # Set vmin to -1 and vmax to 0 for negative range
-# 
-#             fig, axs = plt.subplots(2,1,figsize=(8.0,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
-#             
-#             for j in range(3):
-#                 if signs[j] == 1:
-#                     axs[0].scatter(plotx,maxs[:,j],alpha=scaalpha,s=scasize,c=corr_vals[:,j],cmap=cmap_pos,norm=norm1)
-#                 else:
-#                     axs[0].scatter(plotx,maxs[:,j],alpha=scaalpha,s=scasize,c=corr_vals[:,j],cmap=cmap_neg,norm=norm2)
-#             
-#             # Add colorbars
-#             cblin = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmap_pos),ax=axs[0], pad=-0.01)
-#             cblout= plt.colorbar(ScalarMappable(norm=norm2, cmap=cmap_neg),ax=axs[0], pad=0.015)
-#             cblin.set_label(label='TCP (a.u.)', size=13)
-#             
-#             axs[1].bar(xts, y1, width=0.5, color=histcolortypes[0])
-#             axs[1].bar(xts, y2, bottom=y1, width=0.5, color=histcolortypes[1])
-#             axs[1].bar(xts, y3, bottom=y1+y2, width=0.5, color=histcolortypes[2])
-#             axs[1].legend(['pure', 'cis/fac', 'trans/mer'],prop={'size': 12},loc='upper left', bbox_to_anchor=(1, 1))
-#             
-#             axs[0].tick_params(axis='both', which='major', labelsize=14)
-#             axs[1].tick_params(axis='both', which='major', labelsize=14)
-#             axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
-#             axs[1].set_ylabel('Count', fontsize = 15) 
-#             axs[1].set_xlabel('Br content', fontsize = 15) # X label
-#             axs[0].set_xticks(plotx)
-#             axs[0].set_xticklabels(plotxlab)
-#             #axs[0].set_xticks(typexval)
-#             #axs[0].set_xticklabels(typextick)
-#             for tick_label, color in zip(axs[0].get_xticklabels(), histcolors):
-#                 tick_label.set_color(color)
-#             axs[1].set_yticks([])
-#             axs[1].set_yticklabels([])
-#             axs[0].set_ylim(bottom=0)
-#             axs[1].set_xlim(axs[0].get_xlim())
-#             
-#             newwid = axs[0].get_position().width
-#             pax1 = axs[1].get_position()
-#             new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
-#             axs[1].set_position(new_position)
-# 
-#             #plt.tight_layout()
-#             #plt.subplots_adjust(wspace=0.15, hspace=0.15)
-#             
-#             if saveFigures:
-#                 plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
-#             plt.show()
-# 
-#         else: # cross zero OR all TCP the same sign, use one color axis instead
-#             cmname = 'cividis'
-#             cividis_cmap = plt.cm.get_cmap('cividis')
-#             
-#             posneg = corr_vals.reshape(-1,)
-#             
-#             fig, axs = plt.subplots(2,1,figsize=(7.4,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
-#             norm = Normalize(vmin=np.amin(posneg), vmax=np.amax(posneg))
-#             sm = ScalarMappable(norm=norm, cmap=cmname)
-#             sm.set_array([])  # dummy array to make it work
-#             
-#             axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmname,norm=norm)
-#             axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmname,norm=norm)
-#             axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmname,norm=norm)
-#             
-#             # Set vmin and vmax to match the range of values
-#             clb = plt.colorbar(sm, ax=axs[0], pad=0.04)
-#             clb.set_label(label='TCP (a.u.)', size = 13)
-#             
-#             #axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c='C0')
-#             #axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c='C1')
-#             #axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c='C2')
-#             
-#             axs[1].bar(xts, y1, width=0.5, color=histcolortypes[0])
-#             axs[1].bar(xts, y2, bottom=y1, width=0.5, color=histcolortypes[1])
-#             axs[1].bar(xts, y3, bottom=y1+y2, width=0.5, color=histcolortypes[2])
-#             axs[1].legend(['pure', 'cis/fac', 'trans/mer'],prop={'size': 12},loc='upper left', bbox_to_anchor=(1, 1))
-#             
-#             axs[0].tick_params(axis='both', which='major', labelsize=14)
-#             axs[1].tick_params(axis='both', which='major', labelsize=14)
-#             axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
-#             axs[1].set_ylabel('Count', fontsize = 15) 
-#             axs[1].set_xlabel('Br content', fontsize = 15) # X label
-#             axs[0].set_xticks(plotx)
-#             axs[0].set_xticklabels(plotxlab)
-#             #axs[0].set_xticks(typexval)
-#             #axs[0].set_xticklabels(typextick)
-#             for tick_label, color in zip(axs[0].get_xticklabels(), histcolors):
-#                 tick_label.set_color(color)
-#             axs[1].set_yticks([])
-#             axs[1].set_yticklabels([])
-#             axs[0].set_ylim(bottom=0)
-#             axs[1].set_xlim(axs[0].get_xlim())
-#             
-#             newwid = axs[0].get_position().width
-#             pax1 = axs[1].get_position()
-#             new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
-#             axs[1].set_position(new_position)
-# 
-#             #plt.tight_layout()
-#             #plt.subplots_adjust(wspace=0.15, hspace=0.15)
-#             
-#             if saveFigures:
-#                 plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
-#             plt.show()
-# =============================================================================
+    if not (corr_vals is None):
+        from matplotlib.colors import LinearSegmentedColormap, Normalize
+        from matplotlib.cm import ScalarMappable
+        scasize = 80
+        cate = if_arrays_are_different(corr_vals)
+        cmnames = ['summer','winter','cool_r']
+            
+        if cate[0] == 3: # all TCP values are in different ranges and thus plot with three colorbars
+            
+            norm1 = Normalize(vmin=np.amin(corr_vals[:,0]), vmax=np.amax(corr_vals[:,0]))  
+            norm2 = Normalize(vmin=np.amin(corr_vals[:,1]), vmax=np.amax(corr_vals[:,1]))  
+            norm3 = Normalize(vmin=np.amin(corr_vals[:,2]), vmax=np.amax(corr_vals[:,2]))
+
+            fig, axs = plt.subplots(2,1,figsize=(8.6,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+            
+            axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmnames[0],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmnames[1],norm=norm2)
+            axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmnames[2],norm=norm3)
+            
+            # Add colorbars
+            clb1 = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmnames[0]),ax=axs[0], pad=-0.05)
+            clb2 = plt.colorbar(ScalarMappable(norm=norm2, cmap=cmnames[1]),ax=axs[0], pad=-0.03)
+            clb3 = plt.colorbar(ScalarMappable(norm=norm3, cmap=cmnames[2]),ax=axs[0], pad=0.025)
+            
+            clb1.set_label(label='TCP (a.u.)', size=13)
+            
+            axs[1].bar(xts, y1, width=0.5, color=histcolortypes[0])
+            axs[1].bar(xts, y2, bottom=y1, width=0.5, color=histcolortypes[1])
+            axs[1].bar(xts, y3, bottom=y1+y2, width=0.5, color=histcolortypes[2])
+            axs[1].legend(['pure', 'cis/fac', 'trans/mer'],prop={'size': 12},loc='upper left', bbox_to_anchor=(1, 1))
+            
+            axs[0].tick_params(axis='both', which='major', labelsize=14)
+            axs[1].tick_params(axis='both', which='major', labelsize=14)
+            axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+            axs[1].set_ylabel('Count', fontsize = 15) 
+            axs[1].set_xlabel('Br content', fontsize = 15) # X label
+            axs[0].set_xticks(plotx)
+            axs[0].set_xticklabels(plotxlab)
+            #axs[0].set_xticks(typexval)
+            #axs[0].set_xticklabels(typextick)
+            for tick_label, color in zip(axs[0].get_xticklabels(), histcolors):
+                tick_label.set_color(color)
+            axs[1].set_yticks([])
+            axs[1].set_yticklabels([])
+            axs[0].set_ylim(bottom=0)
+            axs[1].set_xlim(axs[0].get_xlim())
+            
+            newwid = axs[0].get_position().width
+            pax1 = axs[1].get_position()
+            new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+            axs[1].set_position(new_position)
+
+            #plt.tight_layout()
+            #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+            
+            if saveFigures:
+                plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+            plt.show()
+
+        elif cate[0] == 2: # two axes have similar TCP and thus plot with two colorbars
+            
+            combaxes = list(cate[1])
+            soleaxis = [i for i in [0,1,2] if i not in combaxes]
+            norm1 = Normalize(vmin=np.amin(corr_vals[:,combaxes]), vmax=np.amax(corr_vals[:,combaxes]))  
+            norm2 = Normalize(vmin=np.amin(corr_vals[:,soleaxis]), vmax=np.amax(corr_vals[:,soleaxis]))  
+
+            fig, axs = plt.subplots(2,1,figsize=(8.0,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+            
+            axs[0].scatter(plotx,maxs[:,soleaxis[0]],alpha=scaalpha,s=scasize,c=corr_vals[:,soleaxis[0]],cmap=cmnames[0],norm=norm2)
+            axs[0].scatter(plotx,maxs[:,combaxes[0]],alpha=scaalpha,s=scasize,c=corr_vals[:,combaxes[0]],cmap=cmnames[1],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,combaxes[1]],alpha=scaalpha,s=scasize,c=corr_vals[:,combaxes[1]],cmap=cmnames[1],norm=norm1)
+            
+            # Add colorbars
+            clb1 = plt.colorbar(ScalarMappable(norm=norm2, cmap=cmnames[0]),ax=axs[0], pad=-0.03)
+            clb2 = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmnames[1]),ax=axs[0], pad=0.025)
+            
+            clb1.set_label(label='TCP (a.u.)', size=13)
+            
+            axs[1].bar(xts, y1, width=0.5, color=histcolortypes[0])
+            axs[1].bar(xts, y2, bottom=y1, width=0.5, color=histcolortypes[1])
+            axs[1].bar(xts, y3, bottom=y1+y2, width=0.5, color=histcolortypes[2])
+            axs[1].legend(['pure', 'cis/fac', 'trans/mer'],prop={'size': 12},loc='upper left', bbox_to_anchor=(1, 1))
+            
+            axs[0].tick_params(axis='both', which='major', labelsize=14)
+            axs[1].tick_params(axis='both', which='major', labelsize=14)
+            axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+            axs[1].set_ylabel('Count', fontsize = 15) 
+            axs[1].set_xlabel('Br content', fontsize = 15) # X label
+            axs[0].set_xticks(plotx)
+            axs[0].set_xticklabels(plotxlab)
+            #axs[0].set_xticks(typexval)
+            #axs[0].set_xticklabels(typextick)
+            for tick_label, color in zip(axs[0].get_xticklabels(), histcolors):
+                tick_label.set_color(color)
+            axs[1].set_yticks([])
+            axs[1].set_yticklabels([])
+            axs[0].set_ylim(bottom=0)
+            axs[1].set_xlim(axs[0].get_xlim())
+            
+            newwid = axs[0].get_position().width
+            pax1 = axs[1].get_position()
+            new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+            axs[1].set_position(new_position)
+
+            #plt.tight_layout()
+            #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+            
+            if saveFigures:
+                plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+            plt.show()
+            
+        elif cate[0] == 1: # all TCP values are in the same range
+        
+            norm1 = Normalize(vmin=np.amin(corr_vals), vmax=np.amax(corr_vals))  
+
+            fig, axs = plt.subplots(2,1,figsize=(7.4,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+            
+            axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmnames[0],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmnames[0],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmnames[0],norm=norm1)
+            
+            # Add colorbars
+            clb1 = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmnames[0]),ax=axs[0], pad=0.025)
+            
+            clb1.set_label(label='TCP (a.u.)', size=13)
+            
+            axs[1].bar(xts, y1, width=0.5, color=histcolortypes[0])
+            axs[1].bar(xts, y2, bottom=y1, width=0.5, color=histcolortypes[1])
+            axs[1].bar(xts, y3, bottom=y1+y2, width=0.5, color=histcolortypes[2])
+            axs[1].legend(['pure', 'cis/fac', 'trans/mer'],prop={'size': 12},loc='upper left', bbox_to_anchor=(1, 1))
+            
+            axs[0].tick_params(axis='both', which='major', labelsize=14)
+            axs[1].tick_params(axis='both', which='major', labelsize=14)
+            axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+            axs[1].set_ylabel('Count', fontsize = 15) 
+            axs[1].set_xlabel('Br content', fontsize = 15) # X label
+            axs[0].set_xticks(plotx)
+            axs[0].set_xticklabels(plotxlab)
+            #axs[0].set_xticks(typexval)
+            #axs[0].set_xticklabels(typextick)
+            for tick_label, color in zip(axs[0].get_xticklabels(), histcolors):
+                tick_label.set_color(color)
+            axs[1].set_yticks([])
+            axs[1].set_yticklabels([])
+            axs[0].set_ylim(bottom=0)
+            axs[1].set_xlim(axs[0].get_xlim())
+            
+            newwid = axs[0].get_position().width
+            pax1 = axs[1].get_position()
+            new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+            axs[1].set_position(new_position)
+
+            #plt.tight_layout()
+            #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+            
+            if saveFigures:
+                plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+            plt.show()
         
     return maxs
 
@@ -1393,14 +1446,14 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
         if D.ndim == 3:
             D = D.reshape(D.shape[0]*D.shape[1],4)
         
-        figs, axs = plt.subplots(4, 1)
+        #figs, axs = plt.subplots(4, 1)
         labels = ["Eg","T2g","T1u","T2u"]
         colors = ["C3","C4","C5","C6"]
         for i in range(4):
             y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-            axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            #axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
         
         Mu = []
         Std = []
@@ -1410,37 +1463,39 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
             mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
     
             
-        for ax in axs.flat:
-            ax.tick_params(axis='both', which='major', labelsize=14)
-            ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel('Distortion', fontsize = 15) # X label
-            ax.set_xlim(xrange)
-            ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
-            ax.set_yticks([])
-            
-        axs[0].xaxis.set_ticklabels([])
-        axs[1].xaxis.set_ticklabels([])
-        axs[2].xaxis.set_ticklabels([])
-        axs[0].yaxis.set_ticklabels([])
-        axs[1].yaxis.set_ticklabels([])
-        axs[2].yaxis.set_ticklabels([])
-        axs[3].yaxis.set_ticklabels([])
-        axs[0].set_xlabel("")
-        axs[1].set_xlabel("")
-        axs[2].set_xlabel("")
-        axs[0].set_ylabel("")
-        axs[2].set_ylabel("")
-        axs[3].set_ylabel("")
-        axs[1].yaxis.set_label_coords(-0.02,-0.40)
-
-        axs[0].set_title(typesname[config_types[di]],fontsize=16)
+# =============================================================================
+#         for ax in axs.flat:
+#             ax.tick_params(axis='both', which='major', labelsize=14)
+#             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
+#             ax.set_xlabel('Distortion', fontsize = 15) # X label
+#             ax.set_xlim(xrange)
+#             ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+#             ax.set_yticks([])
+#             
+#         axs[0].xaxis.set_ticklabels([])
+#         axs[1].xaxis.set_ticklabels([])
+#         axs[2].xaxis.set_ticklabels([])
+#         axs[0].yaxis.set_ticklabels([])
+#         axs[1].yaxis.set_ticklabels([])
+#         axs[2].yaxis.set_ticklabels([])
+#         axs[3].yaxis.set_ticklabels([])
+#         axs[0].set_xlabel("")
+#         axs[1].set_xlabel("")
+#         axs[2].set_xlabel("")
+#         axs[0].set_ylabel("")
+#         axs[2].set_ylabel("")
+#         axs[3].set_ylabel("")
+#         axs[1].yaxis.set_label_coords(-0.02,-0.40)
+# 
+#         axs[0].set_title(typesname[config_types[di]],fontsize=16)
+# =============================================================================
         config_involved.append(typesname[config_types[di]])    
             
-        plt.show()
+        #plt.show()
         
         Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
         Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
@@ -1502,22 +1557,24 @@ def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins 
         if L.ndim == 3:
             L = L.reshape(L.shape[0]*L.shape[1],3)
         
-        figs, axs = plt.subplots(3, 1)
-        
-        histranges = np.zeros((3,2))
-        for i in range(3):
-            histranges[i,:] = [np.quantile(L[:,i], 0.02),np.quantile(L[:,i], 0.98)]
-            
-        histrange = np.zeros((2,))
-        ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
-        histrange[0] = np.amin(histranges[:,0])-ra*0.2
-        histrange[1] = np.amax(histranges[:,1])+ra*0.2
-
-        for i in range(3):
-            y,binEdges=np.histogram(L[:,i],bins=n_bins,range=histrange)
-            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-            axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+# =============================================================================
+#         figs, axs = plt.subplots(3, 1)
+#         
+#         histranges = np.zeros((3,2))
+#         for i in range(3):
+#             histranges[i,:] = [np.quantile(L[:,i], 0.02),np.quantile(L[:,i], 0.98)]
+#             
+#         histrange = np.zeros((2,))
+#         ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
+#         histrange[0] = np.amin(histranges[:,0])-ra*0.2
+#         histrange[1] = np.amax(histranges[:,1])+ra*0.2
+# 
+#         for i in range(3):
+#             y,binEdges=np.histogram(L[:,i],bins=n_bins,range=histrange)
+#             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+#             axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+#             axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+# =============================================================================
         
         Mu = []
         Std = []
@@ -1527,32 +1584,34 @@ def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins 
             mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
     
             
-        for ax in axs.flat:
-            ax.tick_params(axis='both', which='major', labelsize=14)
-            ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
-            ax.set_yticks([])
-            ax.set_xlim(histrange)
-            
-        axs[0].xaxis.set_ticklabels([])
-        axs[1].xaxis.set_ticklabels([])
-        axs[0].yaxis.set_ticklabels([])
-        axs[1].yaxis.set_ticklabels([])
-        axs[2].yaxis.set_ticklabels([])
-        axs[0].set_xlabel("")
-        axs[1].set_xlabel("")
-        axs[0].set_ylabel("")
-        axs[2].set_ylabel("")
-        axs[0].yaxis.set_label_coords(-0.02,-0.40)
-
-        axs[0].set_title(typesname[config_types[di]],fontsize=16)
+# =============================================================================
+#         for ax in axs.flat:
+#             ax.tick_params(axis='both', which='major', labelsize=14)
+#             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
+#             ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
+#             ax.set_yticks([])
+#             ax.set_xlim(histrange)
+#             
+#         axs[0].xaxis.set_ticklabels([])
+#         axs[1].xaxis.set_ticklabels([])
+#         axs[0].yaxis.set_ticklabels([])
+#         axs[1].yaxis.set_ticklabels([])
+#         axs[2].yaxis.set_ticklabels([])
+#         axs[0].set_xlabel("")
+#         axs[1].set_xlabel("")
+#         axs[0].set_ylabel("")
+#         axs[2].set_ylabel("")
+#         axs[0].yaxis.set_label_coords(-0.02,-0.40)
+# 
+#         axs[0].set_title(typesname[config_types[di]],fontsize=16)
+# =============================================================================
         config_involved.append(typesname[config_types[di]])    
             
-        plt.show()
+        #plt.show()
         
         Lgauss = np.concatenate((Lgauss,np.array(Mu).reshape(1,-1)),axis=0)
         Lgaussstd = np.concatenate((Lgaussstd,np.array(Std).reshape(1,-1)),axis=0)
@@ -1743,136 +1802,152 @@ def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, c
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
     plt.show()
     
-# =============================================================================
-#     if not (corr_vals is None):
-#         from matplotlib.colors import LinearSegmentedColormap, Normalize
-#         from matplotlib.cm import ScalarMappable
-#         scasize = 80
-#         cross_zero = False
-#         # check if tcp values have +ve and -ve terms at the same time, if so abort this plotting
-#         signs = []
-#         for i in range(3):
-#             arr = corr_vals[:,i]
-#             same_sign = np.all(np.sign(arr) == np.sign(arr[0]))
-#             if not same_sign:
-#                 cross_zero = True
-#                 signs.append(0)
-#             else:
-#                 signs.append(np.sign(arr[0]))
-#         signs = np.array(signs).astype(int)
-#         
-#         if not cross_zero and not np.all(np.sign(signs) == np.sign(signs[0])): # all TCP values are 'belign' and does not cross zero AND different signs of TCP
-#             cmname = 'cividis'
-#             cividis_cmap = plt.cm.get_cmap('cividis')
-#             
-#             # Define custom colormaps for each range
-#             colors_neg = cividis_cmap(np.linspace(0.5, 0, 128))[::-1]  # Reverse colors for the first half
-#             colors_pos = cividis_cmap(np.linspace(0.5, 1, 128))
-#             cmap_neg = LinearSegmentedColormap.from_list("cividis_neg", colors_neg)
-#             cmap_pos = LinearSegmentedColormap.from_list("cividis_pos", colors_pos)
-#             
-#             negs = []
-#             poss = []
-#             for j in range(3):
-#                 if signs[j] == 1:
-#                     poss.extend(list(corr_vals[:,j]))
-#                 else:
-#                     negs.extend(list(corr_vals[:,j]))
-#             
-#             norm1 = Normalize(vmin=min(poss), vmax=max(poss))  # Normalization from 0 to 1
-#             norm2 = Normalize(vmin=min(negs), vmax=max(negs))  # Set vmin to -1 and vmax to 0 for negative range
-# 
-#             fig, axs = plt.subplots(2,1,figsize=(8.0,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
-#             
-#             for j in range(3):
-#                 if signs[j] == 1:
-#                     axs[0].scatter(plotx,maxs[:,j],alpha=scaalpha,s=scasize,c=corr_vals[:,j],cmap=cmap_pos,norm=norm1)
-#                 else:
-#                     axs[0].scatter(plotx,maxs[:,j],alpha=scaalpha,s=scasize,c=corr_vals[:,j],cmap=cmap_neg,norm=norm2)
-#             
-#             # Add colorbars
-#             cblin = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmap_pos),ax=axs[0], pad=-0.01)
-#             cblout= plt.colorbar(ScalarMappable(norm=norm2, cmap=cmap_neg),ax=axs[0], pad=0.015)
-#             cblin.set_label(label='TCP (a.u.)', size=13)
-#             
-#             axs[1].hist(brconc, bins=100, range=[0,1], color='grey')
-#             
-#             axs[0].tick_params(axis='both', which='major', labelsize=14)
-#             axs[1].tick_params(axis='both', which='major', labelsize=14)
-#             axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
-#             axs[1].set_ylabel('Count', fontsize = 15) 
-#             axs[1].set_xlabel('Br content', fontsize = 15) # X label
-#             #axs[0].set_xticks(plotx)
-#             #axs[0].set_xticks(typexval)
-#             #axs[0].set_xticklabels(typextick)
-#             axs[1].set_yticks([])
-#             axs[1].set_yticklabels([])
-#             axs[0].set_ylim(bottom=0)
-#             axs[1].set_xlim(axs[0].get_xlim())
-#             
-#             newwid = axs[0].get_position().width
-#             pax1 = axs[1].get_position()
-#             new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
-#             axs[1].set_position(new_position)
-# 
-#             #plt.tight_layout()
-#             #plt.subplots_adjust(wspace=0.15, hspace=0.15)
-#             
-#             if saveFigures:
-#                 plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
-#             plt.show()
-# 
-#         else: # cross zero OR all TCP the same sign, use one color axis instead
-#             cmname = 'cividis'
-#             cividis_cmap = plt.cm.get_cmap('cividis')
-#             
-#             posneg = corr_vals.reshape(-1,)
-#             
-#             fig, axs = plt.subplots(2,1,figsize=(7.4,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
-#             norm = Normalize(vmin=np.amin(posneg), vmax=np.amax(posneg))
-#             sm = ScalarMappable(norm=norm, cmap=cmname)
-#             sm.set_array([])  # dummy array to make it work
-#             
-#             axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmname,norm=norm)
-#             axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmname,norm=norm)
-#             axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmname,norm=norm)
-#             
-#             # Set vmin and vmax to match the range of values
-#             clb = plt.colorbar(sm, ax=axs[0], pad=0.04)
-#             clb.set_label(label='TCP (a.u.)', size = 13)
-#             
-#             #axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c='C0')
-#             #axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c='C1')
-#             #axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c='C2')
-#             
-#             axs[1].hist(brconc, bins=100, range=[0,1], color='grey')
-#             
-#             axs[0].tick_params(axis='both', which='major', labelsize=14)
-#             axs[1].tick_params(axis='both', which='major', labelsize=14)
-#             axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
-#             axs[1].set_ylabel('Count', fontsize = 15) 
-#             axs[1].set_xlabel('Br content', fontsize = 15) # X label
-# 
-#             #axs[0].set_xticks(typexval)
-#             #axs[0].set_xticklabels(typextick)
-# 
-#             axs[1].set_yticks([])
-#             axs[1].set_yticklabels([])
-#             axs[0].set_ylim(bottom=0)
-#             axs[1].set_xlim(axs[0].get_xlim())
-#             
-#             newwid = axs[0].get_position().width
-#             pax1 = axs[1].get_position()
-#             new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
-#             axs[1].set_position(new_position)
-# 
-#             #plt.tight_layout()
-#             #plt.subplots_adjust(wspace=0.15, hspace=0.15)
-#             
-#             if saveFigures:
-#                 plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
-#             plt.show()
-# =============================================================================
+    if not (corr_vals is None):
+        from matplotlib.colors import LinearSegmentedColormap, Normalize
+        from matplotlib.cm import ScalarMappable
+        scasize = 80
+        cate = if_arrays_are_different(corr_vals)
+        cmnames = ['summer','cool_r','winter']
+            
+        if cate[0] == 3: # all TCP values are in different ranges and thus plot with three colorbars
+            
+            norm1 = Normalize(vmin=np.amin(corr_vals[:,0]), vmax=np.amax(corr_vals[:,0]))  
+            norm2 = Normalize(vmin=np.amin(corr_vals[:,1]), vmax=np.amax(corr_vals[:,1]))  
+            norm3 = Normalize(vmin=np.amin(corr_vals[:,2]), vmax=np.amax(corr_vals[:,2]))
+
+            fig, axs = plt.subplots(2,1,figsize=(8.6,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+            
+            axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmnames[0],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmnames[1],norm=norm2)
+            axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmnames[2],norm=norm3)
+            
+            # Add colorbars
+            clb1 = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmnames[0]),ax=axs[0], pad=-0.05)
+            clb2 = plt.colorbar(ScalarMappable(norm=norm2, cmap=cmnames[1]),ax=axs[0], pad=-0.03)
+            clb3 = plt.colorbar(ScalarMappable(norm=norm3, cmap=cmnames[2]),ax=axs[0], pad=0.025)
+            
+            clb1.set_label(label='TCP (a.u.)', size=13)
+            
+            axs[1].hist(brconc, bins=100, range=[0,1], color='grey')
+            
+            axs[0].tick_params(axis='both', which='major', labelsize=14)
+            axs[1].tick_params(axis='both', which='major', labelsize=14)
+            axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+            axs[1].set_ylabel('Count', fontsize = 15) 
+            axs[1].set_xlabel('Br content', fontsize = 15) # X label
+
+            #axs[0].set_xticks(typexval)
+            #axs[0].set_xticklabels(typextick)
+
+            axs[1].set_yticks([])
+            axs[1].set_yticklabels([])
+            axs[0].set_xticklabels([])
+            axs[0].set_ylim(bottom=0)
+            axs[1].set_xlim(axs[0].get_xlim())
+            
+            newwid = axs[0].get_position().width
+            pax1 = axs[1].get_position()
+            new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+            axs[1].set_position(new_position)
+
+            #plt.tight_layout()
+            #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+            
+            if saveFigures:
+                plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+            plt.show()
+
+        elif cate[0] == 2: # two axes have similar TCP and thus plot with two colorbars
+            
+            combaxes = list(cate[1])
+            soleaxis = [i for i in [0,1,2] if i not in combaxes]
+            norm1 = Normalize(vmin=np.amin(corr_vals[:,combaxes]), vmax=np.amax(corr_vals[:,combaxes]))  
+            norm2 = Normalize(vmin=np.amin(corr_vals[:,soleaxis]), vmax=np.amax(corr_vals[:,soleaxis]))  
+
+            fig, axs = plt.subplots(2,1,figsize=(8.0,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+            
+            axs[0].scatter(plotx,maxs[:,soleaxis[0]],alpha=scaalpha,s=scasize,c=corr_vals[:,soleaxis[0]],cmap=cmnames[0],norm=norm2)
+            axs[0].scatter(plotx,maxs[:,combaxes[0]],alpha=scaalpha,s=scasize,c=corr_vals[:,combaxes[0]],cmap=cmnames[1],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,combaxes[1]],alpha=scaalpha,s=scasize,c=corr_vals[:,combaxes[1]],cmap=cmnames[1],norm=norm1)
+            
+            # Add colorbars
+            clb1 = plt.colorbar(ScalarMappable(norm=norm2, cmap=cmnames[0]),ax=axs[0], pad=-0.03)
+            clb2 = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmnames[1]),ax=axs[0], pad=0.025)
+            
+            clb1.set_label(label='TCP (a.u.)', size=13)
+            
+            axs[1].hist(brconc, bins=100, range=[0,1], color='grey')
+            
+            axs[0].tick_params(axis='both', which='major', labelsize=14)
+            axs[1].tick_params(axis='both', which='major', labelsize=14)
+            axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+            axs[1].set_ylabel('Count', fontsize = 15) 
+            axs[1].set_xlabel('Br content', fontsize = 15) # X label
+
+            #axs[0].set_xticks(typexval)
+            #axs[0].set_xticklabels(typextick)
+
+            axs[1].set_yticks([])
+            axs[1].set_yticklabels([])
+            axs[0].set_xticklabels([])
+            axs[0].set_ylim(bottom=0)
+            axs[1].set_xlim(axs[0].get_xlim())
+            
+            newwid = axs[0].get_position().width
+            pax1 = axs[1].get_position()
+            new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.05]
+            axs[1].set_position(new_position)
+
+            #plt.tight_layout()
+            #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+            
+            if saveFigures:
+                plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+            plt.show()
+            
+        elif cate[0] == 1: # all TCP values are in the same range
+        
+            norm1 = Normalize(vmin=np.amin(corr_vals), vmax=np.amax(corr_vals))  
+
+            fig, axs = plt.subplots(2,1,figsize=(7.4,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+            
+            axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmnames[0],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmnames[0],norm=norm1)
+            axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmnames[0],norm=norm1)
+            
+            # Add colorbars
+            clb1 = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmnames[0]),ax=axs[0], pad=0.025)
+            
+            clb1.set_label(label='TCP (a.u.)', size=13)
+            
+            axs[1].hist(brconc, bins=100, range=[0,1], color='grey')
+            
+            axs[0].tick_params(axis='both', which='major', labelsize=14)
+            axs[1].tick_params(axis='both', which='major', labelsize=14)
+            axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+            axs[1].set_ylabel('Count', fontsize = 15) 
+            axs[1].set_xlabel('Br content', fontsize = 15) # X label
+
+            #axs[0].set_xticks(typexval)
+            #axs[0].set_xticklabels(typextick)
+
+            axs[1].set_yticks([])
+            axs[1].set_yticklabels([])
+            axs[0].set_xticklabels([])
+            axs[0].set_ylim(bottom=0)
+            axs[1].set_xlim(axs[0].get_xlim())
+            
+            newwid = axs[0].get_position().width
+            pax1 = axs[1].get_position()
+            new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+            axs[1].set_position(new_position)
+
+            #plt.tight_layout()
+            #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+            
+            if saveFigures:
+                plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+            plt.show()
     
     return maxs
 
@@ -1891,15 +1966,17 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
         if D.ndim == 3:
             D = D.reshape(D.shape[0]*D.shape[1],4)
         
-        figs, axs = plt.subplots(4, 1)
-        labels = ["Eg","T2g","T1u","T2u"]
-        colors = ["C3","C4","C5","C6"]
-        for i in range(4):
-            y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
-            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-            axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
-        
+# =============================================================================
+#         figs, axs = plt.subplots(4, 1)
+#         labels = ["Eg","T2g","T1u","T2u"]
+#         colors = ["C3","C4","C5","C6"]
+#         for i in range(4):
+#             y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+#             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+#             axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+#             axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+#         
+# =============================================================================
         Mu = []
         Std = []
         for i in range(4):
@@ -1908,36 +1985,38 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
             mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
     
             
-        for ax in axs.flat:
-            ax.tick_params(axis='both', which='major', labelsize=14)
-            ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel('Distortion', fontsize = 15) # X label
-            ax.set_xlim(xrange)
-            ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
-            ax.set_yticks([])
-            
-        axs[0].xaxis.set_ticklabels([])
-        axs[1].xaxis.set_ticklabels([])
-        axs[2].xaxis.set_ticklabels([])
-        axs[0].yaxis.set_ticklabels([])
-        axs[1].yaxis.set_ticklabels([])
-        axs[2].yaxis.set_ticklabels([])
-        axs[3].yaxis.set_ticklabels([])
-        axs[0].set_xlabel("")
-        axs[1].set_xlabel("")
-        axs[2].set_xlabel("")
-        axs[0].set_ylabel("")
-        axs[2].set_ylabel("")
-        axs[3].set_ylabel("")
-        axs[1].yaxis.set_label_coords(-0.02,-0.40)
-
-        axs[0].set_title('Br concentration: '+str(round(concent[di],4)),fontsize=16)  
-            
-        plt.show()
+# =============================================================================
+#         for ax in axs.flat:
+#             ax.tick_params(axis='both', which='major', labelsize=14)
+#             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
+#             ax.set_xlabel('Distortion', fontsize = 15) # X label
+#             ax.set_xlim(xrange)
+#             ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+#             ax.set_yticks([])
+#             
+#         axs[0].xaxis.set_ticklabels([])
+#         axs[1].xaxis.set_ticklabels([])
+#         axs[2].xaxis.set_ticklabels([])
+#         axs[0].yaxis.set_ticklabels([])
+#         axs[1].yaxis.set_ticklabels([])
+#         axs[2].yaxis.set_ticklabels([])
+#         axs[3].yaxis.set_ticklabels([])
+#         axs[0].set_xlabel("")
+#         axs[1].set_xlabel("")
+#         axs[2].set_xlabel("")
+#         axs[0].set_ylabel("")
+#         axs[2].set_ylabel("")
+#         axs[3].set_ylabel("")
+#         axs[1].yaxis.set_label_coords(-0.02,-0.40)
+# 
+#         axs[0].set_title('Br concentration: '+str(round(concent[di],4)),fontsize=16)  
+#             
+#         plt.show()
+# =============================================================================
         
         Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
         Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
@@ -1991,23 +2070,25 @@ def draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures, n_bins = 1
         if L.ndim == 3:
             L = L.reshape(L.shape[0]*L.shape[1],3)
         
-        figs, axs = plt.subplots(3, 1)
-        
-        histranges = np.zeros((3,2))
-        for i in range(3):
-            histranges[i,:] = [np.quantile(L[:,i], 0.02),np.quantile(L[:,i], 0.98)]
-            
-        histrange = np.zeros((2,))
-        ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
-        histrange[0] = np.amin(histranges[:,0])-ra*0.2
-        histrange[1] = np.amax(histranges[:,1])+ra*0.2
-
-        for i in range(3):
-            
-            y,binEdges=np.histogram(L[:,i],bins=n_bins,range=histrange)
-            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-            axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+# =============================================================================
+#         figs, axs = plt.subplots(3, 1)
+#         
+#         histranges = np.zeros((3,2))
+#         for i in range(3):
+#             histranges[i,:] = [np.quantile(L[:,i], 0.02),np.quantile(L[:,i], 0.98)]
+#             
+#         histrange = np.zeros((2,))
+#         ra = np.amax(histranges[:,1])-np.amin(histranges[:,0])
+#         histrange[0] = np.amin(histranges[:,0])-ra*0.2
+#         histrange[1] = np.amax(histranges[:,1])+ra*0.2
+# 
+#         for i in range(3):
+#             
+#             y,binEdges=np.histogram(L[:,i],bins=n_bins,range=histrange)
+#             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+#             axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+#             axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+# =============================================================================
         
         Mu = []
         Std = []
@@ -2017,31 +2098,33 @@ def draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures, n_bins = 1
             mu, std = norm.fit(dfil)
             Mu.append(mu)
             Std.append(std)
-            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
     
             
-        for ax in axs.flat:
-            ax.tick_params(axis='both', which='major', labelsize=14)
-            ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-            ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
-            ax.set_yticks([])
-            ax.set_xlim(histrange)
-            
-        axs[0].xaxis.set_ticklabels([])
-        axs[1].xaxis.set_ticklabels([])
-        axs[0].yaxis.set_ticklabels([])
-        axs[1].yaxis.set_ticklabels([])
-        axs[2].yaxis.set_ticklabels([])
-        axs[0].set_xlabel("")
-        axs[1].set_xlabel("")
-        axs[0].set_ylabel("")
-        axs[2].set_ylabel("")
-        #axs[1].yaxis.set_label_coords(-0.02,-0.40)
-
-        axs[0].set_title('Br concentration: '+str(round(concent[di],4)),fontsize=16)  
-            
-        plt.show()
+# =============================================================================
+#         for ax in axs.flat:
+#             ax.tick_params(axis='both', which='major', labelsize=14)
+#             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
+#             ax.set_xlabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # X label
+#             ax.set_yticks([])
+#             ax.set_xlim(histrange)
+#             
+#         axs[0].xaxis.set_ticklabels([])
+#         axs[1].xaxis.set_ticklabels([])
+#         axs[0].yaxis.set_ticklabels([])
+#         axs[1].yaxis.set_ticklabels([])
+#         axs[2].yaxis.set_ticklabels([])
+#         axs[0].set_xlabel("")
+#         axs[1].set_xlabel("")
+#         axs[0].set_ylabel("")
+#         axs[2].set_ylabel("")
+#         #axs[1].yaxis.set_label_coords(-0.02,-0.40)
+# 
+#         axs[0].set_title('Br concentration: '+str(round(concent[di],4)),fontsize=16)  
+#             
+#         plt.show()
+# =============================================================================
         
         Lgauss = np.concatenate((Lgauss,np.array(Mu).reshape(1,-1)),axis=0)
         Lgaussstd = np.concatenate((Lgaussstd,np.array(Std).reshape(1,-1)),axis=0)
@@ -2733,11 +2816,11 @@ def quantify_tilt_domain(sc,scnorm):
         print(f"!Tilt Spatial Corr: fitting of decay length may be wrong, a value(s): {pop_warning}")
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(nns)),sc[0,:,0],linewidth=1.5,label='axis 0')
-    plt.plot(list(range(nns)),sc[1,:,0],linewidth=1.5,label='axis 1')
-    plt.plot(list(range(nns)),sc[2,:,0],linewidth=1.5,label='axis 2')
+    plt.plot(list(range(nns)),scnorm[0,:,0],linewidth=1.5,label='tilt 0')
+    plt.plot(list(range(nns)),scnorm[1,:,0],linewidth=1.5,label='tilt 1')
+    plt.plot(list(range(nns)),scnorm[2,:,0],linewidth=1.5,label='tilt 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
-    plt.title("Along axis 0",fontsize=15)
+    plt.title("Correlation along axis 0",fontsize=15)
     ax.set_ylim([-1,1])
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel('Distance (unit cell)', fontsize=14)
@@ -2746,11 +2829,11 @@ def quantify_tilt_domain(sc,scnorm):
     legend.get_frame().set_alpha(0.7)
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(nns)),sc[0,:,1],linewidth=1.5,label='axis 0')
-    plt.plot(list(range(nns)),sc[1,:,1],linewidth=1.5,label='axis 1')
-    plt.plot(list(range(nns)),sc[2,:,1],linewidth=1.5,label='axis 2')
+    plt.plot(list(range(nns)),scnorm[0,:,1],linewidth=1.5,label='tilt 0')
+    plt.plot(list(range(nns)),scnorm[1,:,1],linewidth=1.5,label='tilt 1')
+    plt.plot(list(range(nns)),scnorm[2,:,1],linewidth=1.5,label='tilt 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
-    plt.title("Along axis 1",fontsize=15)
+    plt.title("Correlation along axis 1",fontsize=15)
     ax.set_ylim([-1,1])
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel('Distance (unit cell)', fontsize=14)
@@ -2759,11 +2842,11 @@ def quantify_tilt_domain(sc,scnorm):
     legend.get_frame().set_alpha(0.7)
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(nns)),sc[0,:,2],linewidth=1.5,label='axis 0')
-    plt.plot(list(range(nns)),sc[1,:,2],linewidth=1.5,label='axis 1')
-    plt.plot(list(range(nns)),sc[2,:,2],linewidth=1.5,label='axis 2')
+    plt.plot(list(range(nns)),scnorm[0,:,2],linewidth=1.5,label='tilt 0')
+    plt.plot(list(range(nns)),scnorm[1,:,2],linewidth=1.5,label='tilt 1')
+    plt.plot(list(range(nns)),scnorm[2,:,2],linewidth=1.5,label='tilt 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
-    plt.title("Along axis 2",fontsize=15)
+    plt.title("Correlation along axis 2",fontsize=15)
     ax.set_ylim([-1,1])
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel('Distance (unit cell)', fontsize=14)

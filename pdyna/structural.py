@@ -1101,12 +1101,13 @@ def match_mixed_halide_octa_dot(bx,hals):
 
         ang = np.dot(bx[brs[0],:],bx[brs[1],:])
         
-        if ang < -0.8: # planar form
+        if ang < -0.7: # planar form
             return (2,1),3 # planar form
-        elif abs(ang) < 0.2: # right-angle form
+        elif abs(ang) < 0.3: # right-angle form
             return (2,0),2 # right-angle form
         else:
-            raise ValueError("Can't distinguish the local halide environment. ")
+            print(ang)
+            raise ValueError("Can't distinguish the local halide environment. Angular term printed above. ")
     
     elif brnum == 3:
         brs = []
@@ -1116,12 +1117,13 @@ def match_mixed_halide_octa_dot(bx,hals):
 
         ang = [np.dot(bx[brs[0],:],bx[brs[1],:]),np.dot(bx[brs[0],:],bx[brs[2],:]),np.dot(bx[brs[1],:],bx[brs[2],:])]
         
-        if min(ang) < -0.8: # planar form
+        if min(ang) < -0.7: # planar form
             return (3,1),5 # planar form
-        elif abs(min(ang)) < 0.2: # right-angle form
+        elif abs(min(ang)) < 0.3: # right-angle form
             return (3,0),4 # right-angle form
         else:
-            raise ValueError("Can't distinguish the local halide environment. ")
+            print(ang)
+            raise ValueError("Can't distinguish the local halide environment. Angular terms printed above.")
     
     elif brnum == 4:
         ios = []
@@ -1131,12 +1133,13 @@ def match_mixed_halide_octa_dot(bx,hals):
 
         ang = np.dot(bx[ios[0],:],bx[ios[1],:])
         
-        if ang < -0.8: # planar form
+        if ang < -0.7: # planar form
             return (4,1),7 # planar form
-        elif abs(ang) < 0.2: # right-angle form
+        elif abs(ang) < 0.3: # right-angle form
             return (4,0),6 # right-angle form
         else:
-            raise ValueError("Can't distinguish the local halide environment. ")
+            print(ang)
+            raise ValueError("Can't distinguish the local halide environment. Angular term printed above. ")
 
     elif brnum == 5:
         return (5,0),8

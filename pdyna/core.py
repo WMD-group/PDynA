@@ -175,7 +175,7 @@ class Trajectory:
             
             for elem in st0.symbol_set:
                 if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
              
             self.st0 = st0
             self.natom = len(st0)
@@ -238,7 +238,7 @@ class Trajectory:
             
             for elem in st0.symbol_set:
                 if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
              
             self.st0 = st0
             self.natom = len(st0)
@@ -301,7 +301,7 @@ class Trajectory:
             
             for elem in st0.symbol_set:
                 if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
              
             self.st0 = st0
             self.natom = len(st0)
@@ -364,7 +364,7 @@ class Trajectory:
             
             for elem in st0.symbol_set:
                 if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
              
             self.st0 = st0
             self.natom = len(st0)
@@ -483,7 +483,7 @@ class Trajectory:
             
             for elem in st0.symbol_set:
                 if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
             
             self.st0 = st0
             self.natom = len(st0)
@@ -533,10 +533,7 @@ class Trajectory:
             self.MDTimestep = lammps_setting[2]/1000*lammps_setting[3]  # the timestep between recorded frames
             self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(lammps_setting[3]*lammps_setting[2]/1000)   # temeperature gradient
             
-        
-        
-        
-        
+
         else:
             raise TypeError("Unsupported data format: {}".format(self.data_format))
         
@@ -1229,6 +1226,7 @@ class Trajectory:
                 Lat_scale = round(np.nanmean(Lat[0,:3])/self.default_BB_dist)
                 Lat = Lat/Lat_scale
             else:
+                #Lat = Lat/np.array([4,4,2])
                 print("!lattice_parameter: detected non-cubic cell, use direct cell dimension as output. ")
             
             self.Lat = Lat
@@ -1805,6 +1803,41 @@ class Trajectory:
                 
                 # Normalize Corr
                 #Corr = Corr/np.amax(Corr)
+            
+            elif Benv.shape[1] in [4,5]:
+                if structure_type == 1:
+                    from pdyna.structural import apply_pbc_cart_vecs_single_frame
+                    Benv_orth = np.empty((Benv.shape[0],3)).astype(int)
+                    if not self._non_orthogonal:
+                        for i in range(Benv.shape[0]):
+                            # for each Pb atom find its nearest Pb in each orthogonal direction. 
+                            orders = np.argmax(np.abs(apply_pbc_cart_vecs_single_frame(Bpos[0,Benv[i,:],:] - Bpos[0,i,:],mymat)), axis=0)
+                            Benv_orth[i,:] = Benv[i,:][orders] # correct the order of coords by 'x,y,z'
+                        
+                        # now each row of Benv contains the Pb atom index that sit in x,y and z direction of the row-numbered Pb atom.
+                        Corr = np.empty((T.shape[0],T.shape[1],3))
+                        for B1 in range(T.shape[1]):
+                                
+                            Corr[:,B1,0] = abs_sqrt(T[:,B1,0]*T[:,Benv_orth[B1,0],0])
+                            Corr[:,B1,1] = abs_sqrt(T[:,B1,1]*T[:,Benv_orth[B1,1],1])
+                            Corr[:,B1,2] = abs_sqrt(T[:,B1,2]*T[:,Benv_orth[B1,2],2])
+                        
+                    else:
+                        mm = np.linalg.inv(self._rotmat_from_orthogonal)
+                        for i in range(Benv.shape[0]):
+                            tempv = np.matmul(apply_pbc_cart_vecs_single_frame(Bpos[0,Benv[i,:],:] - Bpos[0,i,:],mymat),mm)
+                            orders = np.argmax(np.abs(tempv), axis=0)
+                            Benv_orth[i,:] = Benv[i,:][orders] # correct the order of coords by 'x,y,z'
+                        
+                        Corr = np.empty((T.shape[0],T.shape[1],3))
+                        for B1 in range(T.shape[1]):
+                                
+                            Corr[:,B1,0] = abs_sqrt(T[:,B1,0]*T[:,Benv_orth[B1,0],0])
+                            Corr[:,B1,1] = abs_sqrt(T[:,B1,1]*T[:,Benv_orth[B1,1],1])
+                            Corr[:,B1,2] = abs_sqrt(T[:,B1,2]*T[:,Benv_orth[B1,2],2])
+                    
+                else:
+                    raise TypeError(f"The environment matrix is incorrect. Each octahedron has {Benv.shape[1]} neighbouring octahedra (or the cell is too small with PBC interfering the n-matrix. ")
 
             elif Benv.shape[1] == 6: # indicate a larger supercell
                 
@@ -1830,7 +1863,7 @@ class Trajectory:
                     Corr[:,B1,[4,5]] = abs_sqrt(T[:,[B1],2]*T[:,Benv[B1,[4,5]],2]) # z neighbour 1,2
                 
             else: 
-                raise TypeError(f"The environment matrix is incorrect. {Benv.shape[1]} ")
+                raise TypeError(f"The environment matrix is incorrect. Each octahedron has {Benv.shape[1]} neighbouring octahedra (or the cell is too small with PBC interfering the n-matrix. ")
             
             self._BNNenv = Benv
             self.Tilting_Corr = Corr
@@ -2249,7 +2282,7 @@ class Trajectory:
         CNdiff = np.amax(np.abs(r0-r1))
         
         if CNdiff > 5:
-            print(f"!MO: A change of C-N connectivity is detected (ref value {np.round(CNdiff,3)} A).")
+            print(f"!MO: A change of C-N connectivity is detected (ref value {np.round(CNdiff,3)} A), indicating a broken organic molecule. ")
 
         MOvecs = {}
         MOcenter = {}
@@ -2351,6 +2384,115 @@ class Trajectory:
         # save the MO vectors together
         self.MOvector = MOvecs
         self.MOcenter = MOcenter
+        
+        # check molecule integrity
+        sampling_ms = 10
+        trajnum = list(np.round(np.linspace(round(self.nframe*allow_equil),self.nframe,sampling_ms)).astype(int))
+        mymat = self.st0.lattice.matrix
+        CN_H_tol = 1.35
+        st0pos = self.st0.cart_coords
+        
+        allmole = []
+        for env in Afa:
+            dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[self.Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+            Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+            assert len(Hs) == 5
+            allmole.append(env[0]+env[1]+[self.Hindex[i] for i in Hs])
+        for env in Ama:
+            dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[self.Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+            Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+            assert len(Hs) == 6
+            allmole.append(env[0]+env[1]+[self.Hindex[i] for i in Hs])
+        for env in Aazr:
+            dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[self.Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+            Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+            assert len(Hs) == 6
+            allmole.append(env[0]+env[1]+[self.Hindex[i] for i in Hs])
+        
+        molediff = []
+        for env in allmole:
+            rm0 = distance_matrix_handler(st0pos[env,:],st0pos[env,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+            rm1 = distance_matrix_handler(self.Allpos[-1,env,:],self.Allpos[-1,env,:],latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+            molediff.append(np.amax(np.abs(rm0-rm1)))
+        
+        #if max(molediff) > 1:
+        Aindex_fa = []
+        Aindex_ma = []
+        Aindex_azr = []
+        
+        dm = distance_matrix_handler(self.Allpos[-1,self.Cindex,:],self.Allpos[-1,self.Nindex,:],latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+        dm1 = distance_matrix_handler(self.Allpos[-1,self.Cindex,:],self.Allpos[-1,self.Cindex,:],latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+        
+        CN_max_distance = 2.5
+        
+        # search all A-site cations and their constituent atoms (if organic)
+        Cpass = []
+        badmoleN = 0
+        
+        for i in range(dm.shape[0]):
+            if i in Cpass: continue # repetitive C atom in case of Azr
+            
+            Ns = []
+            temp = np.argwhere(dm[i,:] < CN_max_distance).reshape(-1)
+            for j in temp:
+                Ns.append(self.Nindex[j])
+            moreC = np.argwhere(np.logical_and(dm1[i,:]<CN_max_distance,dm1[i,:]>0.01)).reshape(-1)
+            if len(moreC) == 1: # aziridinium
+                Aindex_azr.append([[self.Cindex[i],self.Cindex[moreC[0]]],Ns])
+                Cpass.append(moreC[0])
+            elif len(moreC) == 0:
+                if len(temp) == 1:
+                    Aindex_ma.append([[self.Cindex[i]],Ns])
+                elif len(temp) == 2:
+                    Aindex_fa.append([[self.Cindex[i]],Ns])
+                else:
+                    #raise ValueError(f"There are {len(temp)} N atom connected to C atom number {i}")
+                    badmoleN += 1
+                    continue
+            else:
+                raise ValueError(f"There are {len(moreC)+1} C atom connected to C atom number {i}")
+        
+        badmoleH = [0,0,0]
+        if badmoleN == 0:
+            badmoleH = []
+            for fr in trajnum:
+                bH = [0,0,0]
+                allH = []
+                for env in Aindex_fa:
+                    dm = distance_matrix_handler(self.Allpos[-1,env[0]+env[1],:],self.Allpos[-1,self.Hindex,:],latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+                    allH.extend(Hs)
+                    if len(Hs) != 5:
+                        bH[0] += 1
+                        
+                for env in Aindex_ma:
+                    dm = distance_matrix_handler(self.Allpos[-1,env[0]+env[1],:],self.Allpos[-1,self.Hindex,:],latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+                    allH.extend(Hs)
+                    if len(Hs) != 6:
+                        bH[1] += 1
+                        
+                for env in Aindex_azr:
+                    dm = distance_matrix_handler(self.Allpos[-1,env[0]+env[1],:],self.Allpos[-1,self.Hindex,:],latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+                    allH.extend(Hs)
+                    if len(Hs) != 6:
+                        bH[2] += 1
+                
+                allH = sorted(allH)
+                if bH == [0,0,0]: # last check if some H is counted twice and missed some others
+                    if allH != list(range(len(self.Hindex))):
+                        bH = None
+                badmoleH.append(bH)
+            if badmoleH == [[0,0,0]]*sampling_ms: badmoleH = [0,0,0]
+                
+        self._ms1 = molediff # lower means more stable in MD as small change in distance array. 
+        self._ms2 = [badmoleN,badmoleH]
+        
+        if badmoleN != 0:
+            print("!MO: The last frame of the trajectory contains a broken A-site molecule with disconnected C-N bond. ")
+        if badmoleH != [0,0,0]:
+            print("!MO: The last frame of the trajectory contains a broken A-site molecule with detached H atoms. ")
         
         # total polarization
         if not (len(Afa) > 0 and len(Ama) > 0 and len(Aazr) > 0):
@@ -2632,9 +2774,7 @@ class Trajectory:
         Xindex = self.Xindex
         Hindex = self.Hindex
         
-        
         # A-site displacements
-        
         Afa = self.A_sites["FA"]
         Ama = self.A_sites["MA"]
         Aazr = self.A_sites["Azr"]
@@ -2654,7 +2794,7 @@ class Trajectory:
         if len(Afa) > 0:
             for i,env in enumerate(Afa):
                 dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
+                Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_fa.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
@@ -2685,7 +2825,7 @@ class Trajectory:
         if len(Ama) > 0:
             for i,env in enumerate(Ama):
                 dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
+                Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_ma.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
@@ -2716,7 +2856,7 @@ class Trajectory:
         if len(Aazr) > 0:
             for i,env in enumerate(Aazr):
                 dm = distance_matrix_handler(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Hs = sorted(list(np.argwhere(dm<CN_H_tol)[:,1]))
+                Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
                 Aindex_azr.append(env+[Hs])
                 
                 cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
@@ -3356,7 +3496,7 @@ class Frame:
             
             for elem in st0.symbol_set:
                 if not elem in known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
             self.st0 = st0
             at0 = aaa.get_atoms(st0)
             self.at0 = at0
@@ -3410,7 +3550,7 @@ class Frame:
             
             for elem in st0.symbol_set:
                 if not elem in known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please check the list known_elem. ")
+                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
             self.st0 = st0
             at0 = aaa.get_atoms(st0)
             self.at0 = at0
@@ -3858,7 +3998,9 @@ class Frame:
                 spatialnorm.append(layernorm)
                 
             spatialnn = np.array(spatialnn)
-            spatialnorm = np.array(spatialnorm)      
+            spatialnorm = np.array(spatialnorm)   
+            
+            self.spatialCorrTensor = spatialnorm
             
 # =============================================================================
 #             bin_indices = bin_indices-1 # 0-indexing

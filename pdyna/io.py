@@ -12,14 +12,17 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from pdyna.structural import get_cart_from_frac, get_frac_from_cart
 
 
-def read_lammps_dir(fdir):
+def read_lammps_dir(fdir,allow_multi=False):
     filelist = glob(fdir+"*.in")
     if len(filelist) == 0:
         raise FileNotFoundError("Can't find any LAMMPS .in file in the directory.")
-    if len(filelist) > 1:
-        raise FileExistsError("There are more than one LAMMPS .in file in the directory.")
-    
-    return read_lammps_settings(filelist[0])
+        
+    if not allow_multi:
+        if len(filelist) > 1:
+            raise FileExistsError("There are more than one LAMMPS .in file in the directory.")
+        return read_lammps_settings(filelist[0])
+    else:
+        return [read_lammps_settings(f) for f in filelist]
     
 
 def read_lammps_settings(infile): # internal use 
