@@ -984,6 +984,7 @@ def match_bx_orthogonal(bx,mymat):
     Find the order of atoms in octahedron through matching with the reference. 
     Used in connectivity type 2.
     """
+    fitting_tol = 0.25
     ideal_coords = np.array([[-1, 0,  0],
                              [0, -1,  0],
                              [0,  0, -1],
@@ -993,8 +994,7 @@ def match_bx_orthogonal(bx,mymat):
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > 0.3):
-        #if not (fits[fits.argsort()[-1]] > 0.75 and fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > 0.25):
+        if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > fitting_tol):
             print(bx,fits)
             raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
         order.append(np.argmax(fits))
@@ -1007,6 +1007,7 @@ def match_bx_orthogonal_rotated(bx,mymat,rotmat):
     Find the order of atoms in octahedron through matching with the reference. 
     Used in connectivity type 2.
     """
+    fitting_tol = 0.25
     ideal_coords = np.array([[-1, 0,  0],
                              [0, -1,  0],
                              [0,  0, -1],
@@ -1017,9 +1018,9 @@ def match_bx_orthogonal_rotated(bx,mymat,rotmat):
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]]) > 0.25:
+        if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]]) > fitting_tol:
             print(bx,fits)
-            raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
+            raise ValueError("The fitting of initial octahedron config to ideal coords is not successful.  ")
         order.append(np.argmax(fits))
     assert len(set(order)) == 6 # double-check sanity
     return order

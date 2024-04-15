@@ -3485,9 +3485,9 @@ class Trajectory:
                     
                     Dcls = []
                     Tcls = []
-                    for ti, types in enumerate(typelib):
-                        Dtype.append(Di[:,types,:])
-                        Ttype.append(T[:,types,:])
+                    for ti, types in enumerate(occs):
+                        Dcls.append(Di[:,types,:])
+                        Tcls.append(T[:,types,:])
                     if hasattr(self,"Tilting_Corr"):
                         for ti, types in enumerate(typelib):
                             TCNtype.append(TCN[:,types,:])
