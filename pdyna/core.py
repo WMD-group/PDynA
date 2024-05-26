@@ -895,7 +895,26 @@ class Trajectory:
         else:
             r0=distance_matrix_handler(st0Bpos,st0Bpos,None,at0.cell,at0.pbc,True)
 
-        search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
+        try:        
+            search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
+        except ValueError:
+            # try to obtain B-B info from an average of positions sue to high deviation
+            sampling = 10
+            Bpos = self.Allpos[:,self.Bindex,:]
+            blen = Bpos.shape[0]
+            if (blen-1)-round(blen*self.allow_equil) < sampling-1:
+                sampling = (blen-1)-round(blen*self.allow_equil)+1
+            frs_avg = np.round(np.linspace(round(blen*self.allow_equil),(blen-1),sampling)).astype(int)
+            rm = []
+            for fr in frs_avg:
+                if (max(angles) < 100 and min(angles) > 80):
+                    r0=distance_matrix_handler(Bpos[fr,:],Bpos[fr,:],self.latmat[fr,:])
+                else:
+                    r0=distance_matrix_handler(Bpos[fr,:],Bpos[fr,:],at0.cell,self.latmat[fr,:],at0.pbc,False)
+                rm.append(r0)
+            ravg = np.mean(np.array(rm),axis=0)
+            search_NN1 = find_population_gap(ravg, self._fpg_val_BB[0], self._fpg_val_BB[1])
+            
         default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
         self.default_BB_dist = default_BB_dist
         
