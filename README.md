@@ -93,6 +93,11 @@ Reading of these file types can be done similarly by running `traj = Trajectory(
 A full list of all the parameters is shown in the `examples/full.py`. 
 
 
+**Computed Properties**
+
+The computed dynamic properties are all stored in the Trajectory object and can all be accessed easily by calling `traj.Tilting`, `traj.Tilting_Corr`, `traj.Distortion`, etc, which are octahedral tilting, octahedral tilting NN1 correlations (effective Glazor notation), octahedral distortions, respectively. The dimension of these arrays are (N_frames,N_octahedra,property_dimension). 
+
+
 Citation
 ------------
 ["Structural dynamics descriptors for metal halide perovskites" Journal of Physical Chemistry C (2023)](https://pubs.acs.org/doi/full/10.1021/acs.jpcc.3c03377)
