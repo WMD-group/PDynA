@@ -67,7 +67,7 @@ To start using the code, the user must define the B and X site elements in the B
     
     traj.dynamics(..., system_overwrite=user_system)`
 
-The input `new_sys` is a dict with four entries: 
+The input `user_system` is a dict with four entries: 
 
     {'B-sites': ['Sn'], 'X-sites': ['I','Br'], 'fpg_val_BB': [[a,b], [c,d]], 'fpg_val_BX': [[a,b], [c,d]]} 
 
