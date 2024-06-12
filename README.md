@@ -60,6 +60,35 @@ Install the package with pip
 
     pip install .
 
+Pre-definition of the structure
+------------
+
+To start using the code, the user must define the B and X site elements in the BX6 octahedra. This can be done by defining the B and X sites species and their relative distances with the entry `system_overwrite` in the `dynamics`, for example, `traj.dynamics(..., system_overwrite=user_system)`. The input `new_sys` is a dict with four entries: 
+
+    {'B-sites': ['Sn'], 'X-sites': ['I','Br'], 'fpg_val_BB': [[a,b], [c,d]], 'fpg_val_BX': [[a,b], [c,d]]} 
+
+The four numbers in B-B (`fpg_val_BB`) and B-X (`fpg_val_BX`) connectivity are: 
+
+c: NN1 distance of the connected pair
+
+d: NN2 distance of the connected pair
+
+a: lower bound of a range of distance that covers both and only NN1 and NN2
+
+b: upper bound of a range of distance that covers both and only NN1 and NN2
+
+If you are not sure about the relative distances in your system, you can run the `system_test` function with one of your trajectories by calling: 
+
+    traj = Trajectory(filetype,(file_path, MDtup))
+    traj.system_test(B_sites=['Sn'],B_sites=['I','Br']) # with Sn(I/Br) system as an example
+
+This will give you two plots as follows:
+
+<p align="center">
+<img src="distance.png" width="550">
+</p>
+
+
 Usage
 ------------
 
@@ -93,7 +122,8 @@ Reading of these file types can be done similarly by running `traj = Trajectory(
 A full list of all the parameters is shown in the `examples/full.py`. 
 
 
-**Computed Properties**
+Computed Properties
+------------
 
 The computed dynamic properties are all stored in the Trajectory object and can all be accessed easily by calling `traj.Tilting`, `traj.Tilting_Corr`, `traj.Distortion`, etc, which are octahedral tilting, octahedral tilting NN1 correlations (effective Glazor notation), octahedral distortions, respectively. The dimension of these arrays are (N_frames,N_octahedra,property_dimension). 
 
