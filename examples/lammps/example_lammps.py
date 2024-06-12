@@ -4,7 +4,7 @@ MDtup = (100,100,1) # tuple containing the MD simulation parameters: (initial T,
 traj = Trajectory("lammps",('lammps_example_mapbbr3.out', MDtup))
 
 traj.dynamics(read_mode= 1, # key parameter, 1: equilibration mode, 2: quench/anneal mode
-              uniname='test', # A unique user-defined name for this trajectory, will be used in printing and figure saving
+              uniname='test_LAMMPS', # A unique user-defined name for this trajectory, will be used in printing and figure saving
               allow_equil = 0.5, # take the first x fraction of the trajectory as equilibration, this part will not be computed
               read_every = 0, # read only every n steps, default is 0 which the code will decide an appropriate value according to the system size
               saveFigures = True, # whether to save produced figures
