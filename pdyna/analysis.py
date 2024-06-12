@@ -1,11 +1,13 @@
-"""Functions for data analysis."""
+"""
+pdyna.analysis: The collection of analysis functions for outputs and figures.
+
+"""
 import os
 import math
 import numpy as np
-from math import factorial
 from scipy.stats import norm
-from matplotlib.figure import figaspect
 import matplotlib.pyplot as plt
+from matplotlib.figure import figaspect
 
 if os.path.exists("style.mplstyle"):
     plt.style.use("style.mplstyle")
@@ -58,6 +60,7 @@ def savitzky_golay(y, window_size=51, order=3, deriv=0, rate=1):
        W.H. Press, S.A. Teukolsky, W.T. Vetterling, B.P. Flannery
        Cambridge University Press ISBN-13: 9780521880688
     """
+    from math import factorial
     
     try:
         window_size = np.abs(int(window_size))
@@ -228,6 +231,7 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
 def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
     
     fig_name = f"lattice_evo_{uniname}.png"
+    lw = 3
     #print(dm.shape[0],len(steps))
     if dm.shape[0] != len(steps):
         raise ValueError("The dimension of the lattice array does not match with the timesteps. ")
@@ -259,7 +263,64 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis
             #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
             ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
     
-    plt.legend(loc=4)
+    plt.legend()
+    if xaxis_type == 'N':
+        plt.xlabel("MD step")
+    elif xaxis_type == 't':
+        ax.set_xlim(left=0)
+        plt.xlabel("Time (ps)")
+    elif xaxis_type == 'T':
+        plt.xlabel("Temperature (K)")
+    plt.ylabel('Lattice Parameter ($\mathrm{AA}$)')
+
+    if not x_lims is None:
+        ax.set_xlim(x_lims)
+    
+    if not y_lims is None:
+        ax.set_ylim(y_lims)
+        
+    if invert_x:
+        ax.set_xlim([ax.get_xlim()[1],ax.get_xlim()[0]])
+    
+    plt.show()
+    
+    # get a smoothened line
+    sgw = round(La.shape[0]/6)
+    if sgw<5: sgw = 5
+    if sgw%2==0: sgw+=1
+    Las=savitzky_golay(La,window_size=sgw)
+    Lbs=savitzky_golay(Lb,window_size=sgw)
+    Lcs=savitzky_golay(Lc,window_size=sgw)
+    
+    plt.subplots(1,1)
+    if steps[0] == steps[-1] and xaxis_type == 'T':
+        steps1 = list(range(0,len(steps)))
+        plt.scatter(steps1,La,s=4,alpha=0.3)
+        plt.scatter(steps1,Lb,s=4,alpha=0.3)
+        plt.scatter(steps1,Lc,s=4,alpha=0.3)
+        plt.plot(steps1,Las,label = r'$\mathit{a}$',linewidth=lw)
+        plt.plot(steps1,Lbs,label = r'$\mathit{b}$',linewidth=lw)
+        plt.plot(steps1,Lcs,label = r'$\mathit{c}$',linewidth=lw)
+    else: 
+        plt.scatter(steps,La,s=4,alpha=0.3)
+        plt.scatter(steps,Lb,s=4,alpha=0.3)
+        plt.scatter(steps,Lc,s=4,alpha=0.3)
+        plt.plot(steps,Las,label = r'$\mathit{a}$',linewidth=lw)
+        plt.plot(steps,Lbs,label = r'$\mathit{b}$',linewidth=lw)
+        plt.plot(steps,Lcs,label = r'$\mathit{c}$',linewidth=lw)
+    ax = plt.gca()
+    if xaxis_type == 'T':
+        if steps[0] > steps[-1]:
+            #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+            ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+        elif steps[0] < steps[-1]:
+            #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+            ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+        else:
+            #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+            ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
+    
+    plt.legend()
     if xaxis_type == 'N':
         plt.xlabel("MD step")
     elif xaxis_type == 't':
@@ -315,7 +376,7 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0
     ax.set_xlim([0,max(steps)])
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel("Time (ps)", fontsize=14)
-    plt.ylabel('Lattice Parameter ($\mathrm{AA}$)', fontsize=14)
+    plt.ylabel(r'Lattice Parameter ($\mathrm{AA}$)', fontsize=14)
     plt.legend(prop={'size': 12})
     
 
@@ -335,6 +396,7 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0
 def draw_tilt_evolution(T, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
     
     fig_name = f"tilt_evo_{uniname}.png"
+    lw=2
     #print(dm.shape[0],len(steps))
 
     aw = round(T.shape[0]/40)
@@ -350,9 +412,9 @@ def draw_tilt_evolution(T, steps, Tgrad, uniname, saveFigures = False, xaxis_typ
     
     plt.subplots(1,1)
     
-    plt.plot(steps,Tm[:,0],label = r'$\mathit{a}$')
-    plt.plot(steps,Tm[:,1],label = r'$\mathit{b}$')
-    plt.plot(steps,Tm[:,2],label = r'$\mathit{c}$')
+    plt.plot(steps,Tm[:,0],label = r'$\mathit{a}$',linewidth=lw,alpha=0.8)
+    plt.plot(steps,Tm[:,1],label = r'$\mathit{b}$',linewidth=lw,alpha=0.8)
+    plt.plot(steps,Tm[:,2],label = r'$\mathit{c}$',linewidth=lw,alpha=0.8)
         
     ax = plt.gca()
     if xaxis_type == 'T':
@@ -452,123 +514,221 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim
 
 def draw_dist_evolution(D, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
     
-    fig_name = f"dist_evo_{uniname}.png"
-    #print(dm.shape[0],len(steps))
-    
     Dm = np.nanmean(D,axis=1)
-
-    plt.subplots(1,1)
-    labels = ["Eg","T2g","T1u","T2u"]
     
-    for i in range(4):
-        plt.plot(steps,Dm[:,i],label = labels[i],linewidth=1.2)
+    if D.shape[2] == 4:
+        fig_name = f"dist_evo_{uniname}.png"
+        #print(dm.shape[0],len(steps))
 
-
-    ax = plt.gca()
-    if xaxis_type == 'T':
-        if steps[0] > steps[-1]:
-            #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
-        elif steps[0] < steps[-1]:
-            #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
-        else:
-            #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
-            
-    plt.legend()
-    if xaxis_type == 'N':
-        plt.xlabel("MD step")
-    elif xaxis_type == 't':
-        ax.set_xlim(left=0)
-        plt.xlabel("Time (ps)")
-    elif xaxis_type == 'T':
-        plt.xlabel("Temperature (K)")
-    plt.ylabel('Distortion')
-
-    if not x_lims is None:
-        ax.set_xlim(x_lims)
-    
-    if not y_lims is None:
-        ax.set_ylim(y_lims)
+        plt.subplots(1,1)
+        labels = ["Eg","T2g","T1u","T2u"]
         
-    if invert_x:
-        ax.set_xlim([ax.get_xlim()[1],ax.get_xlim()[0]])
+        for i in range(4):
+            plt.plot(steps,Dm[:,i],label = labels[i],linewidth=1.2)
+
+
+        ax = plt.gca()
+        if xaxis_type == 'T':
+            if steps[0] > steps[-1]:
+                #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+                ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+            elif steps[0] < steps[-1]:
+                #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+                ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+            else:
+                #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+                ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
+                
+        plt.legend()
+        if xaxis_type == 'N':
+            plt.xlabel("MD step")
+        elif xaxis_type == 't':
+            ax.set_xlim(left=0)
+            plt.xlabel("Time (ps)")
+        elif xaxis_type == 'T':
+            plt.xlabel("Temperature (K)")
+        plt.ylabel('Distortion')
+
+        if not x_lims is None:
+            ax.set_xlim(x_lims)
+        
+        if not y_lims is None:
+            ax.set_ylim(y_lims)
+            
+        if invert_x:
+            ax.set_xlim([ax.get_xlim()[1],ax.get_xlim()[0]])
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        
+        plt.show()
     
-    if saveFigures:
-        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
-    
-    plt.show()
-    
+    elif D.shape[2] == 3:
+        fig_name = f"distB_evo_{uniname}.png"
+        #print(dm.shape[0],len(steps))
+
+        plt.subplots(1,1)
+        labels = ["B100","B110","B111"]
+        
+        for i in range(3):
+            plt.plot(steps,Dm[:,i],label = labels[i],linewidth=1.2)
+
+
+        ax = plt.gca()
+        if xaxis_type == 'T':
+            if steps[0] > steps[-1]:
+                #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+                ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+            elif steps[0] < steps[-1]:
+                #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+                ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+            else:
+                #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
+                ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
+                
+        plt.legend()
+        if xaxis_type == 'N':
+            plt.xlabel("MD step")
+        elif xaxis_type == 't':
+            ax.set_xlim(left=0)
+            plt.xlabel("Time (ps)")
+        elif xaxis_type == 'T':
+            plt.xlabel("Temperature (K)")
+        plt.ylabel('Distortion')
+
+        if not x_lims is None:
+            ax.set_xlim(x_lims)
+        
+        if not y_lims is None:
+            ax.set_ylim(y_lims)
+            
+        if invert_x:
+            ax.set_xlim([ax.get_xlim()[1],ax.get_xlim()[0]])
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        
+        plt.show()
+
     return (steps,Dm)
 
 
 def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim = None):
     
-    fig_name = f"traj_dist_time_{uniname}.png"
-    
     assert D.ndim == 3
     assert D.shape[0] == len(steps)
     
-    Dline = np.empty((0,4))
+    if D.shape[2] == 4:
+        
+        fig_name = f"traj_dist_time_{uniname}.png"
+    
+        Dline = np.empty((0,4))
 
-    aw = 15
-    
-    for i in range(D.shape[0]-aw+1):
-        temp = D[list(range(i,i+aw)),:,:].reshape(-1,4)
-        #temp1 = temp[np.where(np.logical_and(temp<20,temp>-20))]
-        fitted = np.mean(temp,axis=0)[np.newaxis,:]
-        Dline = np.concatenate((Dline,fitted),axis=0)
-    
-    ts = steps[1] - steps[0]
-    time_window = smoother # picosecond
-    sgw = round(time_window/ts)
-    if sgw<5: sgw = 5
-    if sgw%2==0: sgw+=1
-    if smoother != 0:
-        Da = savitzky_golay(Dline[:,0],window_size=sgw)
-        Db = savitzky_golay(Dline[:,1],window_size=sgw)
-        Dc = savitzky_golay(Dline[:,2],window_size=sgw)
-        Dd = savitzky_golay(Dline[:,3],window_size=sgw)
-    else:
-        Da = Dline[:,0]
-        Db = Dline[:,1]
-        Dc = Dline[:,2]
-        Dd = Dline[:,3]
-    
-    w, h = figaspect(0.8/1.45)
-    plt.subplots(figsize=(w,h))
-    ax = plt.gca()
-    
-    labels = ["Eg","T2g","T1u","T2u"]
-    
-    #for i in range(D.shape[0]):
-    #    plt.scatter(steps[i],D[i,])
-    
-    plt.plot(steps[:(len(steps)-aw+1)],Da,label = labels[0],linewidth=2.5)
-    plt.plot(steps[:(len(steps)-aw+1)],Db,label = labels[1],linewidth=2.5)
-    plt.plot(steps[:(len(steps)-aw+1)],Dc,label = labels[2],linewidth=2.5)    
-    plt.plot(steps[:(len(steps)-aw+1)],Dd,label = labels[3],linewidth=2.5)   
+        aw = 15
+        
+        for i in range(D.shape[0]-aw+1):
+            temp = D[list(range(i,i+aw)),:,:].reshape(-1,4)
+            #temp1 = temp[np.where(np.logical_and(temp<20,temp>-20))]
+            fitted = np.mean(temp,axis=0)[np.newaxis,:]
+            Dline = np.concatenate((Dline,fitted),axis=0)
+        
+        ts = steps[1] - steps[0]
+        time_window = smoother # picosecond
+        sgw = round(time_window/ts)
+        if sgw<5: sgw = 5
+        if sgw%2==0: sgw+=1
+        if smoother != 0:
+            Da = savitzky_golay(Dline[:,0],window_size=sgw)
+            Db = savitzky_golay(Dline[:,1],window_size=sgw)
+            Dc = savitzky_golay(Dline[:,2],window_size=sgw)
+            Dd = savitzky_golay(Dline[:,3],window_size=sgw)
+        else:
+            Da = Dline[:,0]
+            Db = Dline[:,1]
+            Dc = Dline[:,2]
+            Dd = Dline[:,3]
+        
+        w, h = figaspect(0.8/1.45)
+        plt.subplots(figsize=(w,h))
+        ax = plt.gca()
+        
+        labels = ["Eg","T2g","T1u","T2u"]
+        
+        #for i in range(D.shape[0]):
+        #    plt.scatter(steps[i],D[i,])
+        
+        plt.plot(steps[:(len(steps)-aw+1)],Da,label = labels[0],linewidth=2.5)
+        plt.plot(steps[:(len(steps)-aw+1)],Db,label = labels[1],linewidth=2.5)
+        plt.plot(steps[:(len(steps)-aw+1)],Dc,label = labels[2],linewidth=2.5)    
+        plt.plot(steps[:(len(steps)-aw+1)],Dd,label = labels[3],linewidth=2.5)   
 
-    #ax.set_ylim([-45,45])
-    #ax.set_yticks([-45,-30,-15,0,15,30,45])
+        #ax.set_ylim([-45,45])
+        #ax.set_yticks([-45,-30,-15,0,15,30,45])
+        
+        ax.tick_params(axis='both', which='major', labelsize=12)
+        plt.xlabel('Time (ps)', fontsize=14)
+        plt.ylabel('Distortion', fontsize=14)
+        plt.legend(prop={'size': 13})
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
+        
+        return (steps[:(len(steps)-aw+1)],Da,Db,Dc,Dd)
     
-    ax.tick_params(axis='both', which='major', labelsize=12)
-    plt.xlabel('Time (ps)', fontsize=14)
-    plt.ylabel('Distortion', fontsize=14)
-    plt.legend(prop={'size': 13})
+    elif D.shape[2] == 3:
+        fig_name = f"traj_distB_time_{uniname}.png"
     
-    if saveFigures:
-        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
-    plt.show()
-    
-    return (steps[:(len(steps)-aw+1)],Da,Db,Dc,Dd)
+        Dline = np.empty((0,3))
+
+        aw = 15
+        
+        for i in range(D.shape[0]-aw+1):
+            temp = D[list(range(i,i+aw)),:,:].reshape(-1,3)
+            #temp1 = temp[np.where(np.logical_and(temp<20,temp>-20))]
+            fitted = np.mean(temp,axis=0)[np.newaxis,:]
+            Dline = np.concatenate((Dline,fitted),axis=0)
+        
+        ts = steps[1] - steps[0]
+        time_window = smoother # picosecond
+        sgw = round(time_window/ts)
+        if sgw<5: sgw = 5
+        if sgw%2==0: sgw+=1
+        if smoother != 0:
+            Da = savitzky_golay(Dline[:,0],window_size=sgw)
+            Db = savitzky_golay(Dline[:,1],window_size=sgw)
+            Dc = savitzky_golay(Dline[:,2],window_size=sgw)
+        else:
+            Da = Dline[:,0]
+            Db = Dline[:,1]
+            Dc = Dline[:,2]
+        
+        w, h = figaspect(0.8/1.45)
+        plt.subplots(figsize=(w,h))
+        ax = plt.gca()
+        
+        labels = ["B100","B110","B111"]
+        
+        plt.plot(steps[:(len(steps)-aw+1)],Da,label = labels[0],linewidth=2.5)
+        plt.plot(steps[:(len(steps)-aw+1)],Db,label = labels[1],linewidth=2.5)
+        plt.plot(steps[:(len(steps)-aw+1)],Dc,label = labels[2],linewidth=2.5)    
+
+        ax.tick_params(axis='both', which='major', labelsize=12)
+        plt.xlabel('Time (ps)', fontsize=14)
+        plt.ylabel('Distortion', fontsize=14)
+        plt.legend(prop={'size': 13})
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
+        
+        return (steps[:(len(steps)-aw+1)],Da,Db,Dc)
 
 
 def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = None): #"curve"
 
     tup_T = (T[:,:,0].reshape((-1,)),T[:,:,1].reshape((-1,)),T[:,:,2].reshape((-1,)))
-    zero_threshold = 1
+    zero_threshold = 1.5
     
     if method == "auto":
         if T.shape[1] > 200:
@@ -609,12 +769,18 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
     elif method == "gaussian":
         
         bins = 900
+        cplot = []
         c = []
         for i in range(3):
             ctemp, y = np.histogram(tup_T[i],bins=bins,range=[-45,45],density=True)
+            cplot.append(ctemp)
+            cdiff = np.log10(np.mean(np.abs(np.diff(ctemp))))
+            if cdiff > -3: # the curve is too kinky and will be smoothened
+                ctemp = savitzky_golay(ctemp,window_size=((bins/7)-(bins/7)%2)+1,order=2)
             yc = (y[:-1]+y[1:])/2
             c.append(ctemp)
-        c = np.array(c).T
+        c = np.array(c).T    
+        cplot = np.array(cplot).T
         
         xres = 601
         scanx = np.linspace(0,30,xres)[np.newaxis,np.newaxis,:]
@@ -629,6 +795,7 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
         
         normfac = np.sum(dmat)/xres/std_res
         c = c*(normfac/(np.sum(c,axis=0)))
+        cplot = cplot*(normfac/(np.sum(cplot,axis=0)))
         
         maxs = []
         pred = []
@@ -650,12 +817,12 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
         override=[False,False,False]
         if corr_vals:
             for i in range(3):
-                if abs(corr_vals[i]) < 0.42 and maxs[i] < 6:
+                if abs(corr_vals[i]) < 0.42 and maxs[i] < 5:
                     maxs[i] = 0
                     override[i] = True
         
         if plot_fitting:
-            draw_tilt_prediction(c,pred,preds,yc,maxs,override=override)
+            draw_tilt_prediction(cplot,pred,preds,yc,maxs,override=override)
             
     elif method == 'both':
         
@@ -680,11 +847,17 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
             
         bins = 900
         c = []
+        cplot = []
         for i in range(3):
             ctemp, y = np.histogram(tup_T[i],bins=bins,range=[-45,45],density=True)
+            cplot.append(ctemp)
+            cdiff = np.log10(np.mean(np.abs(np.diff(ctemp))))
+            if cdiff > -3: # the curve is too kinky and will be smoothened
+                ctemp = savitzky_golay(ctemp,window_size=((bins/7)-(bins/7)%2)+1,order=2)
             yc = (y[:-1]+y[1:])/2
             c.append(ctemp)
         c = np.array(c).T
+        cplot = np.array(cplot).T
         
         xres = 601
         scanx = np.linspace(0,30,xres)[np.newaxis,np.newaxis,:]
@@ -699,6 +872,7 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
         
         normfac = np.sum(dmat)/xres/std_res
         c = c*(normfac/(np.sum(c,axis=0)))
+        cplot = cplot*(normfac/(np.sum(cplot,axis=0)))
         
         maxs2 = []
         pred = []
@@ -725,7 +899,7 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
                     override[i] = True
         
         if plot_fitting:
-            draw_tilt_prediction(c,pred,preds,yc,maxs2,override=override)
+            draw_tilt_prediction(cplot,pred,preds,yc,maxs2,override=override)
             
         maxs = [maxs1,maxs2]
                 
@@ -840,21 +1014,155 @@ def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', sc
 
 def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], gaus_fit = True, title = None):
     
-    fig_name = f"traj_dist_density_{uniname}.png"
+    if D.shape[-1] == 4:
+        fig_name = f"traj_dist_density_{uniname}.png"
+        
+        if D.ndim == 3:
+            D = D.reshape(D.shape[0]*D.shape[1],4)
+        
+        figs, axs = plt.subplots(4, 1)
+        labels = ["Eg","T2g","T1u","T2u"]
+        colors = ["C3","C4","C5","C6"]
+        for i in range(4):
+            y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            axs[i].text(0.05, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
+        
+        if gaus_fit: # fit a gaussian to the plot
+            Mu = []
+            Std = []
+            for i in range(4):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+                axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+                axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+        
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel('Distortion', fontsize = 15) # X label
+            ax.set_xlim(xrange)
+            ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+            ax.set_yticks([])
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[2].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[3].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[1].set_xlabel("")
+        axs[2].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[2].set_ylabel("")
+        axs[3].set_ylabel("")
+        axs[1].yaxis.set_label_coords(-0.02,-0.40)
+        
+        if not title is None:
+            axs[0].set_title(title,fontsize=14,loc='left')
+            
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+            
+        plt.show()
+        
+    elif D.shape[-1] == 3:
+        fig_name = f"traj_distB_density_{uniname}.png"
+        
+        if D.ndim == 3:
+            D = D.reshape(D.shape[0]*D.shape[1],3)
+        
+        figs, axs = plt.subplots(3, 1)
+        labels = ["B100","B110","B111"]
+        colors = ["C3","C4","C5","C6"]
+        for i in range(3):
+            y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            axs[i].text(0.07, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
+        
+        if gaus_fit: # fit a gaussian to the plot
+            Mu = []
+            Std = []
+            for i in range(3):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+                axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+                axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+        
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel('Distortion', fontsize = 15) # X label
+            ax.set_xlim(xrange)
+            ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+            ax.set_yticks([])
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[1].set_xlabel("")
+        axs[2].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[2].set_ylabel("")
+        #axs[1].yaxis.set_label_coords(-0.02,-0.40)
+        
+        if not title is None:
+            axs[0].set_title(title,fontsize=14,loc='left')
+            
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+            
+        plt.show()
+        
+    elif D.shape[-1] == 7:
+        if D.ndim == 3:
+            Dx = D[:,:,:4]
+            Db = D[:,:,4:]
+        elif D.ndim == 2:
+            Dx = D[:,:4]
+            Db = D[:,4:]
+        
+        dmu, dstd = draw_dist_density(Dx, uniname, saveFigures, n_bins, xrange, gaus_fit, title)
+        dbmu, dbstd = draw_dist_density(Db, uniname, saveFigures, n_bins, xrange, gaus_fit, title)
+        
+        Mu = dmu+dbmu
+        Std = dstd+dbstd
+
+    if gaus_fit:
+        return Mu, Std
+
+
+def draw_dist_density_frame(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
     
-    if D.ndim == 3:
-        D = D.reshape(D.shape[0]*D.shape[1],4)
+    fig_name1 = f"frame_dist_{uniname}.png"
+    fig_name2 = f"frame_distB_{uniname}.png"
     
-    figs, axs = plt.subplots(4, 1)
-    labels = ["Eg","T2g","T1u","T2u"]
-    colors = ["C3","C4","C5","C6"]
-    for i in range(4):
-        y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
-        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-        axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-        axs[i].text(0.05, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
+    assert D.ndim == 2
     
-    if gaus_fit: # fit a gaussian to the plot
+    if D.shape[1] == 4:
+    
+        figs, axs = plt.subplots(4, 1)
+        labels = ["Eg","T2g","T1u","T2u"]
+        colors = ["C3","C4","C5","C6"]
+        for i in range(4):
+            y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            axs[i].text(0.05, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
+        
         Mu = []
         Std = []
         for i in range(4):
@@ -864,96 +1172,126 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
             Mu.append(mu)
             Std.append(std)
             axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-            axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-    
-    for ax in axs.flat:
-        ax.tick_params(axis='both', which='major', labelsize=14)
-        ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
-        ax.set_xlabel('Distortion', fontsize = 15) # X label
-        ax.set_xlim(xrange)
-        ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
-        ax.set_yticks([])
         
-    axs[0].xaxis.set_ticklabels([])
-    axs[1].xaxis.set_ticklabels([])
-    axs[2].xaxis.set_ticklabels([])
-    axs[0].yaxis.set_ticklabels([])
-    axs[1].yaxis.set_ticklabels([])
-    axs[2].yaxis.set_ticklabels([])
-    axs[3].yaxis.set_ticklabels([])
-    axs[0].set_xlabel("")
-    axs[1].set_xlabel("")
-    axs[2].set_xlabel("")
-    axs[0].set_ylabel("")
-    axs[2].set_ylabel("")
-    axs[3].set_ylabel("")
-    axs[1].yaxis.set_label_coords(-0.02,-0.40)
-    
-    if not title is None:
-        axs[0].set_title(title,fontsize=14,loc='left')
-        
-    if saveFigures:
-        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
-        
-    plt.show()
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel('Distortion', fontsize = 15) # X label
+            ax.set_xlim(xrange)
+            ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+            ax.set_yticks([])
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[2].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[3].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[1].set_xlabel("")
+        axs[2].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[2].set_ylabel("")
+        axs[3].set_ylabel("")
+        axs[1].yaxis.set_label_coords(-0.02,-0.40)
 
-    if gaus_fit:
-        return Mu, Std
-
-
-def draw_dist_density_frame(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
-    
-    fig_name = f"frame_dist_{uniname}.png"
-    
-    assert D.ndim == 2
-    
-    figs, axs = plt.subplots(4, 1)
-    labels = ["Eg","T2g","T1u","T2u"]
-    colors = ["C3","C4","C5","C6"]
-    for i in range(4):
-        y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
-        bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-        axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-        axs[i].text(0.05, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
-    
-    Mu = []
-    Std = []
-    for i in range(4):
-        dfil = D[:,i].copy()
-        dfil = dfil[~np.isnan(dfil)]
-        mu, std = norm.fit(dfil)
-        Mu.append(mu)
-        Std.append(std)
-        axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-    
-    for ax in axs.flat:
-        ax.tick_params(axis='both', which='major', labelsize=14)
-        ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
-        ax.set_xlabel('Distortion', fontsize = 15) # X label
-        ax.set_xlim(xrange)
-        ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
-        ax.set_yticks([])
+        if saveFigures:
+            plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+        plt.show()
         
-    axs[0].xaxis.set_ticklabels([])
-    axs[1].xaxis.set_ticklabels([])
-    axs[2].xaxis.set_ticklabels([])
-    axs[0].yaxis.set_ticklabels([])
-    axs[1].yaxis.set_ticklabels([])
-    axs[2].yaxis.set_ticklabels([])
-    axs[3].yaxis.set_ticklabels([])
-    axs[0].set_xlabel("")
-    axs[1].set_xlabel("")
-    axs[2].set_xlabel("")
-    axs[0].set_ylabel("")
-    axs[2].set_ylabel("")
-    axs[3].set_ylabel("")
-    axs[1].yaxis.set_label_coords(-0.02,-0.40)
-    
-    
-    if saveFigures:
-        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    elif D.shape[1] == 7:
+        Db = D[:,4:]
+        D = D[:,:4]
         
-    plt.show()
+        figs, axs = plt.subplots(4, 1)
+        labels = ["Eg","T2g","T1u","T2u"]
+        colors = ["C3","C4","C5","C6"]
+        for i in range(4):
+            y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            axs[i].text(0.05, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
+        
+        Mu = []
+        Std = []
+        for i in range(4):
+            dfil = D[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
+            Mu.append(mu)
+            Std.append(std)
+            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+        
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel('Distortion', fontsize = 15) # X label
+            ax.set_xlim(xrange)
+            ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+            ax.set_yticks([])
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[2].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[3].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[1].set_xlabel("")
+        axs[2].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[2].set_ylabel("")
+        axs[3].set_ylabel("")
+        axs[1].yaxis.set_label_coords(-0.02,-0.40)
+
+        if saveFigures:
+            plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+        plt.show()
+        
+        figs, axs = plt.subplots(3, 1)
+        labels = ["B100","B110","B111"]
+        colors = ["C3","C4","C5","C6"]
+        for i in range(3):
+            y,binEdges=np.histogram(Db[:,i],bins=n_bins,range=xrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+            axs[i].text(0.07, 0.78, labels[i], horizontalalignment='center', fontsize=13, verticalalignment='center', transform=axs[i].transAxes)
+        
+        Mu = []
+        Std = []
+        for i in range(3):
+            dfil = Db[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
+            Mu.append(mu)
+            Std.append(std)
+            axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+        
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel('Distortion', fontsize = 15) # X label
+            ax.set_xlim(xrange)
+            ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
+            ax.set_yticks([])
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[1].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[2].set_ylabel("")
+        #axs[1].yaxis.set_label_coords(-0.02,-0.40)
+
+        if saveFigures:
+            plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+        plt.show()
+        
     return Mu
 
 
@@ -1436,8 +1774,6 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
     Isolate distortion mode wrt. the local halide configuration.  
     """
     
-    fig_name=f"dist_octatype_density_{uniname}.png"
-    
     typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
                  "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
     typexval = [0,1,1.83,2.17,2.83,3.17,3.83,4.17,5,6]
@@ -1446,95 +1782,136 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
     config_types = list(config_types)
     config_involved = []
     
-    Dgauss = np.empty((0,4))
-    Dgaussstd = np.empty((0,4))
+    if Dtype[0].shape[2] == 4:
     
-    for di, D in enumerate(Dtype):
-        if D.ndim == 3:
-            D = D.reshape(D.shape[0]*D.shape[1],4)
+        fig_name=f"dist_octatype_density_{uniname}.png"
+
+        Dgauss = np.empty((0,4))
+        Dgaussstd = np.empty((0,4))
         
-        #figs, axs = plt.subplots(4, 1)
-        labels = ["Eg","T2g","T1u","T2u"]
-        colors = ["C3","C4","C5","C6"]
-        for i in range(4):
-            y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
-            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-            #axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-            #axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
-        
-        Mu = []
-        Std = []
-        for i in range(4):
-            dfil = D[:,i].copy()
-            dfil = dfil[~np.isnan(dfil)]
-            mu, std = norm.fit(dfil)
-            Mu.append(mu)
-            Std.append(std)
-            #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-            #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-    
+        for di, D in enumerate(Dtype):
+            if D.ndim == 3:
+                D = D.reshape(D.shape[0]*D.shape[1],4)
             
-# =============================================================================
-#         for ax in axs.flat:
-#             ax.tick_params(axis='both', which='major', labelsize=14)
-#             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-#             ax.set_xlabel('Distortion', fontsize = 15) # X label
-#             ax.set_xlim(xrange)
-#             ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
-#             ax.set_yticks([])
-#             
-#         axs[0].xaxis.set_ticklabels([])
-#         axs[1].xaxis.set_ticklabels([])
-#         axs[2].xaxis.set_ticklabels([])
-#         axs[0].yaxis.set_ticklabels([])
-#         axs[1].yaxis.set_ticklabels([])
-#         axs[2].yaxis.set_ticklabels([])
-#         axs[3].yaxis.set_ticklabels([])
-#         axs[0].set_xlabel("")
-#         axs[1].set_xlabel("")
-#         axs[2].set_xlabel("")
-#         axs[0].set_ylabel("")
-#         axs[2].set_ylabel("")
-#         axs[3].set_ylabel("")
-#         axs[1].yaxis.set_label_coords(-0.02,-0.40)
-# 
-#         axs[0].set_title(typesname[config_types[di]],fontsize=16)
-# =============================================================================
-        config_involved.append(typesname[config_types[di]])    
+            #figs, axs = plt.subplots(4, 1)
+            labels = ["Eg","T2g","T1u","T2u"]
+            colors = ["C3","C4","C5","C6"]
+            for i in range(4):
+                y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+                bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+                #axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+                #axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
             
-        #plt.show()
+            Mu = []
+            Std = []
+            for i in range(4):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+                #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+                #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
         
-        Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
-        Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
-     
-    # plot type dependence   
-    plotx = np.array([typexval[i] for i in config_types])
-    plotxlab = [typextick[i] for i in config_types]
+            config_involved.append(typesname[config_types[di]])    
+                
+            #plt.show()
+            
+            Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
+            Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+         
+        # plot type dependence   
+        plotx = np.array([typexval[i] for i in config_types])
+        plotxlab = [typextick[i] for i in config_types]
+        
+        scaalpha = 0.8
+        scasize = 50
+        plt.subplots(1,1)
+        ax = plt.gca()
+        ax.scatter(plotx-0.075,Dgauss[:,0],label='Eg',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx-0.075,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx-0.025,Dgauss[:,1],label='T2g',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx-0.025,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx+0.025,Dgauss[:,2],label='T1u',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx+0.025,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx+0.075,Dgauss[:,3],label='T2u',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx+0.075,Dgauss[:,3],yerr=Dgaussstd[:,3],fmt='o',solid_capstyle='projecting', capsize=5)
+        plt.legend(prop={'size': 12})
+        
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
+        ax.set_xlabel('Br content', fontsize = 15) # X label
+        ax.set_xticks(plotx)
+        ax.set_xticklabels(plotxlab)
+        ax.set_ylim(bottom=0)
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
     
-    scaalpha = 0.8
-    scasize = 50
-    plt.subplots(1,1)
-    ax = plt.gca()
-    ax.scatter(plotx-0.075,Dgauss[:,0],label='Eg',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx-0.075,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
-    ax.scatter(plotx-0.025,Dgauss[:,1],label='T2g',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx-0.025,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
-    ax.scatter(plotx+0.025,Dgauss[:,2],label='T1u',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx+0.025,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
-    ax.scatter(plotx+0.075,Dgauss[:,3],label='T2u',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx+0.075,Dgauss[:,3],yerr=Dgaussstd[:,3],fmt='o',solid_capstyle='projecting', capsize=5)
-    plt.legend(prop={'size': 12})
-    
-    ax.tick_params(axis='both', which='major', labelsize=14)
-    ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
-    ax.set_xlabel('Br content', fontsize = 15) # X label
-    ax.set_xticks(plotx)
-    ax.set_xticklabels(plotxlab)
-    ax.set_ylim(bottom=0)
-    
-    if saveFigures:
-        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
-    plt.show()
+    elif Dtype[0].shape[2] == 3:
+        fig_name=f"distB_octatype_density_{uniname}.png"
+
+        Dgauss = np.empty((0,3))
+        Dgaussstd = np.empty((0,3))
+        
+        for di, D in enumerate(Dtype):
+            if D.ndim == 3:
+                D = D.reshape(D.shape[0]*D.shape[1],3)
+            
+            #figs, axs = plt.subplots(4, 1)
+            labels = ["B100","B110","B111"]
+            colors = ["C3","C4","C5","C6"]
+            for i in range(3):
+                y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+                bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+                #axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+                #axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+            
+            Mu = []
+            Std = []
+            for i in range(3):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+                #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+                #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+        
+            config_involved.append(typesname[config_types[di]])    
+                
+            #plt.show()
+            
+            Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
+            Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+         
+        # plot type dependence   
+        plotx = np.array([typexval[i] for i in config_types])
+        plotxlab = [typextick[i] for i in config_types]
+        
+        scaalpha = 0.8
+        scasize = 50
+        plt.subplots(1,1)
+        ax = plt.gca()
+        ax.scatter(plotx-0.05,Dgauss[:,0],label=labels[0],alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx-0.05,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx,Dgauss[:,1],label=labels[1],alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx+0.05,Dgauss[:,2],label=labels[2],alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx+0.05,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+        plt.legend(prop={'size': 12})
+        
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
+        ax.set_xlabel('Br content', fontsize = 15) # X label
+        ax.set_xticks(plotx)
+        ax.set_xticklabels(plotxlab)
+        ax.set_ylim(bottom=0)
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
     
     return Dgauss, Dgaussstd
 
@@ -1760,7 +2137,7 @@ def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, c
             
         plt.show()
         
-        m1 = np.array(compute_tilt_density(T,method='curve')).reshape(1,-1)
+        m1 = np.array(compute_tilt_density(T,method='gaussian')).reshape(1,-1)
         maxs = np.concatenate((maxs,m1),axis=0)
     
     # plot type dependence   
@@ -1964,98 +2341,111 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
     Isolate distortion mode wrt. the local halide concentration.  
     """
     
-    fig_name=f"dist_halideconc_density_{uniname}.png"
-    
-    Dgauss = np.empty((0,4))
-    Dgaussstd = np.empty((0,4))
-    
-    for di, D in enumerate(Dconc):
-        if D.ndim == 3:
-            D = D.reshape(D.shape[0]*D.shape[1],4)
+    if Dconc[0].shape[2] == 4:
+        fig_name=f"dist_halideconc_density_{uniname}.png"
         
-# =============================================================================
-#         figs, axs = plt.subplots(4, 1)
-#         labels = ["Eg","T2g","T1u","T2u"]
-#         colors = ["C3","C4","C5","C6"]
-#         for i in range(4):
-#             y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
-#             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
-#             axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
-#             axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
-#         
-# =============================================================================
-        Mu = []
-        Std = []
-        for i in range(4):
-            dfil = D[:,i].copy()
-            dfil = dfil[~np.isnan(dfil)]
-            mu, std = norm.fit(dfil)
-            Mu.append(mu)
-            Std.append(std)
-            #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-            #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
-    
-            
-# =============================================================================
-#         for ax in axs.flat:
-#             ax.tick_params(axis='both', which='major', labelsize=14)
-#             ax.set_ylabel('counts (a.u.)', fontsize = 15) # Y label
-#             ax.set_xlabel('Distortion', fontsize = 15) # X label
-#             ax.set_xlim(xrange)
-#             ax.set_xticks(np.linspace(xrange[0], xrange[1], round((xrange[1]-xrange[0])/0.1+1)))
-#             ax.set_yticks([])
-#             
-#         axs[0].xaxis.set_ticklabels([])
-#         axs[1].xaxis.set_ticklabels([])
-#         axs[2].xaxis.set_ticklabels([])
-#         axs[0].yaxis.set_ticklabels([])
-#         axs[1].yaxis.set_ticklabels([])
-#         axs[2].yaxis.set_ticklabels([])
-#         axs[3].yaxis.set_ticklabels([])
-#         axs[0].set_xlabel("")
-#         axs[1].set_xlabel("")
-#         axs[2].set_xlabel("")
-#         axs[0].set_ylabel("")
-#         axs[2].set_ylabel("")
-#         axs[3].set_ylabel("")
-#         axs[1].yaxis.set_label_coords(-0.02,-0.40)
-# 
-#         axs[0].set_title('Br concentration: '+str(round(concent[di],4)),fontsize=16)  
-#             
-#         plt.show()
-# =============================================================================
+        Dgauss = np.empty((0,4))
+        Dgaussstd = np.empty((0,4))
         
-        Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
-        Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
-     
-    # plot type dependence   
-    plotx = np.array(concent)
-    
-    dist_gap = 0.0005
-    
-    scaalpha = 0.8
-    scasize = 50
-    plt.subplots(1,1)
-    ax = plt.gca()
-    ax.scatter(plotx-3*dist_gap,Dgauss[:,0],label='Eg',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx-3*dist_gap,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
-    ax.scatter(plotx-1*dist_gap,Dgauss[:,1],label='T2g',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx-1*dist_gap,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
-    ax.scatter(plotx+1*dist_gap,Dgauss[:,2],label='T1u',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx+1*dist_gap,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
-    ax.scatter(plotx+3*dist_gap,Dgauss[:,3],label='T2u',alpha=scaalpha,s=scasize)
-    ax.errorbar(plotx+3*dist_gap,Dgauss[:,3],yerr=Dgaussstd[:,3],fmt='o',solid_capstyle='projecting', capsize=5)
-    plt.legend(prop={'size': 12})
-    
-    ax.tick_params(axis='both', which='major', labelsize=14)
-    ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
-    ax.set_xlabel('Br content', fontsize = 15) # X label
+        for di, D in enumerate(Dconc):
+            if D.ndim == 3:
+                D = D.reshape(D.shape[0]*D.shape[1],4)
 
-    ax.set_ylim(bottom=0)
-    
-    if saveFigures:
-        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
-    plt.show()
+            Mu = []
+            Std = []
+            for i in range(4):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+                #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+                #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+
+            Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
+            Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+         
+        # plot type dependence   
+        plotx = np.array(concent)
+        
+        dist_gap = 0.0005
+        
+        scaalpha = 0.8
+        scasize = 50
+        plt.subplots(1,1)
+        ax = plt.gca()
+        ax.scatter(plotx-3*dist_gap,Dgauss[:,0],label='Eg',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx-3*dist_gap,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx-1*dist_gap,Dgauss[:,1],label='T2g',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx-1*dist_gap,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx+1*dist_gap,Dgauss[:,2],label='T1u',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx+1*dist_gap,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx+3*dist_gap,Dgauss[:,3],label='T2u',alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx+3*dist_gap,Dgauss[:,3],yerr=Dgaussstd[:,3],fmt='o',solid_capstyle='projecting', capsize=5)
+        plt.legend(prop={'size': 12})
+        
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
+        ax.set_xlabel('Br content', fontsize = 15) # X label
+
+        ax.set_ylim(bottom=0)
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
+        
+    elif Dconc[0].shape[2] == 3:
+        fig_name=f"distB_halideconc_density_{uniname}.png"
+        
+        Dgauss = np.empty((0,3))
+        Dgaussstd = np.empty((0,3))
+        
+        labels = ["B100","B110","B111"]
+        
+        for di, D in enumerate(Dconc):
+            if D.ndim == 3:
+                D = D.reshape(D.shape[0]*D.shape[1],3)
+
+            Mu = []
+            Std = []
+            for i in range(3):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+                #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+                #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+
+            Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
+            Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+         
+        # plot type dependence   
+        plotx = np.array(concent)
+        
+        dist_gap = 0.0005
+        
+        scaalpha = 0.8
+        scasize = 50
+        plt.subplots(1,1)
+        ax = plt.gca()
+        ax.scatter(plotx-2*dist_gap,Dgauss[:,0],label=labels[0],alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx-2*dist_gap,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx,Dgauss[:,1],label=labels[1],alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx+2*dist_gap,Dgauss[:,2],label=labels[2],alpha=scaalpha,s=scasize)
+        ax.errorbar(plotx+2*dist_gap,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+        plt.legend(prop={'size': 12})
+        
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel(r'Distortion', fontsize = 15) # Y label
+        ax.set_xlabel('Br content', fontsize = 15) # X label
+
+        ax.set_ylim(bottom=0)
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
     
     return Dgauss, Dgaussstd
 
@@ -2156,6 +2546,477 @@ def draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures, n_bins = 1
     ax.tick_params(axis='both', which='major', labelsize=14)
     ax.set_ylabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # Y label
     ax.set_xlabel('Br content', fontsize = 15) # X label
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return Lgauss, Lgaussstd
+
+
+def draw_hetero_tilt_density(Tcls, TCNcls, typelib, uniname, saveFigures, corr_vals = None, n_bins = 100, symm_n_fold = 4):
+    """ 
+    Isolate tilting pattern wrt. the local halide configuration.  
+    """
+    
+    from pdyna.structural import periodicity_fold
+    fig_name=f"tilt_hetero_density_{uniname}.png"
+    fig_name1=f"tilt_hetero_density_tcp_{uniname}.png"
+    
+    if symm_n_fold == 2:
+        hrange = [-90,90]
+        tlabel = [-90,-60,-30,0,30,60,90]
+    elif symm_n_fold == 4:
+        hrange = [-45,45]
+        tlabel = [-45,-30,-15,0,15,30,45]
+    elif symm_n_fold == 8:
+        hrange = [0,45]
+        tlabel = [0,15,30,45]
+    
+    typesname = ["bulk","grain boundary","grain"]
+    typexval = [0,1,2]
+    typextick = ["bulk","grain boundary","grain"]
+    fill_alpha = 0.5
+    
+    if not TCNcls is None:
+        C = []
+        if TCNcls[0].shape[2] == 3:
+            for temp in TCNcls:
+                C.append((temp[:,:,0].reshape((-1,)),
+                          temp[:,:,1].reshape((-1,)),
+                          temp[:,:,2].reshape((-1,))))
+        elif TCNcls[0].shape[2] == 6:
+            for temp in TCNcls:
+                C.append((np.concatenate((temp[:,:,0],temp[:,:,1]),axis=0).reshape((-1,)),
+                    np.concatenate((temp[:,:,2],temp[:,:,3]),axis=0).reshape((-1,)),
+                    np.concatenate((temp[:,:,4],temp[:,:,5]),axis=0).reshape((-1,))))
+    
+    maxs = np.empty((0,3))
+    for ti, T in enumerate(Tcls):
+        
+        T = periodicity_fold(T,n_fold=symm_n_fold)
+        
+        T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
+        T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
+        T_c = T[:,:,2].reshape((T.shape[0]*T.shape[1]))
+        tup_T = (T_a,T_b,T_c)
+        assert len(tup_T) == 3
+        
+        figs, axs = plt.subplots(3, 1)
+        labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+        colors = ["C0","C1","C2"]
+        for i in range(3):
+            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
+            
+            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=hrange)
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yt=y/max(y)
+            axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
+            #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+
+            y,binEdges=np.histogram(C[ti][i],bins=n_bins,range=hrange) 
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yc=y/max(y)
+            yy=yt*yc
+
+            axs[i].fill_between(bincenters, yy, 0, facecolor = colors[i], alpha=fill_alpha, interpolate=True)
+            
+        for ax in axs.flat:
+            #ax.set(xlabel=r'Tilt Angle ($\degree$)', ylabel='Counts (a.u.)')
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_xlim(hrange)
+            ax.set_xticks(tlabel)
+            ax.set_yticks([])
+        
+        axs[2].set_xlabel(r'Tilt Angle ($\degree$)', fontsize=15)
+        axs[1].set_ylabel('Counts (a.u.)', fontsize=15)
+        
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[1].set_xlabel("")
+        axs[2].set_ylabel("")
+        
+        axs[0].set_title(typesname[ti],fontsize=16)
+
+        plt.show()
+        
+        m1 = np.array(compute_tilt_density(T,method='gaussian',plot_fitting=True,corr_vals=list(corr_vals[:,0]))).reshape(1,-1)
+        maxs = np.concatenate((maxs,m1),axis=0)
+    
+    # plot type dependence   
+    plotx = np.array([0,1,2])
+    plotxlab = typextick
+    histcolors = ['grey','darkred','darkblue']
+    
+    scaalpha = 0.9
+    scasize = 80
+    
+# =============================================================================
+#     plt.subplots(1,1)
+#     ax = plt.gca()
+#     ax.scatter(plotx,maxs[:,0],label=r'$\mathit{a}$',alpha=scaalpha,s=scasize)
+#     ax.scatter(plotx,maxs[:,1],label=r'$\mathit{b}$',alpha=scaalpha,s=scasize)
+#     ax.scatter(plotx,maxs[:,2],label=r'$\mathit{c}$',alpha=scaalpha,s=scasize)
+#     plt.legend(prop={'size': 12})
+#     
+#     ax.tick_params(axis='both', which='major', labelsize=14)
+#     ax.set_ylabel('Tilting (deg)', fontsize = 15) # Y label
+#     ax.set_xlabel('Br content', fontsize = 15) # X label
+#     ax.set_xticks(plotx)
+#     ax.set_xticklabels(plotxlab)
+#     ax.set_ylim(bottom=0)
+# =============================================================================
+    
+    
+    config_types = [0,1,2]
+    types = np.zeros((3,)).astype(int)
+    for i,t in enumerate(typelib):
+        types[config_types[i]] = len(t)
+    
+    xts = typextick
+    
+    # plot bars in stack manner
+    
+    fig, axs = plt.subplots(2,1,figsize=(5.1,4.2),gridspec_kw={'height_ratios':[3, 1]},sharex=False)
+
+    axs[0].scatter(plotx,maxs[:,0],label=r'$\mathit{a}$',alpha=scaalpha,s=scasize)
+    axs[0].scatter(plotx,maxs[:,1],label=r'$\mathit{b}$',alpha=scaalpha,s=scasize)
+    axs[0].scatter(plotx,maxs[:,2],label=r'$\mathit{c}$',alpha=scaalpha,s=scasize)
+    axs[0].legend(loc=2,prop={'size': 13.2},frameon = True)
+    axs[0].set_xlim([-0.5,2.5])
+    
+    axs[1].bar(xts, types, width=0.5, color=histcolors[0])
+    axs[1].text(0, types[0], str(types[0]), fontsize=11,horizontalalignment='center',verticalalignment='bottom')
+    axs[1].text(1, types[1], str(types[1]), fontsize=11,horizontalalignment='center',verticalalignment='bottom')
+    axs[1].text(2, types[2], str(types[2]), fontsize=11,horizontalalignment='center',verticalalignment='bottom')
+    if max(types)/min(types) > 15:
+        axs[1].set_yscale("log")
+        axs[1].set_ylabel('Log count', fontsize = 15) 
+        axs[1].set_ylim([axs[1].get_ylim()[0],axs[1].get_ylim()[1]*3])
+    else:
+        axs[1].set_ylabel('Count', fontsize = 15) 
+        axs[1].set_ylim([axs[1].get_ylim()[0],axs[1].get_ylim()[1]*1.2])
+    
+    axs[0].tick_params(axis='both', which='major', labelsize=14)
+    axs[1].tick_params(axis='both', which='major', labelsize=14)
+    axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+    #axs[1].set_xlabel('Br content', fontsize = 15) # X label
+    axs[0].set_xticks(plotx)
+    axs[0].set_xticklabels([])
+    #axs[0].set_xticks(typexval)
+    #axs[0].set_xticklabels(typextick)
+    #for tick_label, color in zip(axs[0].get_xticklabels(), histcolors):
+    #    tick_label.set_color(color)
+    axs[1].set_yticks([])
+    axs[1].set_yticklabels([])
+    axs[0].set_ylim(bottom=0)
+    axs[1].set_xlim(axs[0].get_xlim())
+
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.15, hspace=0.05)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    if not (corr_vals is None):
+        from matplotlib.colors import LinearSegmentedColormap, Normalize
+        from matplotlib.cm import ScalarMappable
+        scasize = 150
+        cmname = "coolwarm"
+            
+        norm1 = Normalize(vmin=-np.amax(np.abs(corr_vals)), vmax=np.amax(np.abs(corr_vals)))  
+
+        fig, axs = plt.subplots(2,1,figsize=(7.4,6.0),gridspec_kw={'height_ratios':[2.6, 0.8]},sharex=False)
+        
+        axs[0].scatter(plotx,maxs[:,0],alpha=scaalpha,s=scasize,c=corr_vals[:,0],cmap=cmname,norm=norm1)
+        axs[0].scatter(plotx,maxs[:,1],alpha=scaalpha,s=scasize,c=corr_vals[:,1],cmap=cmname,norm=norm1)
+        axs[0].scatter(plotx,maxs[:,2],alpha=scaalpha,s=scasize,c=corr_vals[:,2],cmap=cmname,norm=norm1)
+        axs[0].set_xlim([-0.5,2.5])
+        
+        # Add colorbars
+        clb1 = plt.colorbar(ScalarMappable(norm=norm1, cmap=cmname),ax=axs[0], pad=0.025)
+        
+        clb1.set_label(label='TCP (a.u.)', size=13)
+        
+        axs[1].bar(xts, types, width=0.5, color=histcolors[0])
+        axs[1].text(0, types[0], str(types[0]), fontsize=11,horizontalalignment='center',verticalalignment='bottom')
+        axs[1].text(1, types[1], str(types[1]), fontsize=11,horizontalalignment='center',verticalalignment='bottom')
+        axs[1].text(2, types[2], str(types[2]), fontsize=11,horizontalalignment='center',verticalalignment='bottom')
+        if max(types)/min(types) > 15:
+            axs[1].set_yscale("log")
+            axs[1].set_ylabel('Log count', fontsize = 15) 
+            axs[1].set_ylim([axs[1].get_ylim()[0],axs[1].get_ylim()[1]*3])
+        else:
+            axs[1].set_ylabel('Count', fontsize = 15) 
+            axs[1].set_ylim([axs[1].get_ylim()[0],axs[1].get_ylim()[1]*1.2])
+               
+        axs[0].tick_params(axis='both', which='major', labelsize=14)
+        axs[1].tick_params(axis='both', which='major', labelsize=14)
+        axs[0].set_ylabel('Tilting (deg)', fontsize = 15) 
+        
+        #axs[1].set_xlabel('Br content', fontsize = 15) # X label
+        axs[0].set_xticks(plotx)
+        axs[0].set_xticklabels([])
+        #axs[0].set_xticks(typexval)
+        #axs[0].set_xticklabels(typextick)
+        #for tick_label, color in zip(axs[0].get_xticklabels(), histcolors):
+        #    tick_label.set_color(color)
+        axs[1].set_yticks([])
+        axs[1].set_yticklabels([])
+        axs[0].set_ylim(bottom=0)
+        axs[1].set_xlim(axs[0].get_xlim())
+        
+        newwid = axs[0].get_position().width
+        pax1 = axs[1].get_position()
+        new_position = [pax1.x0, pax1.y0, newwid, pax1.height+0.03]
+        axs[1].set_position(new_position)
+
+        #plt.tight_layout()
+        #plt.subplots_adjust(wspace=0.15, hspace=0.15)
+        
+        if saveFigures:
+            plt.savefig(fig_name1, dpi=350,bbox_inches='tight')
+        plt.show()
+        
+    return maxs
+
+
+def draw_hetero_dist_density(Dcls, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
+    """ 
+    Isolate distortion mode wrt. the local halide configuration.  
+    """
+    from sklearn.decomposition import PCA
+    
+    typesname = ["bulk","grain boundary","grain"]
+    typexval = [0,1,2]
+    typextick = ["bulk","grain boundary","grain"]
+    
+    if Dcls[0].shape[-1] == 4:
+        fig_name=f"dist_hetero_density_{uniname}.png"
+        
+        Dgauss = np.empty((0,4))
+        Dgaussstd = np.empty((0,4))
+        
+        Dlist = []
+        for di, D in enumerate(Dcls):
+            if D.ndim == 3:
+                D = D.reshape(-1,4)
+            Dlist.append(D)
+            #figs, axs = plt.subplots(4, 1)
+            labels = ["Eg","T2g","T1u","T2u"]
+            colors = ["C3","C4","C5","C6"]
+            for i in range(4):
+                y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+                bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+                #axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+                #axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+            
+            Mu = []
+            Std = []
+            for i in range(4):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+
+            Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
+            Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+         
+        # plot type dependence   
+        plotx = np.array([0,1,2])
+        plotxlab = typesname
+        
+        Ddelta = Dgauss-Dgauss[0,:]
+        
+        scaalpha = 0.8
+        scasize = 50
+        plt.subplots(1,1)
+        ax = plt.gca()
+        ax.scatter(plotx,Ddelta[:,0],label='Eg',alpha=scaalpha,s=scasize)
+        #ax.errorbar(plotx-0.075,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx,Ddelta[:,1],label='T2g',alpha=scaalpha,s=scasize)
+        #ax.errorbar(plotx-0.025,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx,Ddelta[:,2],label='T1u',alpha=scaalpha,s=scasize)
+        #ax.errorbar(plotx+0.025,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx,Ddelta[:,3],label='T2u',alpha=scaalpha,s=scasize)
+        #ax.errorbar(plotx+0.075,Dgauss[:,3],yerr=Dgaussstd[:,3],fmt='o',solid_capstyle='projecting', capsize=5)
+        plt.legend(prop={'size': 12},frameon=True)
+        
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel(r'$\Delta$ Distortion', fontsize = 15) # Y label
+        #ax.set_xlabel('Br content', fontsize = 15) # X label
+        ax.set_xticks(plotx)
+        ax.set_xticklabels(plotxlab)
+        plt.axhline(0,linestyle='--',linewidth=2,color='k')
+        #ax.set_ylim(bottom=0)
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
+        
+        # PCA on Distortions
+        plt.subplots(1,1)
+        ax = plt.gca()
+        for di, dtemp in enumerate(Dlist):
+            pca=PCA(n_components=2) 
+            Y=pca.fit_transform(dtemp)
+            
+            ax.scatter(Y[:,0],Y[:,1],s=10,alpha=0.4,label=typesname[di])
+            
+        plt.legend(prop={'size': 12},frameon=True)
+        
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xlabel(r'PC1', fontsize = 15) # Y label
+        ax.set_ylabel(r'PC2', fontsize = 15) # Y label
+        
+    elif Dcls[0].shape[-1] == 3:
+        fig_name=f"distB_hetero_density_{uniname}.png"
+        
+        Dgauss = np.empty((0,3))
+        Dgaussstd = np.empty((0,3))
+        
+        Dlist = []
+        for di, D in enumerate(Dcls):
+            if D.ndim == 3:
+                D = D.reshape(-1,3)
+            Dlist.append(D)
+            #figs, axs = plt.subplots(4, 1)
+            labels = ["B100","B110","B111"]
+            colors = ["C3","C4","C5","C6"]
+            for i in range(3):
+                y,binEdges=np.histogram(D[:,i],bins=n_bins,range=xrange)
+                bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+                #axs[i].plot(bincenters,y,label = labels[i],color = colors[i],linewidth = 2.4)
+                #axs[i].text(0.05, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+            
+            Mu = []
+            Std = []
+            for i in range(3):
+                dfil = D[:,i].copy()
+                dfil = dfil[~np.isnan(dfil)]
+                mu, std = norm.fit(dfil)
+                Mu.append(mu)
+                Std.append(std)
+
+            Dgauss = np.concatenate((Dgauss,np.array(Mu).reshape(1,-1)),axis=0)
+            Dgaussstd = np.concatenate((Dgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+         
+        # plot type dependence   
+        plotx = np.array([0,1,2])
+        plotxlab = typesname
+        
+        Ddelta = Dgauss-Dgauss[0,:]
+        
+        scaalpha = 0.8
+        scasize = 50
+        plt.subplots(1,1)
+        ax = plt.gca()
+        ax.scatter(plotx,Ddelta[:,0],label=labels[0],alpha=scaalpha,s=scasize)
+        #ax.errorbar(plotx-0.075,Dgauss[:,0],yerr=Dgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx,Ddelta[:,1],label=labels[1],alpha=scaalpha,s=scasize)
+        #ax.errorbar(plotx-0.025,Dgauss[:,1],yerr=Dgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+        ax.scatter(plotx,Ddelta[:,2],label=labels[2],alpha=scaalpha,s=scasize)
+        #ax.errorbar(plotx+0.025,Dgauss[:,2],yerr=Dgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+        plt.legend(prop={'size': 12},frameon=True)
+        
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.set_ylabel(r'$\Delta$ Distortion', fontsize = 15) # Y label
+        #ax.set_xlabel('Br content', fontsize = 15) # X label
+        ax.set_xticks(plotx)
+        ax.set_xticklabels(plotxlab)
+        plt.axhline(0,linestyle='--',linewidth=2,color='k')
+        #ax.set_ylim(bottom=0)
+        
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+        plt.show()
+        
+        # PCA on Distortions
+        from sklearn.decomposition import PCA
+        
+        plt.subplots(1,1)
+        ax = plt.gca()
+        for di, dtemp in enumerate(Dlist):
+            pca=PCA(n_components=2) 
+            Y=pca.fit_transform(dtemp)
+            
+            ax.scatter(Y[:,0],Y[:,1],s=10,alpha=0.4,label=typesname[di])
+            
+        plt.legend(prop={'size': 12},frameon=True)
+        
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xlabel(r'PC1', fontsize = 15) # Y label
+        ax.set_ylabel(r'PC2', fontsize = 15) # Y label
+
+    return Dgauss, Dgaussstd
+
+
+def draw_hetero_lat_density(Lcls, uniname, saveFigures, n_bins = 100):
+    """ 
+    Isolate distortion mode wrt. the local halide configuration.  
+    """
+    
+    fig_name=f"lat_octatype_density_{uniname}.png"
+    
+    typesname = ["bulk","grain boundary","grain"]
+    typexval = [0,1,2]
+    typextick = ["bulk","grain boundary","grain"]
+    
+    Lgauss = np.empty((0,3))
+    Lgaussstd = np.empty((0,3))
+    
+    labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+    colors = ["C0","C1","C2"]
+    
+    for di, L in enumerate(Lcls):
+        if L.ndim == 3:
+            L = L.reshape(L.shape[0]*L.shape[1],3)
+        
+        Mu = []
+        Std = []
+        for i in range(3):
+            dfil = L[:,i].copy()
+            dfil = dfil[~np.isnan(dfil)]
+            mu, std = norm.fit(dfil)
+            Mu.append(mu)
+            Std.append(std)
+            #axs[i].text(0.852, 0.77, 'Mean: %.4f' % mu, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+            #axs[i].text(0.878, 0.45, 'SD: %.4f' % std, horizontalalignment='center', fontsize=12, verticalalignment='center', transform=axs[i].transAxes)
+    
+        
+        Lgauss = np.concatenate((Lgauss,np.array(Mu).reshape(1,-1)),axis=0)
+        Lgaussstd = np.concatenate((Lgaussstd,np.array(Std).reshape(1,-1)),axis=0)
+     
+    # plot type dependence   
+    plotx = np.array([0,1,2])
+    plotxlab = typextick
+    
+    scaalpha = 0.8
+    scasize = 50
+    plt.subplots(1,1)
+    ax = plt.gca()
+    ax.scatter(plotx-0.05,Lgauss[:,0],label=r'$\mathit{a}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx-0.05,Lgauss[:,0],yerr=Lgaussstd[:,0],fmt='o',solid_capstyle='projecting', capsize=5)
+    ax.scatter(plotx,Lgauss[:,1],label=r'$\mathit{b}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx,Lgauss[:,1],yerr=Lgaussstd[:,1],fmt='o',solid_capstyle='projecting', capsize=5)
+    ax.scatter(plotx+0.05,Lgauss[:,2],label=r'$\mathit{c}$',alpha=scaalpha,s=scasize)
+    ax.errorbar(plotx+0.05,Lgauss[:,2],yerr=Lgaussstd[:,2],fmt='o',solid_capstyle='projecting', capsize=5)
+    plt.legend(prop={'size': 12})
+    
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.set_ylabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize = 15) # Y label
+    #ax.set_xlabel('Br content', fontsize = 15) # X label
+    ax.set_xticks(plotx)
+    ax.set_xticklabels(plotxlab)
     
     if saveFigures:
         plt.savefig(fig_name, dpi=350,bbox_inches='tight')
@@ -2980,6 +3841,79 @@ def quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures, n_
     plt.title("Tilting Correlation Length",fontsize=15)
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel('Br Content', fontsize=15)
+    plt.ylabel('Correlation Length (unit cell)', fontsize=15)
+    legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+    legend.get_frame().set_alpha(0.7)
+    
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return data
+
+
+def quantify_hetero_tilt_domain(TCcls, uniname, saveFigures, n_bins = 100):
+    """ 
+    Isolate tilting pattern wrt. the local halide configuration.  
+    """
+    
+    fig_name=f"tilt_domain_hetero_{uniname}.png"
+    nns = TCcls[0].shape[2]
+    
+    typesname = ["bulk","grain boundary","grain"]
+    typexval = [0,1,2]
+    typextick = ["bulk","grain boundary","grain"]
+    
+    from scipy.optimize import curve_fit
+    def model_func(x, k):
+        return np.exp(-k*x)
+    
+    scdecay = np.empty((len(TCcls),3,3))
+    for t in range(len(TCcls)):
+        meantc = np.mean(TCcls[t],axis=0)
+        for i in range(3):
+            for j in range(3):
+                tc = np.abs(meantc[i,:,j])
+                p0 = (5) # starting search coeffs
+                opt, pcov = curve_fit(model_func, np.array(list(range(nns))), tc, p0)
+                k= opt
+
+                scdecay[t,i,j] = (1/k)
+        
+        fig,ax = plt.subplots()
+        plt.plot(list(range(nns)),meantc[0,:,2],linewidth=1.5,label='axis 0')
+        plt.plot(list(range(nns)),meantc[1,:,2],linewidth=1.5,label='axis 1')
+        plt.plot(list(range(nns)),meantc[2,:,2],linewidth=1.5,label='axis 2')
+        plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
+        plt.title(f"{typesname[t]} - Along axis 2",fontsize=15)
+        ax.set_ylim([-1,1])
+        ax.tick_params(axis='both', which='major', labelsize=12)
+        plt.xlabel('Distance (unit cell)', fontsize=14)
+        plt.ylabel('Spatial correlation (a.u.)', fontsize=14)
+        legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
+        legend.get_frame().set_alpha(0.7)
+        
+    if np.sum(scdecay<0) > 0:
+        print("!Halideconc_tilt_domain: found fitted infinite correlation length. ")
+        scdecay[scdecay<0] = np.nan
+    
+    # assume isotropic
+    diag = (scdecay[:,0,0]+scdecay[:,1,1]+scdecay[:,2,2])/3
+    off_diag = (scdecay[:,0,1]+scdecay[:,1,2]+scdecay[:,0,2]+scdecay[:,1,0]+scdecay[:,2,1]+scdecay[:,2,0])/6
+    
+    # plot type dependence   
+    plotx = np.array([0,1,2])
+    plotxlab = typextick
+    data = [plotxlab,diag,off_diag]
+    
+    fig,ax = plt.subplots()
+    plt.plot(plotx,data[1],marker='s',markersize=6,linewidth=2.2,label='Normal')
+    plt.plot(plotx,data[2],marker='s',markersize=6,linewidth=2.2,label='Parallel')
+    ax.set_xticks(plotx)
+    ax.set_xticklabels(plotxlab)
+    plt.title("Tilting Correlation Length",fontsize=15)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    #plt.xlabel('Br Content', fontsize=15)
     plt.ylabel('Correlation Length (unit cell)', fontsize=15)
     legend = plt.legend(prop={'size': 12},frameon = True, loc="upper right")
     legend.get_frame().set_alpha(0.7)

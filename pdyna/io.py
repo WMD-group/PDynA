@@ -1,18 +1,16 @@
-import numpy as np
-import warnings
-import time
+"""
+pdyna.io: The collection of I/O functions to various input formats.
+
+"""
+
 import re
-from glob import glob
+import numpy as np
 from ase.atoms import Atoms
 from ase.calculators.lammps import convert
-from collections import deque
-import pymatgen.io.ase as pia
-from ase.quaternions import Quaternions
-from ase.calculators.singlepoint import SinglePointCalculator
-from pdyna.structural import get_cart_from_frac, get_frac_from_cart
 
 
 def read_lammps_dir(fdir,allow_multi=False):
+    from glob import glob
     filelist = glob(fdir+"*.in")
     if len(filelist) == 0:
         raise FileNotFoundError("Can't find any LAMMPS .in file in the directory.")
@@ -48,6 +46,8 @@ def read_lammps_settings(infile): # internal use
 
 
 def read_ase_md_settings(fdir): # internal use 
+
+    from glob import glob
 
     filelist = glob(fdir+"*.py")
     if len(filelist) == 0:
@@ -157,10 +157,12 @@ def process_lat_reverse(cellpar):
 
 
 def read_xdatcar(filename,natom):
-    import re
+    import warnings
     from monty.io import zopen
     from pymatgen.util.io_utils import clean_lines
     from pymatgen.core.periodic_table import Element
+    
+    from pdyna.structural import get_cart_from_frac, get_frac_from_cart
 
     def from_string(data):
         """
@@ -331,6 +333,8 @@ def read_lammps_dump(filepath,specorder=None):
     """
     Modified from ASE lammps reading functions
     """
+    from collections import deque
+    from pymatgen.io.ase import AseAtomsAdaptor as aaa
     # Load all dumped timesteps into memory simultaneously
     fp = open(filepath,"r")
     lines = deque(fp.readlines())
@@ -415,7 +419,7 @@ def read_lammps_dump(filepath,specorder=None):
     assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
     
     out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=celldisp,cell=cell)
-    st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
+    st0 = aaa.get_structure(out_atoms)
     
     maxframe = framenums[-1]
     if framenums[1]-framenums[0] > framenums[2]-framenums[1]:
@@ -428,8 +432,7 @@ def read_xyz(filepath):
     """
     Modified from Pymatgen xyz reading functions
     """
-    
-    import re
+    from pymatgen.io.ase import AseAtomsAdaptor as aaa
     
     def read_xyz_block(bloc):
 
@@ -487,7 +490,7 @@ def read_xyz(filepath):
     latmat = latmat[1:,:]
         
     out_atoms = Atoms(symbols=np.array(asymb),positions=Allpos[0,:],pbc=[True,True,True],celldisp=np.array([0., 0., 0.]),cell=latmat[0,:])
-    st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
+    st0 = aaa.get_structure(out_atoms)
     
     return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
 
@@ -496,8 +499,7 @@ def read_pdb(filepath):
     """
     Modified from Pymatgen xyz reading functions
     """
-    
-    import re
+    from pymatgen.io.ase import AseAtomsAdaptor as aaa
     
     def read_pdb_block(bloc):
         
@@ -551,7 +553,7 @@ def read_pdb(filepath):
     latmat = latmat[1:,:]
         
     out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=np.array([0., 0., 0.]),cell=lat0)
-    st0 = pia.AseAtomsAdaptor.get_structure(out_atoms)
+    st0 = aaa.get_structure(out_atoms)
     
     return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
 
@@ -561,8 +563,8 @@ def read_ase_traj(filepath):
     Modified from ASE original trajectory reading functions
     """
     
-    import re
     from ase.io import Trajectory
+    from pymatgen.io.ase import AseAtomsAdaptor as aaa
     
     contents = Trajectory(filepath)
     
@@ -588,7 +590,7 @@ def read_ase_traj(filepath):
     lattice = lattice[1:,:]
     latmat = latmat[1:,:]
         
-    st0 = pia.AseAtomsAdaptor.get_structure(contents[0])
+    st0 = aaa.get_structure(contents[0])
     if not np.array_equal(np.array(st0.atomic_numbers),np.array(contents[0].numbers)):
         raise TypeError("Fatal: the converted Pymatgen structure does not match with the ASE Atoms. ")
     asymb = []
@@ -606,6 +608,8 @@ def process_lammps_data(
     order=True,
     specorder=None,
     units="metal",):
+    
+    from pdyna.structural import get_frac_from_cart
 
     # read IDs if given and order if needed
     if "id" in colnames:
@@ -653,33 +657,14 @@ def process_lammps_data(
     else:
         raise ValueError("No atomic positions found in LAMMPS output")
 
-    #velocities = get_quantity(["vx", "vy", "vz"], "velocity")
-    #charges = get_quantity(["q"], "charge")
-    #forces = get_quantity(["fx", "fy", "fz"], "force")
-    #quaternions = get_quantity(["c_q[1]", "c_q[2]", "c_q[3]", "c_q[4]"])
-
     # convert cell
     cell = convert(cell, "distance", units, "ASE")
     celldisp = convert(celldisp, "distance", units, "ASE")
-    
-# =============================================================================
-#     if np.any(celldisp): # if there is a non-zero celldisp
-#         print(celldisp)
-#         print(positions)
-#         raise ValueError("There is a non-zero cell displacement. ")
-# =============================================================================
     
     l6 = process_lat(cell)
     
     cart_coords = positions-celldisp
     frac_coords = get_frac_from_cart(cart_coords,cell)
-    
-    ## process the extra columns of fixes, variables and computes
-    ##    that can be dumped, add as additional arrays to atoms object
-    #for colname in colnames:
-    #    # determine if it is a compute or fix (but not the quaternian)
-    #    if (colname.startswith('f_') or colname.startswith('v_') or
-    #            (colname.startswith('c_') and not colname.startswith('c_q['))):
 
     return list(elements), cell, l6, frac_coords, cart_coords  
 
@@ -696,25 +681,12 @@ def lammps_data_to_ase_atoms( # deprecated
     prismobj=None,
     units="metal",
 ):
-    """Extract positions and other per-atom parameters and create Atoms
-
-    :param data: per atom data
-    :param colnames: index for data
-    :param cell: cell dimensions
-    :param celldisp: origin shift
-    :param pbc: periodic boundaries
-    :param atomsobj: function to create ase-Atoms object
-    :param order: sort atoms by id. Might be faster to turn off.
-    Disregarded in case `id` column is not given in file.
-    :param specorder: list of species to map lammps types to ase-species
-    (usually .dump files to not contain type to species mapping)
-    :param prismobj: Coordinate transformation between lammps and ase
-    :type prismobj: Prism
-    :param units: lammps units for unit transformation between lammps and ase
-    :returns: Atoms object
-    :rtype: Atoms
-
     """
+    Extract positions and other per-atom parameters and create Atoms
+    Taken directly from ASE
+    """
+    
+    from ase.calculators.singlepoint import SinglePointCalculator
 
     # read IDs if given and order if needed
     if "id" in colnames:
@@ -772,8 +744,7 @@ def lammps_data_to_ase_atoms( # deprecated
     velocities = get_quantity(["vx", "vy", "vz"], "velocity")
     charges = get_quantity(["q"], "charge")
     forces = get_quantity(["fx", "fy", "fz"], "force")
-    # !TODO: how need quaternions be converted?
-    quaternions = get_quantity(["c_q[1]", "c_q[2]", "c_q[3]", "c_q[4]"])
+    quaternions = get_quantity(["c_q[1]", "c_q[2]", "c_q[3]", "c_q[4]"]) # not tested
 
     # convert cell
     cell = convert(cell, "distance", units, "ASE")
@@ -783,6 +754,7 @@ def lammps_data_to_ase_atoms( # deprecated
         cell = prismobj.update_cell(cell)
 
     if quaternions:
+        from ase.quaternions import Quaternions
         out_atoms = Quaternions(
             symbols=elements,
             positions=positions,
@@ -878,6 +850,7 @@ def read_lammps_dump_text(fileobj, index=-1, **kwargs): # deprecated
     :returns: list of Atoms objects
     :rtype: list
     """
+    from collections import deque
     # Load all dumped timesteps into memory simultaneously
     lines = deque(fileobj.readlines())
     index_end = get_max_index(index)
@@ -970,28 +943,25 @@ def chemical_from_formula(struct):
     
 
 def print_time(times):
+    import time
     def time_format(secs):
         return time.strftime("%H:%M:%S", time.gmtime(secs))
     
+    time_quantities = {'env_resolve':         "Structure Resolving:   {}",
+                       'lattice':             "Lattice Parameter:     {}",
+                       'tavg':                "Time-averaging:        {}",
+                       'tilt_distort':        "Tilting & Distortion:  {}",
+                       'MO':                  "Molecular Orientation: {}",
+                       'RDF':                 "Radial Distribution:   {}",
+                       'A_disp':              "A-site Displacement:   {}",
+                       'property_processing': "Property processing:   {}",
+                       }
+    
     print("--Elapsed Time")
     print("Data Reading:          {}".format(time_format(round(times['reading']))))
-    if 'env_resolve' in times:
-        print("Structure Resolving:   {}".format(time_format(round(times['env_resolve']))))
-    if 'lattice' in times:
-        print("Lattice Parameter:     {}".format(time_format(round(times['lattice']))))
-    if 'tavg' in times:
-        print("Time-averaging:        {}".format(time_format(round(times['tavg']))))
-    if 'tilt_distort' in times:
-        print("Tilting & Distortion:  {}".format(time_format(round(times['tilt_distort']))))
-    if 'MO' in times:
-        print("Molecular Orientation: {}".format(time_format(round(times['MO']))))
-    if 'RDF' in times:
-        print("Radial Distribution:   {}".format(time_format(round(times['RDF']))))
-    if 'A_disp' in times:
-        print("A-site Displacement:   {}".format(time_format(round(times['A_disp']))))
-    if 'property_processing' in times:
-        print("Property processing:   {}".format(time_format(round(times['property_processing']))))
-    
+    for printkey, printstr in time_quantities.items():
+        if printkey in times:
+            print(printstr.format(time_format(round(times[printkey]))))
     print("Total:                 {}".format(time_format(round(times['total']))))
     
     
