@@ -1,36 +1,115 @@
-"""Functions for structural analysis."""
-import numpy as np
-import re, os
-import json
-import sys
-import pdyna
-from joblib import Parallel, delayed
-from tqdm import tqdm
-import pymatgen.analysis.molecule_matcher
-from pymatgen.core.periodic_table import Element
-from scipy.spatial.transform import Rotation as sstr
+"""
+pdyna.structural: The collection of structural processing functions.
 
-filename_basis = os.path.join(os.path.abspath(pdyna.__file__).rstrip('__init__.py'),'basis/octahedron_basis.json')
+"""
+import pdyna
+import contextlib
+import numpy as np
+import os, json, sys
+import matplotlib.pyplot as plt
+from pymatgen.core.operations import SymmOp
+from pymatgen.core.structure import Molecule
+from pymatgen.core.periodic_table import Element
+from pymatgen.analysis.molecule_matcher import HungarianOrderMatcher
+
+
+# loading the octahedral basis files
+filename_basis = os.path.join(os.path.abspath(pdyna.__file__).rstrip('__init__.py'),'basis/octahedron_basis_full.json')
 try:
     with open(filename_basis, 'r') as f:
         dict_basis = json.load(f)
+        dist_dim = len(dict_basis)-3
 except IOError:
     sys.stderr.write('IOError: failed reading from {}.'.format(filename_basis))
     sys.exit(1)
-
-def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,latmat,fpg_val_BX,neigh_list,orthogonal_frame,structure_type,complex_pbc,ref_initial=None,rtr=None):
-    """ 
-    Compute octahedral tilting and distortion from the trajectory coordinates and octahedral connectivity.
+    
+@contextlib.contextmanager
+def tqdm_joblib(tqdm_object):
     """
+    Supportive function for adding progress bar within joblib parallelized computation. 
+    """
+    import joblib
+    class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
+        def __call__(self, *args, **kwargs):
+            tqdm_object.update(n=self.batch_size)
+            return super().__call__(*args, **kwargs)
+
+    old_batch_callback = joblib.parallel.BatchCompletionCallBack
+    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
+    try:
+        yield tqdm_object
+    finally:
+        joblib.parallel.BatchCompletionCallBack = old_batch_callback
+        tqdm_object.close()
+
+
+def traj_time_average(Allpos,latmat,MDTimestep,twindow):
+    avgfr = round(twindow/MDTimestep)
+    fracs = get_frac_from_cart(Allpos,latmat)
+    ftavg = np.empty((fracs.shape[0]-avgfr+1,fracs.shape[1],3))
+    for i in range(fracs.shape[1]):
+        for j in range(3):
+            ftavg[:,i,j] = np.convolve(fracs[:,i,j],np.ones(avgfr)/avgfr,'valid')
+    lmat = latmat.copy()
+    lavg = np.empty((fracs.shape[0]-avgfr+1,3,3))
+    for i in range(3):
+        for j in range(3): 
+            lavg[:,i,j] = np.convolve(lmat[:,i,j],np.ones(avgfr)/avgfr,'valid')
+    
+    # store into object attr
+    ctavg = get_cart_from_frac(ftavg,lavg)
+    timeori = np.linspace(0,fracs.shape[0]-1,fracs.shape[0])*MDTimestep
+    timeavg = np.convolve(timeori,np.ones(avgfr)/avgfr,'valid')
+    
+    fig,ax = plt.subplots()
+    plt.plot(timeori,Allpos[:,0,0],alpha=0.8,label='raw')
+    plt.plot(timeavg,ctavg[:,0,0],alpha=0.8,label='t-averaged')
+    plt.title("Time averaging: x-coords of atom 0")
+    plt.xlabel("time (ps)")
+    plt.ylabel("X coordinate (Angstrom)")
+    plt.legend()
+    plt.show()
+    
+    return ctavg, lavg, ctavg.shape[0]
+
+
+def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,latmat,fpg_val_BX,neigh_list,orthogonal_frame,structure_type,complex_pbc,ref_initial=None,rtr=None):
+    """
+    Compute octahedral tilting and distortion from the trajectory coordinates and octahedral connectivity.
+
+    Args:
+        Bpos (Numpy array): coordinate array of B-sites
+        Xpos (Numpy array): coordinate array of X-sites
+        readfr (list): list of frame numbers to be computed 
+        at0 (ASE Atoms): Atoms object of the initial frame
+        enable_refit (bool): enabling of structure refitting during computation if a large distortion is found
+        latmat (Numpy array): lattice matrix of all frames, with a shape of (N,3,3)
+        fpg_val_BX (list): defined B-X bond information at the beginning of the class
+        neigh_list (Numpy array): the B-X connectivity matrix of octahedra with shape (N,6)
+        orthogonal_frame (bool): if the structure is 3D perovskite and are aligned in the orthogonal directions
+        structure_type (int): structure type indicating orientation and connectivity of octahedra
+        complex_pbc (bool): if the cell has strong tilts
+        ref_initial (Numpy array): for non-orthogonal structure, the individual reference for each octahedron
+        rtr (Numpy array): a (3,3) rotation matrix from orthogonal directions if specified
+        
+    Returns:
+        Di (Numpy array): computed array of octahedral distortion with a shape of (N,dist_dim)
+        T (Numpy array): computed array of octahedral tilting with a shape of (N,3)
+        refits (Numpy array): record of structural refitting if parameter enable_refit is True, shape is (N,2), giving a frame number and a bool indicating if refit is performed
+
+    """
+    from tqdm import tqdm
+    from scipy.spatial.transform import Rotation as sstr
+    
     def frame_wise(fr):
         mymat=latmat[fr,:]
         
-        disto = np.empty((0,4))
+        disto = np.empty((0,dist_dim))
         Rmat = np.zeros((Bcount,3,3))
         Rmsd = np.zeros((Bcount,1))
         for B_site in range(Bcount): # for each B-site atom
             if np.isnan(neigh_list[B_site,:]).any(): 
-                a = np.empty((1,4))
+                a = np.empty((1,dist_dim))
                 a[:] = np.nan
                 Rmat[B_site,:] = np.nan
                 Rmsd[B_site] = np.nan
@@ -43,11 +122,11 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
                 if not rtr is None:
                     bx = np.matmul(bx,rtr)
           
-                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors_full(bx) # _full
                     
                 Rmat[B_site,:] = rotmat
                 Rmsd[B_site] = rmsd
-                disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
+                disto = np.concatenate((disto,dist_val.reshape(1,dist_dim)),axis = 0)
         
         tilts = np.zeros((Bcount,3))
         for i in range(Rmat.shape[0]):
@@ -57,7 +136,7 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
                 tilts[i,:] = sstr.from_matrix(Rmat[i,:]).as_euler('xyz', degrees=True)
 
         #tilts = periodicity_fold(tilts) 
-        return (disto.reshape(1,Bcount,4),tilts.reshape(1,Bcount,3),Rmsd)
+        return (disto.reshape(1,Bcount,dist_dim),tilts.reshape(1,Bcount,3),Rmsd)
     
     if (not ref_initial is None) and (not rtr is None):
         raise TypeError("individual reference of octahedra and orthogonal lattice alignment are simulaneously enabled. Check structure_type and rotation_from_orthogonal parameters. ")
@@ -70,19 +149,19 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
     
     if multi_thread == 1: # multi-threading disabled and can do in-situ refit
         
-        Di = np.empty((len(readfr),Bcount,4))
+        Di = np.empty((len(readfr),Bcount,dist_dim))
         T = np.empty((len(readfr),Bcount,3))
         
         for subfr in tqdm(range(len(readfr))):
             fr = readfr[subfr]
             mymat=latmat[fr,:]
             
-            disto = np.empty((0,4))
+            disto = np.empty((0,dist_dim))
             Rmat = np.zeros((Bcount,3,3))
             Rmsd = np.zeros((Bcount,1))
             for B_site in range(Bcount): # for each B-site atom
                 if np.isnan(neigh_list[B_site,:]).any(): 
-                    a = np.empty((1,4))
+                    a = np.empty((1,dist_dim))
                     a[:] = np.nan
                     Rmat[B_site,:] = np.nan
                     Rmsd[B_site] = np.nan
@@ -99,7 +178,7 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
 
                     Rmat[B_site,:] = rotmat
                     Rmsd[B_site] = rmsd
-                    disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
+                    disto = np.concatenate((disto,dist_val.reshape(1,dist_dim)),axis = 0)
             
             if enable_refit and fr > 0 and max(np.amax(disto)) > 1: # re-fit neigh_list if large distortion value is found
                 disto_prev = np.nanmean(disto,axis=0)
@@ -119,7 +198,7 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
                 mymat=latmat[fr,:]
                 
                 # re-calculate distortion values
-                disto = np.empty((0,4))
+                disto = np.empty((0,dist_dim))
                 Rmat = np.zeros((Bcount,3,3))
                 Rmsd = np.zeros((Bcount,1))
                 for B_site in range(Bcount): # for each B-site atom
@@ -135,13 +214,13 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
                         
                     Rmat[B_site,:] = rotmat
                     Rmsd[B_site] = rmsd
-                    disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
+                    disto = np.concatenate((disto,dist_val.reshape(1,dist_dim)),axis = 0)
                 if np.array_equal(np.nanmean(disto,axis=0),disto_prev) and np.array_equal(neigh_list,neigh_list_prev):
                     refits = np.concatenate((refits,np.array([[fr,0]])),axis=0)
                 else:
                     refits = np.concatenate((refits,np.array([[fr,1]])),axis=0)
             
-            Di[subfr,:,:] = disto.reshape(1,Bcount,4)
+            Di[subfr,:,:] = disto.reshape(1,Bcount,dist_dim)
             
             tilts = np.zeros((Bcount,3))
             for i in range(Rmat.shape[0]):
@@ -151,11 +230,13 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
             
             
     elif multi_thread > 1: # multi-threading enabled and cannot refit
-        Di = np.empty((len(readfr),Bcount,4))
+        from joblib import Parallel, delayed
+        Di = np.empty((len(readfr),Bcount,dist_dim))
         T = np.empty((len(readfr),Bcount,3))
         
-        results = Parallel(n_jobs=multi_thread)(delayed(frame_wise)(fr) for fr in readfr)
-        
+        with tqdm_joblib(tqdm(desc="Progress", total=len(readfr))) as progress_bar:
+            results = Parallel(n_jobs=multi_thread)(delayed(frame_wise)(fr) for fr in readfr)
+            
         # unpack the result from multi-threading calculation
         assert len(results) == len(readfr)
         for fr, each in enumerate(results):
@@ -163,45 +244,10 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,lattice,lat
             T[fr,:,:] = each[1]
     
     else:
-        raise ValueError("The selected multi-threading count must be a positive integer.")
+        raise ValueError("The input multi-threading count must be a positive integer.")
         
     
     return Di, T, refits
-
-
-def fit_octahedral_network(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,structure_type):
-    """ 
-    Resolve the octahedral connectivity. 
-    """
-
-    max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
-        
-    neigh_list = np.zeros((Bpos_frame.shape[0],6))
-    ref_initial = np.zeros((Bpos_frame.shape[0],3,3))
-    for B_site, X_list in enumerate(r): # for each B-site atom
-        X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
-        if len(X_idx) != 6:
-            raise ValueError(f"The number of X site atoms connected to B site atom no.{B_site} is not 6 but {len(X_idx)}. \n")
-        
-        bx_raw = Xpos_frame[X_idx,:] - Bpos_frame[B_site,:]
-        bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
-        
-        if structure_type == 1:
-            order1 = match_bx_orthogonal(bx,mymat) 
-            neigh_list[B_site,:] = np.array(X_idx)[order1]
-        elif structure_type == 2:
-            order1, _ = match_bx_arbitrary(bx,mymat) 
-            neigh_list[B_site,:] = np.array(X_idx)[order1]
-        elif structure_type == 3:   
-            order1, ref1 = match_bx_arbitrary(bx,mymat) 
-            neigh_list[B_site,:] = np.array(X_idx)[order1]
-            ref_initial[B_site,:] = ref1
-    
-    neigh_list = neigh_list.astype(int)
-    if structure_type in (1,2):
-        return neigh_list
-    else:
-        return neigh_list, ref_initial
 
 
 def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,rotated,rotmat):
@@ -237,43 +283,63 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
     """ 
     Resolve the octahedral connectivity with a defect tolerance. 
     """
-
-    max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
     
-    bxs = []
-    bxc = []
-    for B_site, X_list in enumerate(r): # for each B-site atom
-        X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
-        bxc.append(len(X_idx))
-        bxs.append(X_idx)
-    bxc = np.array(bxc)
+    try:
+        max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1], tol=5) # tol is set for extrame cases with defects
+        
+        bxs = []
+        bxc = []
+        for B_site, X_list in enumerate(r): # for each B-site atom
+            X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
+            bxc.append(len(X_idx))
+            bxs.append(X_idx)
+        bxc = np.array(bxc)
+        
+        ndef = None
+        if np.amax(bxc) != 6 or np.amin(bxc) != 6:
+            ndef = np.sum(bxc!=6) 
+            if np.amax(bxc) == 7 and np.amin(bxc) == 5: # benign defects
+                print(f"!Structure Resolving: the initial structure contains {ndef} out of {len(bxc)} octahedra with defects. The algorithm has screened them out of the population. ")
+            else: # bad defects
+                raise TypeError("!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
     
-    ndef = None
-    if np.amax(bxc) != 6 or np.amin(bxc) != 6:
-        ndef = np.sum(bxc!=6) 
-        if np.amax(bxc) == 7 and np.amin(bxc) == 5: # benign defects
-            print(f"!Structure Resolving: the initial structure contains {ndef} out of {len(bxc)} octahedra with defects. The algorithm has screened them out of the population. ")
-        else: # bad defects
-            raise TypeError(f"!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
-            
+    except ValueError:
+        closebx = np.argsort(r, axis=0)[:2, :]
+        binx, bcount = np.unique(closebx, return_counts=True)
+        if (not np.array_equal(binx,np.arange(0,r.shape[0]))) or (not np.array_equal(bcount,np.ones_like(bcount)*6)):
+            raise ValueError("!Structure resolving: Can't separate the different neighbours, please check the fpg_val values are correct according to the guidance at the beginning of the Trajectory class, or check if initial structure is defected or too distorted. ")
+        #print("!Sructure Resolving: Detected relative high deviation in the B-X connectivity, used a more aggresive fit, please monitor the outputs carefully. ")
+        bxs = convert_xb_to_bx(closebx)
+           
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
     ref_initial = np.zeros((Bpos_frame.shape[0],3,3))
+    #bxfit_rmsd = []
     for B_site, bxcom in enumerate(bxs): # for each B-site atom
         if len(bxcom) == 6:
-            bx_raw = Xpos_frame[bxcom,:] - Bpos_frame[B_site,:]
-            bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
+            #rmsd = None
+            try: # remove this try for strict octahedral match
+                bx_raw = Xpos_frame[bxcom,:] - Bpos_frame[B_site,:]
+                bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
+                
+                if structure_type == 1:
+                    order1 = match_bx_orthogonal(bx,mymat) 
+                    neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
+                elif structure_type == 2:
+                    order1, _, rmsd = match_bx_arbitrary(bx,mymat) 
+                    neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
+                elif structure_type == 3:   
+                    order1, ref1, rmsd = match_bx_arbitrary(bx,mymat) 
+                    neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
+                    ref_initial[B_site,:] = ref1
+                #bxfit_rmsd.append(rmsd)
             
-            if structure_type == 1:
-                order1 = match_bx_orthogonal(bx,mymat) 
-                neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
-            elif structure_type == 2:
-                order1, _ = match_bx_arbitrary(bx,mymat) 
-                neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
-            elif structure_type == 3:   
-                order1, ref1 = match_bx_arbitrary(bx,mymat) 
-                neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
-                ref_initial[B_site,:] = ref1
-        
+            except ValueError: # til here
+                if structure_type in (1,2):
+                    neigh_list[B_site,:] = np.nan
+                else:   
+                    neigh_list[B_site,:] = np.nan
+                    ref_initial[B_site,:] = np.nan
+
         else:
             if structure_type in (1,2):
                 neigh_list[B_site,:] = np.nan
@@ -296,24 +362,33 @@ def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mym
         raise TypeError("The non-orthogonal initial structure can only be analysed under the 3C (corner-sharing) connectivity. ")
     #rotmat = np.linalg.inv(rotmat)
         
-    max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
+    try:
+        max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1], tol=5)
+        
+        bxs = []
+        bxc = []
+        for B_site, X_list in enumerate(r): # for each B-site atom
+            X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
+            bxc.append(len(X_idx))
+            bxs.append(X_idx)
+        bxc = np.array(bxc)
+        
+        ndef = None
+        if np.amax(bxc) != 6 or np.amin(bxc) != 6:
+            ndef = np.sum(bxc!=6) 
+            if np.amax(bxc) == 7 and np.amin(bxc) == 5: # benign defects
+                print(f"!Structure Resolving: the initial structure contains {ndef} out of {len(bxc)} octahedra with defects. The algorithm has screened them out of the population. ")
+            else: # bad defects
+                raise TypeError("!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
     
-    bxs = []
-    bxc = []
-    for B_site, X_list in enumerate(r): # for each B-site atom
-        X_idx = [i for i in range(len(X_list)) if X_list[i] < max_BX_distance]
-        bxc.append(len(X_idx))
-        bxs.append(X_idx)
-    bxc = np.array(bxc)
-    
-    ndef = None
-    if np.amax(bxc) != 6 or np.amin(bxc) != 6:
-        ndef = np.sum(bxc!=6) 
-        if np.amax(bxc) == 7 and np.amin(bxc) == 5: # benign defects
-            print(f"!Structure Resolving: the initial structure contains {ndef} out of {len(bxc)} octahedra with defects. The algorithm has screened them out of the population. ")
-        else: # bad defects
-            raise TypeError(f"!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
-            
+    except ValueError:
+        closebx = np.argsort(r, axis=0)[:2, :]
+        binx, bcount = np.unique(closebx, return_counts=True)
+        if (not np.array_equal(binx,np.arange(0,r.shape[0]))) or (not np.array_equal(bcount,np.ones_like(bcount)*6)):
+            raise ValueError("!Structure resolving: Can't separate the different neighbours, please check the fpg_val values are correct according to the guidance at the beginning of the Trajectory class, or check if initial structure is defected or too distorted. ")
+        print("!Sructure Resolving: Detected relatively high deviation in the B-X connectivity, used a more aggresive fit, please monitor the outputs carefully. ")
+        bxs = convert_xb_to_bx(closebx)
+        
     neigh_list = np.zeros((Bpos_frame.shape[0],6))
     ref_initial = np.zeros((Bpos_frame.shape[0],3,3))
     for B_site, bxcom in enumerate(bxs): # for each B-site atom
@@ -328,6 +403,18 @@ def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mym
             neigh_list[B_site,:] = np.nan
 
     return neigh_list
+
+
+def convert_xb_to_bx(xb):
+    
+    bx = [[] for i in range(int(xb.shape[1]/3))]
+    for i in range(xb.shape[1]):
+        bx[xb[0,i]].append(i)
+        bx[xb[1,i]].append(i)
+    bx = np.array(bx)
+    assert bx.shape==(int(xb.shape[1]/3),6)
+    
+    return bx
 
 
 def find_polytype_network(Bpos_frame,Xpos_frame,r,mymat,neigh_list):
@@ -628,7 +715,7 @@ def pseudocubic_lat(traj,  # the main class instance
     #if not traj._non_orthogonal:
     celldim = np.cbrt(len(traj.Bindex))
     if not celldim.is_integer():
-        raise ValueError("The cell is not in cubic shape. ")
+        raise ValueError("The cell is not in cubic shape, please use lat_method = 1. ")
     
     cc = st0.frac_coords[blist]
     
@@ -660,88 +747,6 @@ def pseudocubic_lat(traj,  # the main class instance
         return Lat
     else:
         return run_pcl(zdrc)         
-
-
-def structure_time_average(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None):
-    """ 
-    Compute the time-averaged structure. (deprecated)
-    """
-    import pymatgen.io.cif
-    # current problem: can't average lattice parameters and angles; can't deal with organic A-site
-    M_len = traj.nframe
-    
-    frac = get_frac_from_cart(traj.Allpos, traj.latmat)
-    
-    # time averaging
-    lat_param = np.concatenate((np.mean(traj.lattice[round(M_len*start_ratio):round(M_len*end_ratio),:3],axis=0).reshape(1,-1),np.mean(traj.lattice[round(M_len*start_ratio):round(M_len*end_ratio),3:],axis=0).reshape(1,-1)),axis=0)
-    CC = np.mean(frac[round(M_len*start_ratio):round(M_len*end_ratio),:],axis=0)
-
-    # construct a cif file for modification
-    pymatgen.io.cif.CifWriter(traj.st0).write_file("temp1.cif")
-    with open("temp1.cif") as file:
-        lines = file.readlines()
-    for i in range(len(lines)): 
-        lines[i] = lines[i].lstrip(' ') # remove all leading spaces in lines
-        lines[i] = re.sub(' +\n', '\n', lines[i]) # remove all spaces before '\n' in lines 
-    os.unlink('temp1.cif')
-    
-    # change the lattice param and angles
-    for i, line in enumerate(lines):
-        if line.startswith("_cell_length_a"):
-            lines[i] = re.sub(line.split()[1], str(lat_param[0,0]), line)
-        if line.startswith("_cell_length_b"):
-            lines[i] = re.sub(line.split()[1], str(lat_param[0,1]), line)
-        if line.startswith("_cell_length_c"):
-            lines[i] = re.sub(line.split()[1], str(lat_param[0,2]), line)
-        if line.startswith("_cell_angle_alpha"):
-            lines[i] = re.sub(line.split()[1], str(lat_param[1,0]), line)
-        if line.startswith("_cell_angle_beta"):
-            lines[i] = re.sub(line.split()[1], str(lat_param[1,1]), line)
-        if line.startswith("_cell_angle_gamma"):
-            lines[i] = re.sub(line.split()[1], str(lat_param[1,2]), line)
-            
-    
-    # change the atomic positions
-    for i, line in enumerate(lines):
-        if line.startswith("_atom_site_"):
-            break
-    i_coord = 0
-    while line.startswith("_atom_site_"):
-        i+=1
-        i_coord+=1
-        line = lines[i]
-        if line.startswith("_atom_site_fract_x"):
-            line_coord = i_coord
-
-    Natom = traj.natom
-    k = 0
-    for j in range(i,i+Natom):
-        line = lines[j].split()
-        line[line_coord:line_coord+3] = CC[k,:]
-        line = [str(x) for x in line]
-        lines[j] = " ".join(line)+'\n'
-        k+=1
-    
-    # construct another cif file for saving
-    if cif_save_path is None:
-        a_file = open('temp2.cif', "w")
-        a_file.writelines(lines)
-        a_file.close()
-    else:
-        b_file = open(cif_save_path, "w")
-        b_file.writelines(lines)
-        b_file.close()
-        
-        a_file = open('temp2.cif', "w")
-        a_file.writelines(lines)
-        a_file.close()
-        
-    cif_obj = pymatgen.io.cif.CifParser('temp2.cif', occupancy_tolerance=5)
-    struct = cif_obj.get_structures(primitive=False)[0]
-
-    os.unlink('temp2.cif')   
-    
-    return struct
 
 
 def structure_time_average_ase(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None):
@@ -816,12 +821,12 @@ def simply_calc_distortion(traj):
     
     mymat = struct.lattice.matrix
     
-    disto = np.empty((0,4))
+    disto = np.empty((0,dist_dim))
     Rmat = np.zeros((len(traj.Bindex),3,3))
     Rmsd = np.zeros((len(traj.Bindex),1))
     for B_site in range(len(traj.Bindex)): # for each B-site atom
         if np.isnan(neigh_list[B_site,:]).any(): 
-            a = np.empty((1,4))
+            a = np.empty((1,dist_dim))
             a[:] = np.nan
             Rmat[B_site,:] = np.nan
             Rmsd[B_site] = np.nan
@@ -832,7 +837,7 @@ def simply_calc_distortion(traj):
             dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
             Rmat[B_site,:] = rotmat
             Rmsd[B_site] = rmsd
-            disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
+            disto = np.concatenate((disto,dist_val.reshape(1,dist_dim)),axis = 0)
     
     temp_var = np.var(disto,axis = 0)
     temp_std = np.divide(np.sqrt(temp_var),np.nanmean(disto, axis=0))
@@ -874,11 +879,11 @@ def calc_distortions_from_bond_vectors(bx):
             irrep_distortions.append(elem)
 
     # define "molecules"
-    pymatgen_molecule = pymatgen.core.structure.Molecule(
+    pymatgen_molecule = Molecule(
         species=[Element("Pb"),Element("H"),Element("He"),Element("Li"),Element("Be"),Element("B"),Element("I")],
         coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
 
-    pymatgen_molecule_ideal = pymatgen.core.structure.Molecule(
+    pymatgen_molecule_ideal = Molecule(
         species=pymatgen_molecule.species,
         coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
 
@@ -904,9 +909,9 @@ def calc_distortions_from_bond_vectors(bx):
     return distortion_amplitudes,rotmat,rmsd
 
 
-def calc_rotation_from_arbitrary_order(bx):
+def calc_distortions_from_bond_vectors_full(bx):
     """ 
-    Compute the rotation of six bond vectors with arbitrary order. 
+    Compute the tilting and distortion from the six B-X bond vectors. 
     """
     # constants
     ideal_coords = [[-1, 0,  0],
@@ -916,12 +921,62 @@ def calc_rotation_from_arbitrary_order(bx):
                     [0,  1,  0],
                     [1,  0,  0]]
 
+    irrep_distortions = []
+    for irrep in dict_basis.keys():
+        for elem in dict_basis[irrep]:
+            irrep_distortions.append(elem)
+
     # define "molecules"
-    pymatgen_molecule = pymatgen.core.structure.Molecule(
+    pymatgen_molecule = Molecule(
+        species=[Element("Pb"),Element("H"),Element("He"),Element("Li"),Element("Be"),Element("B"),Element("I")],
+        coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
+
+    pymatgen_molecule_ideal = Molecule(
+        species=pymatgen_molecule.species,
+        coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
+
+    # transform
+    pymatgen_molecule,rotmat,rmsd = match_molecules_extra(
+        pymatgen_molecule, pymatgen_molecule_ideal)
+
+    # project
+    distortion_amplitudes = calc_displacement_full(
+        pymatgen_molecule, pymatgen_molecule_ideal, irrep_distortions
+    )
+
+    # average
+    distortion_amplitudes = distortion_amplitudes * distortion_amplitudes
+    temp_list = []
+    count = 0
+    for irrep in dict_basis:
+        dim = len(dict_basis[irrep])
+        temp_list.append(np.sum(distortion_amplitudes[count:count + dim]))
+        count += dim
+    distortion_amplitudes = np.sqrt(temp_list)[3:]
+
+    return distortion_amplitudes,rotmat,rmsd
+
+
+def calc_rotation_from_arbitrary_order(bx):
+    """ 
+    Compute the rotation of six bond vectors with arbitrary order, used in non-ortho structure. 
+    """
+    from scipy.spatial.transform import Rotation as sstr
+    
+    # constants
+    ideal_coords = [[-1, 0,  0],
+                    [0, -1,  0],
+                    [0,  0, -1],
+                    [0,  0,  1],
+                    [0,  1,  0],
+                    [1,  0,  0]]
+
+    # define "molecules"
+    pymatgen_molecule = Molecule(
         species=[Element("Pb"),Element("H"),Element("H"),Element("H"),Element("H"),Element("H"),Element("H")],
         coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
 
-    pymatgen_molecule_ideal = pymatgen.core.structure.Molecule(
+    pymatgen_molecule_ideal = Molecule(
         species=pymatgen_molecule.species,
         coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
 
@@ -944,10 +999,69 @@ def calc_rotation_from_arbitrary_order(bx):
     return rots, rotmat
 
 
+def calc_distortion_from_order_manual(bx,ideal_coords,dict_basis):
+    """ 
+    Compute the rotation of six bond vectors with arbitrary order, used in non-ortho structure. 
+    """
+    from scipy.spatial.transform import Rotation as sstr
+    
+    irrep_distortions = []
+    for irrep in dict_basis.keys():
+        for elem in dict_basis[irrep]:
+            irrep_distortions.append(elem)
+    
+    # define "molecules"
+    pymatgen_molecule = Molecule(
+        species=[Element("Pb"),Element("H"),Element("He"),Element("Li"),Element("Be"),Element("B"),Element("I")],
+        coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
+
+    pymatgen_molecule_ideal = Molecule(
+        species=pymatgen_molecule.species,
+        coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
+
+    # transform
+    pymatgen_molecule,rotmat,rmsd = match_molecules_extra(
+        pymatgen_molecule, pymatgen_molecule_ideal)
+
+    # project
+    distortion_amplitudes = calc_displacement_full(
+        pymatgen_molecule, pymatgen_molecule_ideal, irrep_distortions
+    )
+
+    # average
+    distortion_amplitudes = distortion_amplitudes * distortion_amplitudes
+    temp_list = []
+    count = 0
+    for irrep in dict_basis:
+        dim = len(dict_basis[irrep])
+        temp_list.append(np.sum(distortion_amplitudes[count:count + dim]))
+        count += dim
+    distortion_amplitudes = np.sqrt(temp_list)
+
+    return distortion_amplitudes,rotmat,rmsd
+
+
 def quick_match_octahedron(bx):
     """ 
     Compute the rotation status of an octahedron with a reference. 
+    Used in connectivity type 3.
     """
+    
+    def calc_match(bx):
+        # define "molecules"
+        pymatgen_molecule = Molecule(
+            species=[Element("Pb"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I")],
+            coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
+
+        pymatgen_molecule_ideal = Molecule(
+            species=pymatgen_molecule.species,
+            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
+
+        # transform
+        new_molecule,rotmat,rmsd = match_molecules_extra(pymatgen_molecule_ideal, pymatgen_molecule)
+        
+        return new_molecule,rotmat,rmsd
+        
     # constants
     ideal_coords = [[-1, 0,  0],
                     [0, -1,  0],
@@ -960,31 +1074,35 @@ def quick_match_octahedron(bx):
     for irrep in dict_basis.keys():
         for elem in dict_basis[irrep]:
             irrep_distortions.append(elem)
-
-    # define "molecules"
-    pymatgen_molecule = pymatgen.core.structure.Molecule(
-        species=[Element("Pb"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I"),Element("I")],
-        coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
-
-    pymatgen_molecule_ideal = pymatgen.core.structure.Molecule(
-        species=pymatgen_molecule.species,
-        coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-
-    # transform
-    new_molecule,rotmat,rmsd = match_molecules_extra(pymatgen_molecule_ideal, pymatgen_molecule)
+ 
+    new_molecule,rotmat,rmsd = calc_match(bx)
+    
+    if rmsd > 0.1: # in case of very rare mis-match, shuffle the entry to try again 
+        fitting_tol = 0.3
+        order = []
+        for ix in range(6):
+            fits = np.dot(bx,np.array(ideal_coords)[ix,:])
+            if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > fitting_tol):
+                #print(bx,fits)
+                raise ValueError(f"The fitting of initial octahedron config to ideal coords is not successful. The initial structure may be too tilted or distorted. The fitting confidence is {round(fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]],3)}, if this is not too far from the tolerance {fitting_tol}, consider lower the fitting_tol in this function. ")
+            order.append(np.argmax(fits))
+        new_molecule,rotmat,rmsd = calc_match(bx[order,:])
+        if rmsd > 0.1: 
+            print(bx[order,:])
+            #raise RuntimeError("The fitting of initial octahedron config to ideal coords is not successful.")
         
     new_coords = np.matmul(ideal_coords,rotmat)
     #new_coords = new_molecule.cart_coords[1:,:]
     
-    return np.linalg.inv(rotmat), new_coords
+    return np.linalg.inv(rotmat), new_coords, rmsd
 
 
 def match_bx_orthogonal(bx,mymat):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
-    Used in connectivity type 2.
+    Used in structure_type 1.
     """
-    fitting_tol = 0.25
+    fitting_tol = 0.3
     ideal_coords = np.array([[-1, 0,  0],
                              [0, -1,  0],
                              [0,  0, -1],
@@ -995,19 +1113,19 @@ def match_bx_orthogonal(bx,mymat):
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
         if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]] > fitting_tol):
-            print(bx,fits)
-            raise ValueError("The fitting of initial octahedron config to ideal coords is not successful. ")
+            #print(bx,fits)
+            raise ValueError(f"The fitting of initial octahedron config to ideal coords is not successful. The initial structure may be too tilted or distorted. The fitting confidence is {round(fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]],3)}, if this is not too far from the tolerance {fitting_tol}, consider lower the fitting_tol in this function. ")
         order.append(np.argmax(fits))
-    assert len(set(order)) == 6 # double-check sanity
+    if len(set(order)) != 6: raise ValueError # double-check sanity
     return order
 
 
 def match_bx_orthogonal_rotated(bx,mymat,rotmat):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
-    Used in connectivity type 2.
+    Used in structure_type 2.
     """
-    fitting_tol = 0.25
+    fitting_tol = 0.3
     ideal_coords = np.array([[-1, 0,  0],
                              [0, -1,  0],
                              [0,  0, -1],
@@ -1020,7 +1138,7 @@ def match_bx_orthogonal_rotated(bx,mymat,rotmat):
         fits = np.dot(bx,ideal_coords[ix,:])
         if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]]) > fitting_tol:
             print(bx,fits)
-            raise ValueError("The fitting of initial octahedron config to ideal coords is not successful.  ")
+            raise ValueError(f"The fitting of initial octahedron config to ideal coords is not successful. The initial structure may be too tilted or distorted. The fitting confidence is {round(fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]],3)}, if this is not too far from the tolerance {fitting_tol}, consider lower the fitting_tol in this function. ")
         order.append(np.argmax(fits))
     assert len(set(order)) == 6 # double-check sanity
     return order
@@ -1029,10 +1147,11 @@ def match_bx_orthogonal_rotated(bx,mymat,rotmat):
 def match_bx_arbitrary(bx,mymat):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
-    Used in connectivity type 3.
+    Used in structure_type 3.
     """
-    ref_rot, ideal_coords = quick_match_octahedron(bx)
     confidence_bound = [0.8,0.2]
+    ref_rot, ideal_coords, rmsd = quick_match_octahedron(bx)
+    
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
@@ -1041,19 +1160,20 @@ def match_bx_arbitrary(bx,mymat):
             raise ValueError("The fitting of initial octahedron config to rotated reference is not successful. This may happen if the initial configuration is too distorted. ")
         order.append(np.argmax(fits))
     assert len(set(order)) == 6 # double-check sanity
-    return order, ref_rot
+    return order, ref_rot, rmsd
 
 
 def match_molecules_extra(molecule_transform, molecule_reference):
     """ 
     Hungarian matching to output the transformation matrix
     """
+    
     # match molecules
-    (inds, u, v, rmsd) = pymatgen.analysis.molecule_matcher.HungarianOrderMatcher(
+    (inds, u, v, rmsd) = HungarianOrderMatcher(
         molecule_reference).match(molecule_transform)
 
     # affine transform
-    molecule_transform.apply_operation(pymatgen.core.operations.SymmOp(
+    molecule_transform.apply_operation(SymmOp(
         np.concatenate((
             np.concatenate((u.T, v.reshape(3, 1)), axis=1),
             [np.zeros(4)]), axis=0
@@ -1065,10 +1185,16 @@ def match_molecules_extra(molecule_transform, molecule_reference):
 
 
 def calc_displacement(pymatgen_molecule, pymatgen_molecule_ideal, irrep_distortions):
-    return np.tensordot(
-        irrep_distortions,
-        (pymatgen_molecule.cart_coords
-         - pymatgen_molecule_ideal.cart_coords).ravel()[3:], axes=1)
+    
+    return np.tensordot(irrep_distortions,
+                        (pymatgen_molecule.cart_coords - pymatgen_molecule_ideal.cart_coords).ravel()[3:],
+                        axes=1)
+
+def calc_displacement_full(pymatgen_molecule, pymatgen_molecule_ideal, irrep_distortions):
+    
+    return np.tensordot(irrep_distortions,
+                        (pymatgen_molecule.cart_coords - pymatgen_molecule_ideal.cart_coords).ravel(),
+                        axes=1)
 
 
 def match_mixed_halide_octa_dot(bx,hals):
@@ -1147,188 +1273,6 @@ def match_mixed_halide_octa_dot(bx,hals):
 
     elif brnum == 6:
         return (6,0),9
-
-def match_mixed_halide_octa(bx,hals):
-    """ 
-    Find the configuration class in binary-mixed halide octahedron. (deprecated)
-    """
-    
-    distinct_thresh = 20
-    
-    ideal_coords = [
-        [-1,  0,  0],
-        [0, -1,  0],
-        [0,  0, -1],
-        [0,  0,  1],
-        [0,  1,  0],
-        [1,  0,  0]]
-    
-    brnum = hals.count('Br')
-    
-    if brnum == 0:
-        return (0,0),0
-    
-    elif brnum == 1:
-        return (1,0),1
-    
-    elif brnum == 2:
-        conf2r = [Element("Pb"),Element("I"),Element("I"),Element("I"),Element("Br"),Element("Br"),Element("I")]
-        conf2p = [Element("Pb"),Element("I"),Element("I"),Element("Br"),Element("Br"),Element("I"),Element("I")]
-        
-        pymatgen_molecule = pymatgen.core.structure.Molecule(
-            species=[Element("Pb"),Element(hals[0]),Element(hals[1]),Element(hals[2]),Element(hals[3]),Element(hals[4]),Element(hals[5])],
-            coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
-        pymatgen_molecule_ideal0 = pymatgen.core.structure.Molecule(
-            species=conf2r,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        pymatgen_molecule_ideal1 = pymatgen.core.structure.Molecule(
-            species=conf2p,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        
-        _,_,rmsd0 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal0)
-        _,_,rmsd1 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal1)
-        
-        if rmsd0 > rmsd1: # planar form
-            if rmsd0/rmsd1 < distinct_thresh: # tolerance of difference
-                raise ValueError(f"The difference between the configurations are not large enough, with a factor of {rmsd0/rmsd1} and threshold is {distinct_thresh}.")
-            return (2,1),3 # planar form
-        else: # right-angle form
-            if rmsd1/rmsd0 < distinct_thresh: # tolerance of difference
-                raise ValueError(f"The difference between the configurations are not large enough, with a factor of {rmsd1/rmsd0} and threshold is {distinct_thresh}.")
-            return (2,0),2 # right-angle form
-    
-    elif brnum == 3:
-        conf3r = [Element("Pb"),Element("I"),Element("I"),Element("I"),Element("Br"),Element("Br"),Element("Br")]
-        conf3p1 = [Element("Pb"),Element("Br"),Element("I"),Element("I"),Element("Br"),Element("I"),Element("Br")]
-        conf3p2 = [Element("Pb"),Element("I"),Element("Br"),Element("I"),Element("Br"),Element("Br"),Element("I")]
-        conf3p3 = [Element("Pb"),Element("I"),Element("I"),Element("Br"),Element("Br"),Element("Br"),Element("I")]
-        
-        pymatgen_molecule = pymatgen.core.structure.Molecule(
-            species=[Element("Pb"),Element(hals[0]),Element(hals[1]),Element(hals[2]),Element(hals[3]),Element(hals[4]),Element(hals[5])],
-            coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
-        pymatgen_molecule_ideal0 = pymatgen.core.structure.Molecule(
-            species=conf3r,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        pymatgen_molecule_ideal1 = pymatgen.core.structure.Molecule(
-            species=conf3p1,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        pymatgen_molecule_ideal2 = pymatgen.core.structure.Molecule(
-            species=conf3p2,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        pymatgen_molecule_ideal3 = pymatgen.core.structure.Molecule(
-            species=conf3p3,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        
-        _,_,rmsd0 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal0)
-        _,_,rmsd1 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal1)
-        _,_,rmsd2 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal2)
-        _,_,rmsd3 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal3)
-        
-        rmsd1 = min(rmsd1,rmsd2,rmsd3)
-        if rmsd0 > rmsd1: # planar form
-            if rmsd0/rmsd1 < distinct_thresh: # tolerance of difference
-                raise ValueError(f"The difference between the configurations are not large enough, with a factor of {rmsd0/rmsd1} and threshold is {distinct_thresh}.")
-            return (3,1),5 # planar form
-        else: # right-angle form
-            if rmsd1/rmsd0 < distinct_thresh: # tolerance of difference
-                raise ValueError(f"The difference between the configurations are not large enough, with a factor of {rmsd1/rmsd0} and threshold is {distinct_thresh}.")
-            return (3,0),4 # right-angle form
-        
-        #RM = np.array([rmsd0,rmsd1,rmsd2,rmsd3])
-        #indtemp = np.argmin(RM)
-        #factemp = np.amin(np.delete(RM,np.argmin(RM))/np.amin(RM))
-        
-        #if indtemp in [1,2,3]: # planar form
-        #    if factemp < distinct_thresh: # tolerance of difference
-        #        raise ValueError(f"The difference between the configurations are not large enough, with a factor of {factemp} and threshold is {distinct_thresh}.")
-        #    return (3,1),5 # planar form
-        #else: # right-angle form
-        #    if factemp < distinct_thresh: # tolerance of difference
-        #        raise ValueError(f"The difference between the configurations are not large enough, with a factor of {factemp} and threshold is {distinct_thresh}.")
-        #    return (3,0),4 # right-angle form
-    
-    elif brnum == 4:
-        conf4r = [Element("Pb"),Element("Br"),Element("Br"),Element("Br"),Element("I"),Element("I"),Element("Br")]
-        conf4p = [Element("Pb"),Element("Br"),Element("Br"),Element("I"),Element("I"),Element("Br"),Element("Br")]
-        
-        pymatgen_molecule = pymatgen.core.structure.Molecule(
-            species=[Element("Pb"),Element(hals[0]),Element(hals[1]),Element(hals[2]),Element(hals[3]),Element(hals[4]),Element(hals[5])],
-            coords=np.concatenate((np.zeros((1, 3)), bx), axis=0))
-        pymatgen_molecule_ideal0 = pymatgen.core.structure.Molecule(
-            species=conf4r,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        pymatgen_molecule_ideal1 = pymatgen.core.structure.Molecule(
-            species=conf4p,
-            coords=np.concatenate((np.zeros((1, 3)), ideal_coords), axis=0))
-        
-        _,_,rmsd0 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal0)
-        _,_,rmsd1 = match_molecules_extra(
-            pymatgen_molecule, pymatgen_molecule_ideal1)
-        
-        if rmsd0 > rmsd1: # planar form
-            if rmsd0/rmsd1 < distinct_thresh: # tolerance of difference
-                raise ValueError(f"The difference between the configurations are not large enough, with a factor of {rmsd0/rmsd1} and threshold is {distinct_thresh}.")
-            return (4,1),7 # planar form
-        else: # right-angle form
-            if rmsd1/rmsd0 < distinct_thresh: # tolerance of difference
-                raise ValueError(f"The difference between the configurations are not large enough, with a factor of {rmsd1/rmsd0} and threshold is {distinct_thresh}.")
-            return (4,0),6 # right-angle form
-    
-    elif brnum == 5:
-        return (5,0),8
-
-    elif brnum == 6:
-        return (6,0),9
-
-
-def organic_A_site_env(struct,nc):
-    """ 
-    Get the environment of organic A-site
-    """
-    from pymatgen.analysis.local_env import CrystalNN
-    
-    cnn = CrystalNN()
-    
-    Nlist = []
-    Hlist = []
-    
-    nn1 = 0
-    for site in cnn.get_nn_info(struct,n=nc):
-        nn1 += 1
-        if site['site'].species_string == 'H':
-            Hlist.append(site['site_index'])
-        elif site['site'].species_string == 'N':
-            Nlist.append(site['site_index'])
-        else:
-            raise TypeError(f"Unexpected species {site['site'].species_string} is found by CrystalNN.")
-            
-    if nn1 == 3:
-        mol_type = 'FA'
-    elif nn1 == 4:
-        mol_type = 'MA'
-    else:
-        raise TypeError("Cannot detect the molecule type with CrystalNN.")
-    
-    
-    for N in Nlist:
-        nn2 = 0
-        for site in cnn.get_nn_info(struct,n=N):
-            if site['site'].species_string == 'H':
-                Hlist.append(site['site_index'])
-                nn2 += 1
-        if mol_type == 'FA':
-            assert nn2 == 2
-        elif mol_type == 'MA':
-            assert nn2 == 3
-                
-    return [nc,sorted(Nlist),sorted(Hlist)], mol_type
 
 
 def centmass_organic(st0pos,latmat,env):
@@ -1468,7 +1412,7 @@ def apply_pbc_cart_vecs_single_frame(vecs, mymat):
     return vecs_pbc
 
 
-def find_population_gap(r,find_range,init):
+def find_population_gap(r,find_range,init,tol=0):
     """ 
     Find the 1D classifier value to separate two populations. 
     """
@@ -1482,11 +1426,10 @@ def find_population_gap(r,find_range,init):
     y,binEdges=np.histogram(scan,bins=50)
     bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
     
-    if y[(np.abs(bincenters - p)).argmin()] != 0:
+    if y[(np.abs(bincenters - p)).argmin()] > tol:
         p1 = centers[0]+(centers[1]-centers[0])/(centers[1]+centers[0])*centers[0]
         p = p1
-        if y[(np.abs(bincenters - p)).argmin()] != 0:
-            import matplotlib.pyplot as plt
+        if y[(np.abs(bincenters - p)).argmin()] > tol:
             plt.hist(r.reshape(-1,),bins=100,range=[1,10])
             raise ValueError("!Structure resolving: Can't separate the different neighbours, please check the fpg_val values are correct according to the guidance at the beginning of the Trajectory class, or check if initial structure is defected or too distorted. ")
 
@@ -1494,14 +1437,14 @@ def find_population_gap(r,find_range,init):
 
 
 def get_volume(lattice):
-    assert lattice.shape == (6,) or (lattice.ndim == 2 and lattice.shape[1] == 6)
+    
     if lattice.shape == (6,):
         A,B,C,a,b,c = lattice
         a=a/180*np.pi
         b=b/180*np.pi
         c=c/180*np.pi
         Vol = A*B*C*(1-np.cos(a)**2-np.cos(b)**2-np.cos(c)**2+2*np.cos(a)*np.cos(b)*np.cos(c))**0.5
-    else:
+    elif (lattice.ndim == 2 and lattice.shape[1] == 6):
         Vol = []
         for i in range(lattice.shape[0]):
             A,B,C,a,b,c = lattice[i,:]
@@ -1510,7 +1453,10 @@ def get_volume(lattice):
             c=c/180*np.pi
             vol = A*B*C*(1-np.cos(a)**2-np.cos(b)**2-np.cos(c)**2+2*np.cos(a)*np.cos(b)*np.cos(c))**0.5
             Vol.append(vol)
-        Vol = np.array(Vol)    
+        Vol = np.array(Vol)  
+    else:
+        raise TypeError("The input must with shape (6,) or (N,6). ")
+        
     return Vol
 
 
@@ -1543,6 +1489,7 @@ def distance_matrix_ase(v1,v2,asecell,pbc,get_vec=False):
         return D
     else:
         return D_len
+    
     
 def distance_matrix_ase_replace(v1,v2,asecell,newcell,pbc,get_vec=False):
     from ase.geometry import get_distances

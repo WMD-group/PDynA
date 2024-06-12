@@ -1,16 +1,21 @@
-"""Core objects of PDyna. dev1"""
+"""
+pdyna.core: The three core classes for structural analysis.
+
+Three forms of data are available for processing, namely MD trajectory, single structure frame, and dataset containing mulitple structure frames. 
+The input to each class is the original files of strucures and/or a set of parameters that describe the structures. 
+It returns the processed data class (with callable attributes) and a series of printouts and figures. 
+
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pymatgen.io.ase import AseAtomsAdaptor as aaa
+import time
+import numpy as np
 import matplotlib.pyplot as plt
 from pdyna.io import print_time
+from dataclasses import dataclass, field
+from pymatgen.io.ase import AseAtomsAdaptor as aaa
 from pdyna.structural import distance_matrix_handler
-import numpy as np
-import time
-import os
-
 
 @dataclass
 class Trajectory:
@@ -39,9 +44,9 @@ class Trajectory:
     
     _Xsite_species = ['Cl','Br','I','Se'] # update if your structrue contains other elements on the X-sites
     _Bsite_species = ['Pb','Sn','W'] # update if your structrue contains other elements on the B-sites
-    _known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs", "Se", "W", "Sn") # update if your structure has other constituent elements, this is just to make sure all the elements should appear in the structure. 
+    #_known_elem = ("I", "Br", "Cl", "Pb", "C", "H", "N", "Cs", "Se", "W", "Sn") # update if your structure has other constituent elements, this is just to make sure all the elements should appear in the structure. 
     
-    # characteristic value of bond length of your material for structure construction 
+    # characteristic value of bond length of your material for structure construction, doesn't have to be very accurate
     # the first interval should be large enough to cover all the first and second NN of B-X (B-B) pairs, 
     # in the second list, the two elements are 0) approximate first NN distance of B-X (B-B) pairs, and 1) 0) approximate second NN distance of B-X (B-B) pairs
     # These values can be obtained by inspecting the initial configuration or, e.g. in the pair distrition function of the structure
@@ -68,44 +73,11 @@ class Trajectory:
             
             # read POSCAR and XDATCAR files
             st0 = vi.Poscar.from_file(poscar_path,check_for_POTCAR=False).structure # initial configuration
-            
-            for elem in st0.symbol_set:
-                if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem above. ")
-            self.st0 = st0
-            self.natom = len(st0)
-            self.species_set = st0.symbol_set
-            self.formula = chemical_from_formula(st0)
 
-            atomic_symbols, self.lattice, self.latmat, self.Allpos = read_xdatcar(xdatcar_path,self.natom)
-            self.nframe = self.lattice.shape[0]
+            atomic_symbols, lattice, latmat, Allpos = read_xdatcar(xdatcar_path,len(st0))
             
-            if atomic_symbols != [site.species_string for site in self.st0.sites]:
+            if atomic_symbols != [site.species_string for site in st0.sites]:
                 raise TypeError("The atomic species in the POSCAR does not match with those in the trajectory. ")
-                
-            # read the coordinates and save   
-            Xindex = []
-            Bindex = []
-            Cindex = []
-            Nindex = []
-            Hindex = []
-            for i,site in enumerate(atomic_symbols):
-                 if site in self._Xsite_species:
-                     Xindex.append(i)
-                 if site in self._Bsite_species:
-                     Bindex.append(i)  
-                 if site == 'C':
-                     Cindex.append(i)  
-                 if site == 'N':
-                     Nindex.append(i)  
-                 if site == 'H':
-                     Hindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
-            self.Cindex = Cindex
-            self.Hindex = Hindex
-            self.Nindex = Nindex
             
             # read INCAR to obatin MD settings
             if type(incar_path) == str:
@@ -173,46 +145,6 @@ class Trajectory:
                 atn.numbers = atsym
                 st0 = aaa.get_structure(atn)
             
-            for elem in st0.symbol_set:
-                if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
-             
-            self.st0 = st0
-            self.natom = len(st0)
-            self.species_set = st0.symbol_set
-            self.formula = chemical_from_formula(st0)
-            
-            Xindex = []
-            Bindex = []
-            Cindex = []
-            Nindex = []
-            Hindex = []
-            for i,site in enumerate(atomic_symbols):
-                 if site in self._Xsite_species:
-                     Xindex.append(i)
-                 if site in self._Bsite_species:
-                     Bindex.append(i)  
-                 if site == 'C':
-                     Cindex.append(i)  
-                 if site == 'N':
-                     Nindex.append(i)  
-                 if site == 'H':
-                     Hindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
-            self.Cindex = Cindex
-            self.Hindex = Hindex
-            self.Nindex = Nindex
-            
-            self.Allpos = Allpos
-            
-            self.lattice = lattice
-            self.latmat = latmat
-            
-            self.nframe = lattice.shape[0]
-            
-            
             self.MDsetting = {}
             self.MDsetting["nsw"] = max_step
             self.MDsetting["nblock"] = stepsize
@@ -235,46 +167,6 @@ class Trajectory:
             print("Loading Trajectory files...")
             
             atomic_symbols, lattice, latmat, Allpos, st0, nstep = read_xyz(xyz_path)
-            
-            for elem in st0.symbol_set:
-                if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
-             
-            self.st0 = st0
-            self.natom = len(st0)
-            self.species_set = st0.symbol_set
-            self.formula = chemical_from_formula(st0)
-            
-            Xindex = []
-            Bindex = []
-            Cindex = []
-            Nindex = []
-            Hindex = []
-            for i,site in enumerate(atomic_symbols):
-                 if site in self._Xsite_species:
-                     Xindex.append(i)
-                 if site in self._Bsite_species:
-                     Bindex.append(i)  
-                 if site == 'C':
-                     Cindex.append(i)  
-                 if site == 'N':
-                     Nindex.append(i)  
-                 if site == 'H':
-                     Hindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
-            self.Cindex = Cindex
-            self.Hindex = Hindex
-            self.Nindex = Nindex
-            
-            self.Allpos = Allpos
-            
-            self.lattice = lattice
-            self.latmat = latmat
-            
-            self.nframe = lattice.shape[0]
-            
             
             self.MDsetting = {}
             self.MDsetting["nblock"] = md_setting[3]
@@ -299,46 +191,6 @@ class Trajectory:
             
             atomic_symbols, lattice, latmat, Allpos, st0, nstep = read_pdb(pdb_path)
             
-            for elem in st0.symbol_set:
-                if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
-             
-            self.st0 = st0
-            self.natom = len(st0)
-            self.species_set = st0.symbol_set
-            self.formula = chemical_from_formula(st0)
-            
-            Xindex = []
-            Bindex = []
-            Cindex = []
-            Nindex = []
-            Hindex = []
-            for i,site in enumerate(atomic_symbols):
-                 if site in self._Xsite_species:
-                     Xindex.append(i)
-                 if site in self._Bsite_species:
-                     Bindex.append(i)  
-                 if site == 'C':
-                     Cindex.append(i)  
-                 if site == 'N':
-                     Nindex.append(i)  
-                 if site == 'H':
-                     Hindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
-            self.Cindex = Cindex
-            self.Hindex = Hindex
-            self.Nindex = Nindex
-            
-            self.Allpos = Allpos
-            
-            self.lattice = lattice
-            self.latmat = latmat
-            
-            self.nframe = lattice.shape[0]
-            
-            
             self.MDsetting = {}
             self.MDsetting["nblock"] = md_setting[3]
             self.MDsetting["nsw"] = nstep*md_setting[3]
@@ -361,47 +213,7 @@ class Trajectory:
             print("Loading Trajectory files...")
             
             atomic_symbols, lattice, latmat, Allpos, st0, nstep = read_ase_traj(ase_path)
-            
-            for elem in st0.symbol_set:
-                if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
-             
-            self.st0 = st0
-            self.natom = len(st0)
-            self.species_set = st0.symbol_set
-            self.formula = chemical_from_formula(st0)
-            
-            Xindex = []
-            Bindex = []
-            Cindex = []
-            Nindex = []
-            Hindex = []
-            for i,site in enumerate(atomic_symbols):
-                 if site in self._Xsite_species:
-                     Xindex.append(i)
-                 if site in self._Bsite_species:
-                     Bindex.append(i)  
-                 if site == 'C':
-                     Cindex.append(i)  
-                 if site == 'N':
-                     Nindex.append(i)  
-                 if site == 'H':
-                     Hindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
-            self.Cindex = Cindex
-            self.Hindex = Hindex
-            self.Nindex = Nindex
-            
-            self.Allpos = Allpos
-            
-            self.lattice = lattice
-            self.latmat = latmat
-            
-            self.nframe = lattice.shape[0]
-            
-            
+
             self.MDsetting = {}
             self.MDsetting["nblock"] = md_setting[3]
             self.MDsetting["nsw"] = nstep*md_setting[3]
@@ -416,134 +228,142 @@ class Trajectory:
             from pdyna.io import process_lat, chemical_from_formula
             from ase.io.lammpsdata import read_lammps_data as rld
             import pymatgen.io.ase as pia
+            from ase import Atoms
             
             if len(self.data_path) != 3:
-                raise TypeError("The input format for lammps must be (npz_path, MD setting tuple). ")
+                raise TypeError("The input format for lammps must be (npz_path, init_lammps-data_file, MD setting tuple). ")
             npz_path,init_path,lammps_setting = self.data_path 
             print("------------------------------------------------------------")
-            print("Loading Trajectory files...")
-            
+            print("Loading Trajectory files...")           
             
             if type(npz_path) is str:
                 #specorder = [1,82,6,35,7]
                 ll = np.load(npz_path)
-                carts = ll['positions']
-                cellmat = ll['cells']
+                Allpos = ll['positions']
+                latmat = ll['cells']
                 atomic_numbers = ll['numbers']
                 
-# =============================================================================
-#                 ca = []
-#                 an = []
-#                 for spe in specorder:
-#                     ca.append(carts[:,list(np.where(atomic_numbers==spe)[0]),:])
-#                     an.append(atomic_numbers[list(np.where(atomic_numbers==spe)[0])])
-#                 carts = np.concatenate(ca,axis=1)
-#                 atomic_numbers = np.concatenate(an,axis=0)
-# =============================================================================
-                    
-                
-                if cellmat.ndim == 2:
-                    newmat = np.zeros((cellmat.shape[0],3,3))
+                if latmat.ndim == 2:
+                    newmat = np.zeros((latmat.shape[0],3,3))
                     for i in range(3):
-                        newmat[:,i,i]=cellmat[:,i]
-                    cellmat = newmat.copy()
+                        newmat[:,i,i]=latmat[:,i]
+                    latmat = newmat.copy()
                 
                 lattice = np.empty((0,6))
-                for i in range(cellmat.shape[0]):
-                    lattice = np.vstack((lattice,process_lat(cellmat[i,:])))
-                
-                at = rld(init_path, Z_of_type=None, style='atomic', sort_by_id=True, units='metal')
-                at.numbers = list(atomic_numbers)
-                st0 = pia.AseAtomsAdaptor.get_structure(at)
-                
+                for i in range(latmat.shape[0]):
+                    lattice = np.vstack((lattice,process_lat(latmat[i,:])))
+
             elif type(npz_path) is list:
-                carts = []
-                cellmat = []
+                Allpos = []
+                latmat = []
                 for fp in npz_path:
                     ll = np.load(fp)
-                    carts.append(ll['positions'])
-                    cellmat.append(ll['cells'])
+                    Allpos.append(ll['positions'])
+                    latmat.append(ll['cells'])
                     atomic_numbers = ll['numbers']
-                carts = np.concatenate(carts,axis=0)
-                cellmat = np.concatenate(cellmat,axis=0)
+                Allpos = np.concatenate(Allpos,axis=0)
+                latmat = np.concatenate(latmat,axis=0)
                 
                 lattice = np.empty((0,6))
-                for i in range(cellmat.shape[0]):
-                    lattice = np.vstack((lattice,process_lat(cellmat[i,:])))
+                for i in range(latmat.shape[0]):
+                    lattice = np.vstack((lattice,process_lat(latmat[i,:])))
                 
+            else:
+                raise TypeError("The input npz_path must be either str or list. ")
+            
+            if not init_path is None:
                 at = rld(init_path, Z_of_type=None, style='atomic', sort_by_id=True, units='metal')
                 at.numbers = list(atomic_numbers[0,:])
                 st0 = pia.AseAtomsAdaptor.get_structure(at)
             else:
-                raise TypeError("The input npz_path must be either str or list. ")
-            
-            
-            
-            
-            
-            for elem in st0.symbol_set:
-                if not elem in self._known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
-            
-            self.st0 = st0
-            self.natom = len(st0)
-            self.species_set = st0.symbol_set
-            self.formula = chemical_from_formula(st0)
+                at = Atoms(positions=Allpos[0,:], numbers=atomic_numbers[0,:], cell=latmat[0,:], pbc=True)
+                st0 = pia.AseAtomsAdaptor.get_structure(at)
             
             atomic_symbols = []
             for site in st0.sites:
                 atomic_symbols.append(site.species_string)
-            
-            Xindex = []
-            Bindex = []
-            Cindex = []
-            Nindex = []
-            Hindex = []
-            for i,site in enumerate(atomic_symbols):
-                 if site in self._Xsite_species:
-                     Xindex.append(i)
-                 if site in self._Bsite_species:
-                     Bindex.append(i)  
-                 if site == 'C':
-                     Cindex.append(i)  
-                 if site == 'N':
-                     Nindex.append(i)  
-                 if site == 'H':
-                     Hindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
-            self.Cindex = Cindex
-            self.Hindex = Hindex
-            self.Nindex = Nindex
-            
-            self.Allpos = carts
-            
-            self.lattice = lattice
-            self.latmat = cellmat
-            
-            self.nframe = cellmat.shape[0]
-            
+
             self.MDsetting = {}
-            self.MDsetting["nsw"] = carts.shape[0]*lammps_setting[3]
+            self.MDsetting["nsw"] = Allpos.shape[0]*lammps_setting[3]
             self.MDsetting["Ti"] = lammps_setting[0]
             self.MDsetting["Tf"] = lammps_setting[1]
             self.MDsetting["tstep"] = lammps_setting[2]
             self.MDsetting["nblock"] = lammps_setting[3]
             self.MDTimestep = lammps_setting[2]/1000*lammps_setting[3]  # the timestep between recorded frames
             self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(lammps_setting[3]*lammps_setting[2]/1000)   # temeperature gradient
+        
+        
+        elif self.data_format == 'extxyz': # only for internal use, not generalised 
+            from pdyna.io import process_lat, chemical_from_formula
+            from ase.io import read
+            import pymatgen.io.ase as pia
             
+            if len(self.data_path) != 3:
+                raise TypeError("The input format for lammps must be (extxyz_path, init_extxyz_file, MD setting tuple). ")
+            extxyz_path,init_path,lammps_setting = self.data_path 
+            print("------------------------------------------------------------")
+            print("Loading Trajectory files...")           
+            
+            if not init_path is None:
+                at0 = read(init_path,format='extxyz')
+                st0 = pia.AseAtomsAdaptor.get_structure(at0)
+                atnum0 = at0.numbers
+            
+                ats = read(extxyz_path,index=':',format='extxyz')
+                atnum = ats[-1].numbers
+                if not np.array_equal(atnum,atnum0):
+                    raise TypeError("The input initial configuration does not match with those in the trajectory. ")
+            
+            else:
+                ats = read(extxyz_path,index=':',format='extxyz')
+                at0 = ats[0]
+                ats = ats[1:]
+                st0 = pia.AseAtomsAdaptor.get_structure(at0)
+            
+            Allpos = []
+            latmat = []
+            lattice = []
+            for a in ats:
+                Allpos.append(a.positions)
+                latmat.append(a.cell.array)
+                lattice.append(process_lat(a.cell.array).reshape(-1,))
+            Allpos = np.array(Allpos)
+            latmat = np.array(latmat)
+            lattice = np.array(lattice)
+            
+            atomic_symbols = []
+            for site in st0.sites:
+                atomic_symbols.append(site.species_string)
+
+            self.MDsetting = {}
+            self.MDsetting["nsw"] = Allpos.shape[0]*lammps_setting[3]
+            self.MDsetting["Ti"] = lammps_setting[0]
+            self.MDsetting["Tf"] = lammps_setting[1]
+            self.MDsetting["tstep"] = lammps_setting[2]
+            self.MDsetting["nblock"] = lammps_setting[3]
+            self.MDTimestep = lammps_setting[2]/1000*lammps_setting[3]  # the timestep between recorded frames
+            self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(lammps_setting[3]*lammps_setting[2]/1000)   # temeperature gradient
+        
 
         else:
             raise TypeError("Unsupported data format: {}".format(self.data_format))
         
+        #for elem in st0.symbol_set:
+        #    if not elem in self._known_elem:
+        #        raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem above. ")
         
-        # pre-definitions of the trajectory
-        if 'C' in st0.symbol_set:
-            self._flag_organic_A = True
-        else:
-            self._flag_organic_A = False
-            
+        self.Allpos = Allpos
+        #self.lattice = lattice
+        self.latmat = latmat
+        
+        self.st0 = st0
+        self.natom = len(st0)
+        self.species_set = st0.symbol_set
+        self.formula = chemical_from_formula(st0)
+        self.nframe = self.latmat.shape[0]
+        self.atomic_symbols = atomic_symbols
+
+    
         et1 = time.time()
         self.timing = {}
         self.timing["reading"] = et1-et0
@@ -579,12 +399,13 @@ class Trajectory:
                  uniname = "test", # A unique user-defined name for this trajectory, will be used in printing and figure saving
                  allow_equil = 0.5, # take the first x fraction of the trajectory as equilibration, this part will not be computed
                  read_every = 0, # read only every n steps, default is 0 which the code will decide an appropriate value according to the system size
+                 coords_time_average = 0, # time-averaging of coordinates, input t>0 as the average time window with a unit of picosecond. Use with caution. 
                  saveFigures = False, # whether to save produced figures
                  lib_saver = False,  # whether to save computed material properties in lib file
                  lib_overwrite = False, # whether to overwrite existing lib entry, or just change upon them
                  
                  # function toggles
-                 preset = 2, # 0: no preset, uses the toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
+                 preset = 0, # 0: no preset, uses the toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
                  toggle_lat = False, # switch of lattice parameter calculation
                  toggle_tavg = False, # switch of time averaged structure
                  toggle_tilt_distort = False, # switch of octahedral tilting and distortion calculation
@@ -597,11 +418,11 @@ class Trajectory:
                  # Lattice parameter calculation
                  lat_method = 1, # lattice parameter analysis methods, 1: direct lattice cell dimension, 2: pseudo-cubic lattice parameter
                  zdir = 2, # specified z-direction in case of lat_method 2
-                 leading_crop = 0.01, # remove the first x fraction of the trajectory on plotting 
+                 leading_crop = 0.00, # remove the first x fraction of the trajectory on plotting 
                  vis3D_lat = 0, # 3D visualization of lattice parameter in time.
                  
                  # time averaged structure
-                 start_ratio = 0.5, # time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory
+                 start_ratio = None, # time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory
                  tavg_save_dir = ".", # directory for saving the time-averaging structures
                  Asite_reconstruct = False, # setting a different time-averaging algo for organic A-sites
                  
@@ -624,6 +445,9 @@ class Trajectory:
                  MOautoCorr = False, # compute MO reorientation time constant
                  MO_corr_spatial = False, # enable spatial correlation function of MO
                  draw_MO_anime = False, # plot the MO in 3D animation, will take a few minutes
+                 
+                 # manually define system info that is saved in the class template
+                 system_overwrite = None, # dict contains X-site and B-site info, and the default bond lengths
                  ):
         
         """
@@ -641,6 +465,7 @@ class Trajectory:
         allow_equil -- take the first x (0 to 1) fraction of the trajectory as equilibration, this part will not be computed, used for read_mode 1.
             takes value from 0 to 1, e.g. 0.8 means that only the last 20% of the trajectory will be used for property calculation. default: 0.5
         read_every  -- read only every n steps, default is 0 which the code will decide an appropriate value according to the system size
+        coords_time_average -- time-averaging of coordinates, input t>0 as the average time window with a unit of picosecond. Use with caution.
         
         -- Saving the Outputs
         saveFigures   -- whether to save produced figures
@@ -743,8 +568,8 @@ class Trajectory:
         print("Current sample:",uniname)
         print("Time Span:",round(self.nframe*self.MDTimestep,3),"ps")
         print("Frame count:",self.nframe)
-        
-        #print("Initializing trajectory")
+        if allow_equil != 0:
+            print("Reading from frame no.{}".format(round(self.nframe*allow_equil)))
         
         # reset timing
         self.timing = {"reading": self.timing["reading"]}
@@ -752,7 +577,7 @@ class Trajectory:
         
         et0 = time.time()
         if preset == 1:
-            toggle_lat = True
+            toggle_lat = False
             toggle_tavg = False
             toggle_tilt_distort = True
             toggle_MO = False
@@ -760,7 +585,7 @@ class Trajectory:
             toggle_site_disp = False
         elif preset == 2:
             toggle_lat = True
-            toggle_tavg = True
+            toggle_tavg = False
             toggle_tilt_distort = True
             toggle_MO = True
             toggle_RDF = False
@@ -776,6 +601,55 @@ class Trajectory:
             pass
         else:
             raise TypeError("The calculation mode preset must be within (0,1,2,3). ")
+        
+        if not system_overwrite is None:
+            if 'B-sites' in system_overwrite and (not system_overwrite['B-sites'] is None):
+                self._Bsite_species = system_overwrite['B-sites']
+            if 'X-sites' in system_overwrite and (not system_overwrite['X-sites'] is None):
+                self._Xsite_species = system_overwrite['X-sites']
+            if 'fpg_val_BB' in system_overwrite and (not system_overwrite['fpg_val_BB'] is None):
+                self._fpg_val_BB = system_overwrite['fpg_val_BB']
+            if 'fpg_val_BX' in system_overwrite and (not system_overwrite['fpg_val_BX'] is None):
+                self._fpg_val_BX = system_overwrite['fpg_val_BX']
+        
+        # register the atomic symbols   
+        Xindex = []
+        Bindex = []
+        Cindex = []
+        Nindex = []
+        Hindex = []
+        for i,site in enumerate(self.atomic_symbols):
+             if site in self._Xsite_species:
+                 Xindex.append(i)
+             if site in self._Bsite_species:
+                 Bindex.append(i)  
+             if site == 'C':
+                 Cindex.append(i)  
+             if site == 'N':
+                 Nindex.append(i)  
+             if site == 'H':
+                 Hindex.append(i)  
+        
+        self.Bindex = Bindex
+        self.Xindex = Xindex
+        self.Cindex = Cindex
+        self.Hindex = Hindex
+        self.Nindex = Nindex
+        
+        # time averaging of trajectory coordinates
+        if coords_time_average > 0:
+            if self.MDTimestep > 1: print("!Your MD frame recording frequency ({self.MDTimestep} ps) may be too large, please use the frame time-averaging algorithm with caution.")
+            if coords_time_average <= self.MDTimestep or round(coords_time_average/self.MDTimestep) == 1:
+                raise ValueError(f"The input time window ({coords_time_average} ps) is too small comparing to the registered recording frequency ({self.MDTimestep} ps), please increase coords_time_average or turn off (=0). ")
+            from pdyna.structural import traj_time_average
+            self.Allpos, self.latmat, self.nframe = traj_time_average(self.Allpos,self.latmat,self.MDTimestep,coords_time_average)  
+            print(f"Trajectory time-averaging: a moving average of coordinates is applied with a window of {round(coords_time_average/self.MDTimestep)} frames.")
+        
+        # pre-definitions of the trajectory
+        if 'C' in self.st0.symbol_set:
+            self._flag_organic_A = True
+        else:
+            self._flag_organic_A = False
         
         if multi_thread > 1:
             if enable_refit:
@@ -872,7 +746,9 @@ class Trajectory:
             raise TypeError("The structure does not contain any recognised X site.")
         elif hal_count == 1:
             octa_locality = False
-
+        
+        if start_ratio is None:
+            start_ratio = allow_equil
         
         # end of parameter checking
         self.read_every = read_every
@@ -893,7 +769,7 @@ class Trajectory:
         if (max(angles) < 100 and min(angles) > 80):
             r0=distance_matrix_handler(st0Bpos,st0Bpos,mymat)
         else:
-            r0=distance_matrix_handler(st0Bpos,st0Bpos,None,at0.cell,at0.pbc,True)
+            r0=distance_matrix_handler(st0Bpos,st0Bpos,at0.cell,at0.cell.array,at0.pbc,False)
 
         try:        
             search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
@@ -914,12 +790,14 @@ class Trajectory:
                 rm.append(r0)
             ravg = np.mean(np.array(rm),axis=0)
             search_NN1 = find_population_gap(ravg, self._fpg_val_BB[0], self._fpg_val_BB[1])
-            
+            r0 = ravg.copy()
+                 
         default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
         self.default_BB_dist = default_BB_dist
         
         #default_BB_dist = 6.1
         Bpos = self.Allpos[:,self.Bindex,:]
+        Xpos = self.Allpos[:,self.Xindex,:]
         
         if (max(angles) < 100 and min(angles) > 80):
             ri=distance_matrix_handler(Bpos[0,:],Bpos[0,:],self.latmat[0,:])
@@ -928,21 +806,21 @@ class Trajectory:
             ri=distance_matrix_handler(Bpos[0,:],Bpos[0,:],self.latmat[0,:],at0.cell,at0.pbc,True,True)
             rf=distance_matrix_handler(Bpos[-1,:],Bpos[-1,:],self.latmat[-1,:],at0.cell,at0.pbc,True,True)
 
-        if np.amax(np.abs(ri-rf)) > 3: # confirm that no change in the Pb framework
-            print("!Tilt-spatial: The difference between the initial and final distance matrix is above threshold ({} A), check ri and rf. \n".format(round(np.amax(np.abs(ri-rf)),3)))
+        if np.amax(np.abs(ri-rf)) > 4.5: # confirm that no change in the Pb framework
+            print("!Tilt-spatial: The difference between the initial and final distance matrix is above threshold ({:.3f} A > 4.5 A), check ri and rf. \n".format(np.amax(np.abs(ri-rf))))
         
-        Benv = []
-        for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
-            Benv.append([i for i,B2 in enumerate(B2_list) if (B2 > 0.1 and B2 < search_NN1)])
+        res=np.where(np.logical_and(r0<search_NN1,r0>0.1))
+        Benv = [[] for _ in range(r0.shape[0])]
+        for i in range(res[0].shape[0]):
+            Benv[res[0][i]].append(res[1][i])
         Benv = np.array(Benv)
-        
+       
         try:
             aa = Benv.shape[1] # if some of the rows in Benv don't have 6 neighbours.
         except IndexError:
             print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
             print("See the gap between the populations. \n")
             test_range = ri.reshape((1,ri.shape[0]**2))
-            import matplotlib.pyplot as plt
             fig,ax = plt.subplots(1,1)
             plt.hist(test_range.reshape(-1,),range=[5.3,9.0],bins=100)
             #ax.scatter(test_range,test_range)
@@ -1033,16 +911,50 @@ class Trajectory:
             from pdyna.structural import fit_octahedral_network_defect_tol, fit_octahedral_network_defect_tol_non_orthogonal, find_polytype_network
             rt = distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             
-            if orthogonal_frame:
-                if not self._non_orthogonal:
-                    neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
-                else: # non-orthogonal
-                    neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
-                self.octahedra = neigh_list
-            else:
-                neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
-                self.octahedra = neigh_list
-                self.octahedra_ref = ref_initial
+            try: # use the initial frame first
+                if orthogonal_frame:
+                    if not self._non_orthogonal:
+                        neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                    else: # non-orthogonal
+                        neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
+                    self.octahedra = neigh_list
+                else:
+                    neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                    self.octahedra = neigh_list
+                    self.octahedra_ref = ref_initial
+            
+            except ValueError:# use averaged distances from multiple frames
+                
+                sampling = 5
+                blen = self.nframe
+                if (blen-1)-round(blen*self.allow_equil) < sampling-1:
+                    sampling = (blen-1)-round(blen*self.allow_equil)+1
+                frs_avg = np.round(np.linspace(round(blen*self.allow_equil),(blen-1),sampling)).astype(int)
+                angles = st0.lattice.angles
+                rt = np.zeros_like(rt)
+                for fr in frs_avg:
+                    if (max(angles) < 100 and min(angles) > 80):
+                        r0=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:])
+                    else:
+                        r0=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],at0.cell,self.latmat[fr,:],at0.pbc,False)
+                    rt += r0
+                rt = rt/sampling
+                #self.rt=rt
+                
+                #Bpos_samp = self.Allpos[frs_avg,:][:,self.Bindex,:]
+                #Xpos_samp = self.Allpos[frs_avg,:][:,self.Xindex,:]
+                #lmat_samp = self.latmat[frs_avg,:]
+                
+                if orthogonal_frame:
+                    if not self._non_orthogonal:
+                        neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                    else: # non-orthogonal
+                        neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
+                    self.octahedra = neigh_list
+                else:
+                    neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                    self.octahedra = neigh_list
+                    self.octahedra_ref = ref_initial
             
             # determine polytype (experimental)
             #rt=distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
@@ -1115,7 +1027,8 @@ class Trajectory:
             print("Computing octahedral tilting and distortion...")
             self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,enable_refit=enable_refit,symm_n_fold=symm_n_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame,structure_type=structure_type,tilt_domain=tilt_domain,vis3D_domain=vis3D_domain,tilt_recenter=tilt_recenter,full_NN1_corr=full_NN1_corr,tiltautoCorr=tiltautoCorr)
             if read_mode == 1:
-                print("dynamic distortion:",np.round(self.prop_lib["distortion"][0],4))
+                print("dynamic X-site distortion:",np.round(self.prop_lib["distortion"][0],4))
+                #print("dynamic B-site distortion:",np.round(self.prop_lib["distortion_B"][0],4))
             if structure_type in (1,3) and read_mode == 1:
                 print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
             if 'tilt_corr_polarity' in self.prop_lib and read_mode == 1:
@@ -1174,6 +1087,7 @@ class Trajectory:
             draw_transient_properties(self.Lobj, self.Tobj, self.Cobj, self.Mobj, uniname, saveFigures)
         
         if lib_saver and read_mode == 1:
+            import os
             import pickle
             lib_name = "perovskite_gaussian_data"
             if not os.path.isfile(lib_name): # create the data file if not found in work dir
@@ -1227,24 +1141,12 @@ class Trajectory:
         et0 = time.time()
         
         if lat_method == 1:
+            from pdyna.io import process_lat
             Lat = np.empty((0,3))
             Lat[:] = np.NaN
             
-            st0lat = self.st0.lattice
-# =============================================================================
-#             std_param = [np.std(np.array([st0lat.a,st0lat.b,st0lat.c])),
-#                          np.std(np.array([st0lat.a/np.sqrt(2),st0lat.b/np.sqrt(2),st0lat.c/2]))]
-# 
-#             if std_param.index(min(std_param)) == 1:
-#                 temp = self.lattice[round(self.nframe*allow_equil):,:3]
-#                 temp[:,:2] = temp[:,:2]/np.sqrt(2)
-#                 temp[:,2] = temp[:,2]/2
-#                 Lat = temp
-#                     
-#             elif std_param.index(min(std_param)) == 0:
-#                 Lat = self.lattice[round(self.nframe*allow_equil):,:3]
-# =============================================================================
-            Lat = self.lattice[round(self.nframe*allow_equil):,:3]
+            lattice = np.array([process_lat(m).reshape(-1,) for m in self.latmat])
+            Lat = lattice[round(self.nframe*allow_equil):,:3]
             if self._flag_cubic_cell: # if cubic cell
                 Lat_scale = round(np.nanmean(Lat[0,:3])/self.default_BB_dist)
                 Lat = Lat/Lat_scale
@@ -1313,6 +1215,10 @@ class Trajectory:
                     Lmu, Lstd = draw_lattice_density(Lat, uniname=uniname,saveFigures=saveFigures, n_bins = 50, num_crop = num_crop, title=title) 
                 # update property lib
                 self.prop_lib['lattice'] = [Lmu,Lstd]
+                if lat_method == 2:
+                    self.prop_lib['lattice_method'] = 'pseudo-cubic'
+                elif lat_method == 1:
+                    self.prop_lib['lattice_method'] = 'direct'
                 
             else: #quench mode
                 if self.Tgrad != 0: 
@@ -1477,12 +1383,11 @@ class Trajectory:
         et0 = time.time()
         
         st0 = self.st0
-        lattice = self.lattice
         latmat = self.latmat
         Bindex = self.Bindex
         Xindex = self.Xindex
-        Bpos = self.Allpos[:,self.Bindex,:]
-        Xpos = self.Allpos[:,self.Xindex,:]
+        Bpos = self.Allpos[:,Bindex,:]
+        Xpos = self.Allpos[:,Xindex,:]
         neigh_list = self.octahedra
         
         mymat=st0.lattice.matrix
@@ -1507,9 +1412,13 @@ class Trajectory:
         rotation_from_orthogonal = None
         if self._non_orthogonal:
             rotation_from_orthogonal = self._rotmat_from_orthogonal
-            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,self.complex_pbc,ref_initial,np.linalg.inv(rotation_from_orthogonal))
+            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,self.complex_pbc,ref_initial,np.linalg.inv(rotation_from_orthogonal))
         else:
-            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,lattice,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,self.complex_pbc,ref_initial)
+            Di, T, refits = resolve_octahedra(Bpos,Xpos,readfr,self.at0,enable_refit,multi_thread,latmat,self._fpg_val_BX,neigh_list,orthogonal_frame,structure_type,self.complex_pbc,ref_initial)
+        
+        # separate X-site and B-site contributions of octahedral distorton
+        Dx = Di[:,:,:4]
+        Db = Di[:,:,4:]
         
         if tilt_recenter:
             recenter = []
@@ -1521,7 +1430,7 @@ class Trajectory:
                 print(f"!Tilting: detected shifted tilting values in axes {recenter}, the population is re-centered.")
         
         hasDefect = False
-        if np.amax(Di) > 1 and np.amax(np.abs(T)) > 45:
+        if np.amax(Dx) > 1 and np.amax(np.abs(T)) > 45:
             print(f"!Tilting and Distortion: detected some distortion values ({round(np.amax(Di),3)}) larger than 1 and some tilting values ({round(np.amax(np.abs(T)),1)}) outside the range -45 to 45 degree, consider defect formation. ")
             hasDefect = True
             
@@ -1532,193 +1441,28 @@ class Trajectory:
                     temp_list.append(temp)
             timeline = np.array(temp_list)
             
-            if timeline.shape[0] == Di.shape[0]+1:
+            if timeline.shape[0] == Dx.shape[0]+1:
                 timeline = timeline[1:]
             
-            assert timeline.shape[0] == Di.shape[0]
+            assert timeline.shape[0] == Dx.shape[0]
             assert timeline.shape[0] == T.shape[0]
         
         if np.sum(refits[:,1]) > 0:
             print(f"!Refit: There are {int(refits.shape[0])} re-fits in the run, and some of them detected changed coordination system. \n")
             print(refits)
         
-        # screening
-# =============================================================================
-#         T[np.abs(T)>45] = np.nan
-#         dscreen = [0.3,0.8,0.4,0.8]
-#         for i in range(4):
-#             Di[Di[:,:,i]>dscreen[i],:] = np.nan
-# =============================================================================
-        
         self.TDtimeline = timeline
-        self.Distortion = Di
+        self.Distortion = Dx
+        self.Distortion_B = Db # experimental modes in test/dev
         self.Tilting = T
-        
-        # finding defects if any
-# =============================================================================
-#         def_tilt = np.sum(np.sum(np.abs(T)>45,axis=2)>0,axis=1)
-#         def_dist = np.sum(np.sum(Di>0.7,axis=2)>0,axis=1)
-#         tl = self.TDtimeline
-#         plt.plot(tl,def_dist,label="Distortion")
-#         plt.plot(tl,def_tilt,label="Tilting")
-#         plt.xlabel("Time (ps)")
-#         plt.ylabel("Number of defected octahedra")
-#         plt.legend()
-# =============================================================================
-        
-# =============================================================================
-#         dmax = np.amax(Di,axis=2)
-#         defect_array = np.array(np.where(dmax>0.8))
-#         unique, counts = np.unique(defect_array[1,:], return_counts=True)
-#         defs = np.concatenate((unique[:,np.newaxis], counts[:,np.newaxis]),axis=1)
-#         def_sites = [defs[a,0] for a in range(defs.shape[0]) if defs[a,1] > Di.shape[0]*0.2]
-#         if len(def_sites) > 0:
-#             self.defect_octahedra = def_sites
-#             if len(def_sites) > Di.shape[1]*0.01:
-#                 print(f"!Defecfs: Found {len(def_sites)} octahedra with defects formed. ")
-#         else:
-#             self.defect_octahedra = None
-#         #set(def_sites1).intersection(set(def_sites2))
-#         
-#         b0 = st0.cart_coords[Bindex,:]
-#         x0 = st0.cart_coords[Xindex,:]
-#         r0 = distance_matrix_handler(b0,x0,mymat,at0.cell,at0.pbc,self.complex_pbc)
-#         b1 = Bpos[-1,:]
-#         x1 = Xpos[-1,:]
-#         rf = distance_matrix_handler(b1,x1,self.latmat[-1,:],at0.cell,at0.pbc,self.complex_pbc)
-#         
-#         diffr = np.abs(rf-r0)
-#         diffb = []
-#         for i in range(diffr.shape[0]):
-#             diffb.append(np.mean(diffr[i,r0[i,:] < 11]))
-#         diffb = np.array(diffb)
-#         np.where(diffb>1.5)
-#         diffx = []
-#         for i in range(diffr.shape[1]):
-#             diffx.append(np.mean(diffr[r0[:,i] < 15,i]))
-#         diffx = np.array(diffx)
-#         np.where(diffx>1.5)
-# =============================================================================
-        
-        
-# =============================================================================
-#         from sklearn.decomposition import PCA
-#         from sklearn.cluster import KMeans
-#         from pdyna.analysis import savitzky_golay
-#         
-#         timeline1 = self.TDtimeline
-#         tspan = 50 # ps
-#         trajnum = np.argmin(np.abs(timeline1[-1] - timeline1 - tspan))
-#         
-#         Davg = np.nanmean(Di[trajnum:,:],axis=0)
-#         
-#         for ra in np.linspace(1,0.8,21):
-#             if ra == 1: ra = 1
-#             pca=PCA(n_components=ra) #cumulative contribution: % 
-#             Y=pca.fit_transform(Davg)
-#             if Y.shape[1] == 2: break
-#         if Y.shape[1] != 2:
-#             raise ValueError("Unsuccessful PCA: The dimensionality of resulting components is {}, instead of the required value 2. \n".format(Y.shape[1]))
-#         
-#         kmeans = KMeans(n_clusters=2, random_state=0).fit(Y)
-#         np.sum(kmeans.labels_)
-#         colors = ['r','g','b','c','m', 'y', 'k']
-#         carr = []
-#         for i in range(Y.shape[0]):
-#             carr.append(colors[int(kmeans.labels_[i])])
-#         carr = np.array(carr)
-#         
-#         kmeans = KMeans(n_clusters=2, random_state=0).fit(Davg)
-#         np.sum(kmeans.labels_)
-#         colors = ['r','g','b','c','m', 'y', 'k']
-#         carr = []
-#         for i in range(Y.shape[0]):
-#             carr.append(colors[int(kmeans.labels_[i])])
-#         carr = np.array(carr)
-#         
-#         plt.scatter(Y[:,0],Y[:,1],marker="o", color=carr)
-#         
-#         
-#         conn = self.octahedra
-#         
-#         Cavg = round((trajnum/len(timeline1))*self.Allpos.shape[0])
-#         initfrac = self.st0.frac_coords[:,:]
-#         newfrac = np.mean(get_frac_from_cart(self.Allpos[Cavg:,:,:],self.latmat[Cavg:,:]),axis=0)
-#         newpos = np.mean(self.Allpos[Cavg:,:,:],axis=0)
-#         selectpos = (initfrac-newfrac)*self.supercell_size
-#         
-#         Bdisp = selectpos[self.Bindex,:]
-#         Xdisp = selectpos[self.Xindex,:]
-#         
-#         Bdnorm = np.linalg.norm(Bdisp,axis=1)
-#         Xdnorm = np.linalg.norm(Xdisp,axis=1)
-#         
-#         disp_filt = 0.2
-#         if np.amax(Xdnorm) > disp_filt:
-#             xwhere = np.where(Xdnorm>disp_filt)
-#             xdv = np.empty((0,3))
-#             for xi in list(xwhere[0]):
-#                 xdv = np.vstack((xdv,newpos[self.Xindex[xi],:] - newpos[self.Bindex[np.where(conn==xi)[0][0]],:]))
-#             xdv = xdv/default_BB_dist
-#             xdv = np.abs(xdv - np.round(xdv))
-#             
-#         defect_3D_scatter(xdv,uniname,"X", saveFigures)
-#         
-#         #887,4093,1021,951
-#         bind = 887
-#         plt.scatter(Y[bind,0],Y[bind,1],marker="^", color='m',s=50)
-#         bd = Bpos[:,[bind],:]
-#         xd = Xpos[:,self.octahedra[bind],:]
-#         
-#         ps = np.concatenate((bd,xd),axis=1)
-#         prange = np.array([[np.amax(ps[:,:,0]),np.amax(ps[:,:,1]),np.amax(ps[:,:,2])],
-#                            [np.amin(ps[:,:,0]),np.amin(ps[:,:,1]),np.amin(ps[:,:,2])]])
-#         pwide = np.amax(prange[0,:]-np.mean(prange,axis=0))
-#         plim = np.array([[1,1,1],[-1,-1,-1]])*pwide+np.mean(prange,axis=0)
-#         
-#         from matplotlib.animation import FuncAnimation, PillowWriter
-#         
-#         frs = list(range(len(self.TDtimeline)))
-#         readfr = self.frames_read
-#         
-#         fig=plt.figure()
-#         ax = plt.axes(projection='3d')
-# 
-#         def animate(i):
-#             ax.clear()
-#             timelabel = ax.text2D(0.85, 0.14, f"{round(timeline1[i],1)} ps", ha='center', va='center', fontsize=12, color="k", transform=ax.transAxes)
-#             distlabel = ax.text2D(0.60, 0.06, f"D={np.round(Di[i,bind,:],3)}", ha='center', va='center', fontsize=12, color="k", transform=ax.transAxes)
-#             
-#             scat1 = ax.scatter(bd[readfr[i],[0],0], bd[readfr[i],[0],1], bd[readfr[i],[0],2],color="c",s=50,alpha = 1)
-#             scat2 = ax.scatter(xd[readfr[i],:,0], xd[readfr[i],:,1], xd[readfr[i],:,2],color="g",s=35,alpha = 1)
-#             ax.set_facecolor("grey")
-#             #ax.axis('off')
-#             ax.set_aspect('auto')
-#             ax.set_xticklabels([])
-#             ax.set_yticklabels([])
-#             ax.set_zticklabels([])
-#             ax.set_xlim([plim[1,0],plim[0,0]])
-#             ax.set_ylim([plim[1,1],plim[0,1]])
-#             ax.set_zlim([plim[1,2],plim[0,2]])
-#             return fig
-#         
-#         anim = FuncAnimation(fig, animate, frames=frs, interval=500)
-#         writer = PillowWriter(fps=15)
-#         #anim.save(f"{figname}.gif", writer=writer)
-#         anim.save("link-anim.gif", writer=writer)
-#         plt.show()
-# =============================================================================
-        
-        
-        
-        
         
         # data visualization
         if read_mode == 2:
             if self.Tgrad == 0:
                 from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time, draw_dist_evolution_time
                 self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures=False, smoother=smoother)
-                self.Dobj = draw_dist_evolution_time(Di, timeline,uniname, saveFigures=False, smoother=smoother)
+                self.Dobj = draw_dist_evolution_time(Dx, timeline,uniname, saveFigures=False, smoother=smoother)
+                #self.DBobj = draw_dist_evolution_time(Db, timeline,uniname, saveFigures=False, smoother=smoother)
             
             else:
                 from pdyna.analysis import draw_dist_evolution, draw_tilt_evolution
@@ -1737,7 +1481,7 @@ class Trajectory:
                             temp_list.append(temp)
                     steps = np.array(temp_list)
                     
-                    assert steps.shape[0] == Di.shape[0]
+                    assert steps.shape[0] == Dx.shape[0]
                     assert steps.shape[0] == T.shape[0]
 
                 invert_x = False
@@ -1745,14 +1489,17 @@ class Trajectory:
                     invert_x = True
                 
                 self.TDtempline = steps
-                #draw_distortion_evolution_sca(Di, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
+                #draw_distortion_evolution_sca(Dx, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
                 #draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
-                self.Dobj = draw_dist_evolution(Di, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                self.Dobj = draw_dist_evolution(Dx, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                #self.DBobj = draw_dist_evolution(Db, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
                 self.Tobj = draw_tilt_evolution(T, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
                 
         else: # read_mode 1, constant-T MD (equilibration)
             from pdyna.analysis import draw_dist_density, draw_tilt_density, draw_conntype_tilt_density
-            Dmu,Dstd = draw_dist_density(Di, uniname, saveFigures, n_bins = 100, title=None)
+            Dmu,Dstd = draw_dist_density(Dx, uniname, saveFigures, n_bins = 100, title=None)
+            #DBmu,DBstd = draw_dist_density(Db, uniname, saveFigures, n_bins = 100, title=None)
+            
             if not tilt_corr_NN1:
                 if structure_type == 1 or not hasattr(self, 'octahedral_connectivity'):
                     draw_tilt_density(T, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
@@ -1766,6 +1513,7 @@ class Trajectory:
                         draw_conntype_tilt_density(T, oc, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
             
             self.prop_lib['distortion'] = [Dmu,Dstd]
+            #self.prop_lib['distortion_B'] = [DBmu,DBstd]
             Tval = np.array(compute_tilt_density(T,plot_fitting=False)).reshape((3,-1))
             self.prop_lib['tilting'] = Tval
             
@@ -2108,7 +1856,6 @@ class Trajectory:
             
         
         if vis3D_domain != 0 and vis3D_domain in (1,2):
-            import matplotlib.pyplot as plt
             from scipy.stats import binned_statistic_dd as binstat
             from pdyna.analysis import savitzky_golay, vis3D_domain_anime
 
@@ -2305,7 +2052,7 @@ class Trajectory:
         CNdiff = np.amax(np.abs(r0-r1))
         
         if CNdiff > 5:
-            print(f"!MO: A change of C-N connectivity is detected (ref value {np.round(CNdiff,3)} A), indicating a broken organic molecule. ")
+            print("!MO: A change of C-N connectivity is detected (ref value {:.3f} A), indicating a broken organic molecule. ".format(CNdiff))
 
         MOvecs = {}
         MOcenter = {}
@@ -2710,7 +2457,7 @@ class Trajectory:
         et0 = time.time()
         
         from pdyna.analysis import draw_RDF
-        from pdyna.structural import get_volume
+        #from pdyna.structural import get_volume
         
         trajnum = list(range(round(self.nframe*allow_equil),self.nframe,self.read_every))
         
@@ -2803,7 +2550,7 @@ class Trajectory:
         Aazr = self.A_sites["Azr"]
         Aindex_cs = self.A_sites["Cs"]
         
-        ABsep = 8.2
+        ABsep = 1.3*self.default_BB_dist
         st0Bpos = st0pos[Bindex,:]
         
         CN_H_tol = 1.35
@@ -3122,99 +2869,102 @@ class Trajectory:
         
         
         # A-A displacement corr
-        MOcents=self.MOcenter
-        if len(MOcents) == 1: # only run with pure A-site case
-            MOcent = MOcents[list(MOcents.keys())[0]]
-            if len(Aindex_fa) > 0:
-                Adisp = self.disp_fa
-            if len(Aindex_ma) > 0:
-                Adisp = self.disp_ma
-            if len(Aindex_cs) > 0:
-                Adisp = self.disp_cs
-            if len(Aindex_azr) > 0:
-                Adisp = self.disp_azr
-            
-            safety_margin = np.array([1-1/supercell_size,1])
-            
-            cc = get_frac_from_cart(MOcent, latmatfr)[0,:]
-            
-            rect = [0,0,0]
-            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,0])-np.amin(cc[:,0])))): 
-                cc[:,0] = cc[:,0]-(np.amax(cc[:,0])-(1-1/supercell_size/2))
-                rect[0] = 1
-            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,1])-np.amin(cc[:,1])))): 
-                cc[:,1] = cc[:,1]-(np.amax(cc[:,1])-(1-1/supercell_size/2))
-                rect[1] = 1
-            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,2])-np.amin(cc[:,2])))): 
-                cc[:,2] = cc[:,2]-(np.amax(cc[:,2])-(1-1/supercell_size/2))
-                rect[2] = 1
-            
-            for i in range(3):
-                if rect[i] == 0:
-                    if np.amin(cc[:,i]) < 1/supercell_size/4:
-                        cc[:,i] = cc[:,i] + 1/supercell_size/8*3
-                    if np.amin(cc[:,i]) > 1-1/supercell_size/4:
-                        cc[:,i] = cc[:,i] - 1/supercell_size/8*3
-            
-            for i in range(cc.shape[0]):
-                for j in range(cc.shape[1]):
-                    if cc[i,j] > 1:
-                        cc[i,j] = cc[i,j]-1
-                    if cc[i,j] < 0:
-                        cc[i,j] = cc[i,j]+1
-            
-            clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
-                              [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
-                              [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
-            
-            bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
-                                  range=[[clims[0,0]-0.5*(1/supercell_size), 
-                                          clims[0,1]+0.5*(1/supercell_size)], 
-                                         [clims[1,0]-0.5*(1/supercell_size), 
-                                          clims[1,1]+0.5*(1/supercell_size)],
-                                         [clims[2,0]-0.5*(1/supercell_size), 
-                                          clims[2,1]+0.5*(1/supercell_size)]],
-                                  expand_binnumbers=True).binnumber
-            # validate the binning
-            atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
-            bincount = np.unique(atom_indices, return_counts=True)[1]
-            if len(bincount) != supercell_size**3:
-                raise TypeError("Incorrect number of bins. ")
+        if hasattr(self,'MOcenter'):
+            MOcents=self.MOcenter
+            if len(MOcents) == 1: # only run with pure A-site case
+                MOcent = MOcents[list(MOcents.keys())[0]]
+                if len(Aindex_fa) > 0:
+                    Adisp = self.disp_fa
+                if len(Aindex_ma) > 0:
+                    Adisp = self.disp_ma
+                if len(Aindex_cs) > 0:
+                    Adisp = self.disp_cs
+                if len(Aindex_azr) > 0:
+                    Adisp = self.disp_azr
                 
-            if max(bincount) != min(bincount):
-                raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
-           
-            bin_indices = bin_indices-1 # 0-indexing
-            
-            num_nn = math.ceil((supercell_size-1)/2)
-            
-            aa1 = []
-            aa2 = []
-            for o in range(bin_indices.shape[1]):
-                si = bin_indices[:,[o]]
-                a2d = []
-                for space in range(3):
-                    addit = np.array([[0],[0],[0]])
-                    addit[space,0] = 1
-                    pos1 = si + addit
-                    pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
-                    k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+                safety_margin = np.array([1-1/supercell_size,1])
+                
+                cc = get_frac_from_cart(MOcent, latmatfr)[0,:]
+                
+                rect = [0,0,0]
+                if np.argmin(np.abs(safety_margin - (np.amax(cc[:,0])-np.amin(cc[:,0])))): 
+                    cc[:,0] = cc[:,0]-(np.amax(cc[:,0])-(1-1/supercell_size/2))
+                    rect[0] = 1
+                if np.argmin(np.abs(safety_margin - (np.amax(cc[:,1])-np.amin(cc[:,1])))): 
+                    cc[:,1] = cc[:,1]-(np.amax(cc[:,1])-(1-1/supercell_size/2))
+                    rect[1] = 1
+                if np.argmin(np.abs(safety_margin - (np.amax(cc[:,2])-np.amin(cc[:,2])))): 
+                    cc[:,2] = cc[:,2]-(np.amax(cc[:,2])-(1-1/supercell_size/2))
+                    rect[2] = 1
+                
+                for i in range(3):
+                    if rect[i] == 0:
+                        if np.amin(cc[:,i]) < 1/supercell_size/4:
+                            cc[:,i] = cc[:,i] + 1/supercell_size/8*3
+                        if np.amin(cc[:,i]) > 1-1/supercell_size/4:
+                            cc[:,i] = cc[:,i] - 1/supercell_size/8*3
+                
+                for i in range(cc.shape[0]):
+                    for j in range(cc.shape[1]):
+                        if cc[i,j] > 1:
+                            cc[i,j] = cc[i,j]-1
+                        if cc[i,j] < 0:
+                            cc[i,j] = cc[i,j]+1
+                
+                clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                                  [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                                  [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+                
+                bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                                      range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                              clims[0,1]+0.5*(1/supercell_size)], 
+                                             [clims[1,0]-0.5*(1/supercell_size), 
+                                              clims[1,1]+0.5*(1/supercell_size)],
+                                             [clims[2,0]-0.5*(1/supercell_size), 
+                                              clims[2,1]+0.5*(1/supercell_size)]],
+                                      expand_binnumbers=True).binnumber
+                # validate the binning
+                atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+                bincount = np.unique(atom_indices, return_counts=True)[1]
+                if len(bincount) != supercell_size**3:
+                    raise TypeError("Incorrect number of bins. ")
                     
-                    a2d.append(Adisp[:,[k1],:])
-                a1d = Adisp[:,[o],:]
-                a2d = np.concatenate(a2d,axis=1)
-                aa1.append(a1d)
-                aa2.append(a2d)
-            aa1 = np.array(aa1)
-            aa2 = np.array(aa2)
-            
-            AAdisp_corrcoeff = np.empty((3,3))
-            for tax in range(3):
-                for corrax in range(3):
-                    AAdisp_corrcoeff[corrax,tax] = np.corrcoef(aa1[:,:,0,tax].reshape(-1,),aa2[:,:,corrax,tax].reshape(-1,))[0,1]
-            
-            self.AAdisp_corrcoeff = AAdisp_corrcoeff
-            self.prop_lib['AA_disp_corr'] = self.AAdisp_corrcoeff
+                if max(bincount) != min(bincount):
+                    raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+               
+                bin_indices = bin_indices-1 # 0-indexing
+                
+                num_nn = math.ceil((supercell_size-1)/2)
+                
+                aa1 = []
+                aa2 = []
+                for o in range(bin_indices.shape[1]):
+                    si = bin_indices[:,[o]]
+                    a2d = []
+                    for space in range(3):
+                        addit = np.array([[0],[0],[0]])
+                        addit[space,0] = 1
+                        pos1 = si + addit
+                        pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
+                        k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+                        
+                        a2d.append(Adisp[:,[k1],:])
+                    a1d = Adisp[:,[o],:]
+                    a2d = np.concatenate(a2d,axis=1)
+                    aa1.append(a1d)
+                    aa2.append(a2d)
+                aa1 = np.array(aa1)
+                aa2 = np.array(aa2)
+                
+                AAdisp_corrcoeff = np.empty((3,3))
+                for tax in range(3):
+                    for corrax in range(3):
+                        AAdisp_corrcoeff[corrax,tax] = np.corrcoef(aa1[:,:,0,tax].reshape(-1,),aa2[:,:,corrax,tax].reshape(-1,))[0,1]
+                
+                self.AAdisp_corrcoeff = AAdisp_corrcoeff
+                self.prop_lib['AA_disp_corr'] = self.AAdisp_corrcoeff
+        
+        
         
         
         et1 = time.time()
@@ -3236,7 +2986,7 @@ class Trajectory:
         
         et0 = time.time()
         
-        if octa_locality:
+        if octa_locality and hasattr(self, 'octahedra'):
             from pdyna.structural import octahedra_coords_into_bond_vectors, match_mixed_halide_octa_dot
             
             st0 = self.st0
@@ -3273,8 +3023,8 @@ class Trajectory:
             x1 = Xpos[-1,:]
             rf = distance_matrix_handler(b1,x1,self.latmat[-1,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
 
-            if np.amax(r-rf) > 3.5: 
-                print(f"Warning: The maximum atomic position difference between initial and final configs are too large ({round(np.amax(r-rf),3)} A). ")
+            if np.amax(np.abs(r-rf)) > 4.5: 
+                print("Warning: The maximum atomic position difference between initial and final configs are too large ({:.3f} A). ".format(np.amax(np.abs(r-rf))))
             
             octa_halide_code = [] # resolve the halides of a octahedron, key output
             octa_halide_code_single = []
@@ -3318,7 +3068,7 @@ class Trajectory:
             brconc = syscode[:,1]
 
             # categorize the octa into different configs
-            config_types = set(octa_halide_code_single)
+            config_types = sorted(set(octa_halide_code_single))
             typelib = [[] for numm in range(len(config_types))]
             for ti, typei in enumerate(config_types):
                 typelib[ti] = [k for k, x in enumerate(octa_halide_code_single) if x == typei]
@@ -3349,7 +3099,8 @@ class Trajectory:
             if octa_locality == 'homo':
                 
                 if hasattr(self,"Tilting"):
-                    Di = self.Distortion
+                    Dx = self.Distortion
+                    Db = self.Distortion_B
                     T = self.Tilting
                     TCNtype = []
                     TCNconc = []
@@ -3361,9 +3112,11 @@ class Trajectory:
                     from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density
                     
                     Dtype = []
+                    DBtype = []
                     Ttype = []
                     for ti, types in enumerate(typelib):
-                        Dtype.append(Di[:,types,:])
+                        Dtype.append(Dx[:,types,:])
+                        DBtype.append(Db[:,types,:])
                         Ttype.append(T[:,types,:])
                     if hasattr(self,"Tilting_Corr"):
                         for ti, types in enumerate(typelib):
@@ -3374,14 +3127,18 @@ class Trajectory:
                     
                     Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
                     Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
+                    #DBgauss_type, DBgaussstd_type = draw_octatype_dist_density(DBtype, config_types, uniname, saveFigures)
+                    
                     
                     concent = [] # concentrations recorded
                     Dconc = []
+                    DBconc = []
                     Tconc = []
                     for ii,item in enumerate(brbins):
                         if len(item) == 0: continue
                         concent.append(bincent[ii])
-                        Dconc.append(Di[:,item,:])
+                        Dconc.append(Dx[:,item,:])
+                        DBconc.append(Db[:,item,:])
                         Tconc.append(T[:,item,:])
                     if hasattr(self,"Tilting_Corr"):
                         for ii,item in enumerate(brbins):
@@ -3392,12 +3149,15 @@ class Trajectory:
                     
                     Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals=tcpconc)
                     Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
+                    #DBgauss_conc, DBgaussstd_conc = draw_halideconc_dist_density(DBconc, concent, uniname, saveFigures)
                     
                     self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
                     self.dist_wrt_halideconc = [concent,Dgauss_conc]
+                    #self.distB_wrt_halideconc = [concent,DBgauss_conc]
                     
                     if read_mode == 1:
                         self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
+                        self.prop_lib['distortion_B_halideconc'] = self.distB_wrt_halideconc
                         self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
                     
                     
@@ -3462,13 +3222,13 @@ class Trajectory:
                 print_partition(typelib,config_types,brconc,halcounts)
             
             elif octa_locality == 'hetero':
-                if list(config_types)[0] != 0 or list(config_types)[-1] != 9:
+                if sorted(config_types)[0] != 0 or sorted(config_types)[-1] != 9:
                     raise TypeError("The structure does not contain both types of octahedra that is purely attached to X-site endpoints, please use octa_locality = 'homo'.")
                 
-                if len(typelib[0]) > len(typelib[-1])*2: 
+                if len(typelib[0]) >= len(typelib[-1]): 
                     print("hetero-structure: the bulk is I. ")
                     ibulk = 0
-                elif len(typelib[-1]) > len(typelib[0])*2: 
+                elif len(typelib[-1]) > len(typelib[0]): 
                     print("hetero-structure: the bulk is Br. ")
                     ibulk = 1
                 else:
@@ -3492,7 +3252,8 @@ class Trajectory:
                 print(f"hetero-structure octahedral categories: (bulk: {len(occs[0])}, g.b.: {len(occs[1])}, grain: {len(occs[2])}). ")
                     
                 if hasattr(self,"Tilting"):
-                    Di = self.Distortion
+                    Dx = self.Distortion
+                    Db = self.Distortion_B
                     T = self.Tilting
                     TCNcls = []
                     if hasattr(self,"Tilting_Corr"):
@@ -3500,75 +3261,49 @@ class Trajectory:
                         TCN = self.Tilting_Corr
                         #TCN = get_norm_corr(TCN,T)
                         
-                    from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density
+                    from pdyna.analysis import draw_hetero_tilt_density, draw_hetero_dist_density, draw_hetero_lat_density
                     
                     Dcls = []
+                    DBcls = []
                     Tcls = []
                     for ti, types in enumerate(occs):
-                        Dcls.append(Di[:,types,:])
+                        Dcls.append(Dx[:,types,:])
+                        DBcls.append(Db[:,types,:])
                         Tcls.append(T[:,types,:])
                     if hasattr(self,"Tilting_Corr"):
-                        for ti, types in enumerate(typelib):
-                            TCNtype.append(TCN[:,types,:])
-                        tcptype = get_tcp_from_list(TCNtype)
-                    if len(TCNtype) == 0:
-                        tcptype = None
+                        for ti, types in enumerate(occs):
+                            TCNcls.append(TCN[:,types,:])
+                        tcpcls = get_tcp_from_list(TCNcls)
+                    if len(TCNcls) == 0:
+                        tcpcls = None
                     
-                    Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
-                    Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
-                    
-                    if read_mode == 1:
-                        self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
-                        self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
-                    
-                    
+                    Tmaxs_type = draw_hetero_tilt_density(Tcls, TCNcls, occs, uniname, saveFigures, corr_vals=tcpcls)
+                    Dgauss_type, Dgaussstd_type = draw_hetero_dist_density(Dcls, uniname, saveFigures)
+                    #DBgauss_type, DBgaussstd_type = draw_hetero_dist_density(DBcls, uniname, saveFigures)
                     
                     # partition tilting correlation length wrt local config
                     if hasattr(self,"spatialCorrLength"):
                         TC = self.spatialCorr['raw']
                         TC = np.sqrt(np.abs(TC))*np.sign(TC)
 
-                        from pdyna.analysis import quantify_octatype_tilt_domain, quantify_halideconc_tilt_domain
+                        from pdyna.analysis import quantify_hetero_tilt_domain
                         
-                        TCtype = []
-                        for ti, types in enumerate(typelib):
+                        TCcls = []
+                        for ti, types in enumerate(occs):
                             temp = TC[types,:]
                             temp = temp/temp[:,:,[0],:]
-                            TCtype.append(temp)
+                            TCcls.append(temp)
                         
-                        Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
-                        
-                        concent = [] # concentrations recorded
-                        TCconc = []
-                        for ii,item in enumerate(brbins):
-                            if len(item) == 0: continue
-                            concent.append(bincent[ii])
-                            temp = TC[item,:]
-                            temp = temp/temp[:,:,[0],:]
-                            TCconc.append(temp)
-                        
-                        Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
+                        Tmaxs_type = quantify_hetero_tilt_domain(TCcls, uniname, saveFigures)
 
                     
                 if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
                     L = self.Lat
-                    Ltype = []
-                    for ti, types in enumerate(typelib):
-                        Ltype.append(L[:,types,:])
-                    
-                    concent = [] # concentrations recorded
-                    Lconc = []
-                    for ii,item in enumerate(brbins):
-                        if len(item) == 0: continue
-                        concent.append(bincent[ii])
-                        Lconc.append(L[:,item,:])
+                    Lcls = []
+                    for ti, types in enumerate(occs):
+                        Lcls.append(L[:,types,:])
                         
-                    Lgauss_conc, Lgaussstd_conc = draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures)
-                    Lgauss_type, Lgaussstd_type = draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures)
-
-                    self.lat_wrt_halideconc = [concent,Lgauss_conc]
-                    if read_mode == 1:
-                        self.prop_lib['lattice_halideconc'] = self.lat_wrt_halideconc
+                    Lgauss_type, Lgaussstd_type = draw_hetero_lat_density(Lcls, uniname, saveFigures)
                     
             
         et1 = time.time()
@@ -3595,7 +3330,7 @@ class Frame:
     data_format: str = field(repr=False)
     data_path: str = field(repr=False)
     
-    # characteristic value of bond length of your material for structure construction 
+    # characteristic value of bond length of your material for structure construction, doesn't have to be very accurate 
     # the first interval should be large enough to cover all the first and second NN of B-X (B-B) pairs, 
     # in the second list, the two elements are 0) approximate first NN distance of B-X (B-B) pairs, and 1) approximate second NN distance of B-X (B-B) pairs
     # These values can be obtained by inspecting the initial configuration or, e.g. in the pair distrition function of the structure
@@ -3603,17 +3338,12 @@ class Frame:
     #_fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
     _fpg_val_BB = [[4,9.1], [5.8,8.1]] # empirical values for lead halide perovskites
     _fpg_val_BX = [[2,7.5], [3,6.2]] # empirical values for lead halide perovskites
+    
+    _Xsite_species = ['Cl','Br','I'] # update if needed
+    _Bsite_species = ['Pb','Sn'] # update if needed
      
     def __post_init__(self):
-        
-        Xsite_species = ['Cl','Br','I'] # update if needed
-        Bsite_species = ['Pb','Sn'] # update if needed
-        known_elem = ("I", "Br", "Cl", "Pb", "Sn", "C", "H", "N", "Cs", "K", "Mn") # update if needed
-        
-        #Xsite_species = ['Ba'] # update if needed
-        #Bsite_species = ['P'] # update if needed
-        #known_elem = ('Ba', 'P', 'Sb') # update if needed
-        
+
         et0 = time.time()
 
         if self.data_format == 'poscar':
@@ -3629,9 +3359,6 @@ class Frame:
             # read POSCAR and XDATCAR files
             st0 = vi.Poscar.from_file(poscar_path,check_for_POTCAR=False).structure # initial configuration
             
-            for elem in st0.symbol_set:
-                if not elem in known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
             self.st0 = st0
             at0 = aaa.get_atoms(st0)
             self.at0 = at0
@@ -3639,35 +3366,6 @@ class Frame:
             self.species_set = st0.symbol_set
             self.formula = chemical_from_formula(st0)
             self.scaled_up = False
-
-            # read the coordinates and save   
-            Xindex = []
-            Bindex = []
-
-            for i,site in enumerate(st0.sites):
-                 if site.species_string in Xsite_species:
-                     Xindex.append(i)
-                 if site.species_string in Bsite_species:
-                     Bindex.append(i)  
-            
-            if len(Bindex) < 16:
-                st0.make_supercell([2,2,2])
-                
-                self.st0 = st0
-                self.natom = len(st0)
-                self.scaled_up = True
-                
-                Xindex = []
-                Bindex = []
-
-                for i,site in enumerate(st0.sites):
-                     if site.species_string in Xsite_species:
-                         Xindex.append(i)
-                     if site.species_string in Bsite_species:
-                         Bindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
             
         elif self.data_format == 'cif':
             
@@ -3683,9 +3381,9 @@ class Frame:
             a=read(filename=poscar_path,format='cif')
             st0 = aaa.get_structure(a)
             
-            for elem in st0.symbol_set:
-                if not elem in known_elem:
-                    raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
+            #for elem in st0.symbol_set:
+            #    if not elem in known_elem:
+            #        raise ValueError(f"An unexpected element {elem} is found. Please update the list known_elem. ")
             self.st0 = st0
             at0 = aaa.get_atoms(st0)
             self.at0 = at0
@@ -3694,36 +3392,7 @@ class Frame:
             self.formula = chemical_from_formula(st0)
             self.scaled_up = False
 
-            # read the coordinates and save   
-            Xindex = []
-            Bindex = []
 
-            for i,site in enumerate(st0.sites):
-                 if site.species_string in Xsite_species:
-                     Xindex.append(i)
-                 if site.species_string in Bsite_species:
-                     Bindex.append(i)  
-            
-            if len(Bindex) < 16:
-                st0.make_supercell([2,2,2])
-                
-                self.st0 = st0
-                self.natom = len(st0)
-                self.scaled_up = True
-                
-                Xindex = []
-                Bindex = []
-
-                for i,site in enumerate(st0.sites):
-                     if site.species_string in Xsite_species:
-                         Xindex.append(i)
-                     if site.species_string in Bsite_species:
-                         Bindex.append(i)  
-            
-            self.Bindex = Bindex
-            self.Xindex = Xindex
-            
-        
         else:
             raise TypeError("Unsupported data format: {}".format(self.data_format))
         
@@ -3753,6 +3422,9 @@ class Frame:
                  
                  tilt_corr_spatial = False,
                  max_tilt_of_plot = None,
+                 
+                 # manually define system info that is saved in the class template
+                 system_overwrite = None, # dict contains X-site and B-site info, and the default bond lengths
                  ):
         
         """
@@ -3787,6 +3459,46 @@ class Frame:
         
         # label the constituent octahedra
         from pdyna.structural import fit_octahedral_network_frame
+        
+        if not system_overwrite is None:
+            if not system_overwrite['B-sites'] is None:
+                self._Bsite_species = system_overwrite['B-sites']
+            if not system_overwrite['X-sites'] is None:
+                self._Xsite_species = system_overwrite['X-sites']
+            if not system_overwrite['fpg_val_BB'] is None:
+                self._fpg_val_BB = system_overwrite['fpg_val_BB']
+            if not system_overwrite['fpg_val_BX'] is None:
+                self._fpg_val_BX = system_overwrite['fpg_val_BX']
+                
+        # read the coordinates and save  
+        st0 = self.st0
+        Xindex = []
+        Bindex = []
+
+        for i,site in enumerate(st0.sites):
+             if site.species_string in self._Xsite_species:
+                 Xindex.append(i)
+             if site.species_string in self._Bsite_species:
+                 Bindex.append(i)  
+        
+        if len(Bindex) < 16:
+            st0.make_supercell([2,2,2])
+            
+            self.st0 = st0
+            self.natom = len(st0)
+            self.scaled_up = True
+            
+            Xindex = []
+            Bindex = []
+
+            for i,site in enumerate(st0.sites):
+                 if site.species_string in self._Xsite_species:
+                     Xindex.append(i)
+                 if site.species_string in self._Bsite_species:
+                     Bindex.append(i)  
+        
+        self.Bindex = Bindex
+        self.Xindex = Xindex
         
         st0Bpos = self.st0.cart_coords[self.Bindex,:]
         st0Xpos = self.st0.cart_coords[self.Xindex,:]
@@ -3844,7 +3556,7 @@ class Frame:
         """
         
         from scipy.spatial.transform import Rotation as sstr
-        from pdyna.structural import octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors
+        from pdyna.structural import octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors_full
         from pdyna.analysis import draw_dist_density_frame
         
         et0 = time.time()
@@ -3857,7 +3569,7 @@ class Frame:
         if self.rotated:
             rotmat = np.linalg.inv(self.frame_rotation)
         
-        D = np.empty((0,4))
+        D = np.empty((0,7))
         Rmat = np.zeros((Bcount,3,3))
         Rmsd = np.zeros((Bcount,1))
         for B_site in range(Bcount): # for each B-site atom
@@ -3866,11 +3578,11 @@ class Frame:
             if self.rotated:
                 bx = np.matmul(bx,rotmat)
       
-            dist_val,rot,rmsd = calc_distortions_from_bond_vectors(bx)
+            dist_val,rot,rmsd = calc_distortions_from_bond_vectors_full(bx)
                 
             Rmat[B_site,:] = rot
             Rmsd[B_site] = rmsd
-            D = np.concatenate((D,dist_val.reshape(1,4)),axis = 0)
+            D = np.concatenate((D,dist_val.reshape(1,7)),axis = 0)
                 
         
         T = np.zeros((Bcount,3))
@@ -3895,9 +3607,10 @@ class Frame:
             search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
             default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
             
-            Benv = []
-            for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
-                Benv.append([i for i,B2 in enumerate(B2_list) if (B2 > 0.1 and B2 < search_NN1)])
+            res=np.where(np.logical_and(r0<search_NN1,r0>0.1))
+            Benv = [[] for _ in range(r0.shape[0])]
+            for i in range(res[0].shape[0]):
+                Benv[res[0][i]].append(res[1][i])
             Benv = np.array(Benv)
             
             aa = Benv.shape[1] # if some of the rows in Benv don't have 6 neighbours.
@@ -3971,7 +3684,7 @@ class Frame:
                 
             
             else:
-                raise ValueError("The cell is not in cubic shape. ")
+                raise ValueError("The cell is not in cubic shape, or the system init values (fpg_val) is wrong. ")
         
 
 # =============================================================================
@@ -4244,7 +3957,7 @@ class Dataset:
     _Xsite_species = ['Cl','Br','I'] # update if your structrue contains other elements on the X-sites
     _Bsite_species = ['Pb','Sn'] # update if your structrue contains other elements on the B-sites
     
-    # characteristic value of bond length of your material for structure construction 
+    # characteristic value of bond length of your material for structure construction, doesn't have to be very accurate 
     # the first interval covers the first and second NN of B-X (B-B) pairs, the second interval covers only the first NN of B-X (B-B) pairs.
     _fpg_val_BB = [[3,9.6], [6,8.8]] # empirical values for lead halide perovskites
     _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
@@ -4312,6 +4025,9 @@ class Dataset:
                  uniname = "test", # A unique user-defined name for this trajectory, will be used in printing and figure saving
                  saveFigures = False, # whether to save produced figures
                  tilt_corr_NN1 = True, # enable first NN correlation of tilting, reflecting the Glazer notation
+                 
+                 # manually define system info that is saved in the class template
+                 system_overwrite = None, # dict contains X-site and B-site info, and the default bond lengths
                  ):
         
         from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
@@ -4327,6 +4043,16 @@ class Dataset:
         
         print(" ")
         et0 = time.time()
+        
+        if not system_overwrite is None:
+            if not system_overwrite['B-sites'] is None:
+                self._Bsite_species = system_overwrite['B-sites']
+            if not system_overwrite['X-sites'] is None:
+                self._Xsite_species = system_overwrite['X-sites']
+            if not system_overwrite['fpg_val_BB'] is None:
+                self._fpg_val_BB = system_overwrite['fpg_val_BB']
+            if not system_overwrite['fpg_val_BX'] is None:
+                self._fpg_val_BX = system_overwrite['fpg_val_BX']
         
         Tf = []
         Df = []
@@ -4364,12 +4090,13 @@ class Dataset:
             
             r0=distance_matrix(Bpos,Bpos,mymat)
             search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
-            default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
-            self.default_BB_dist = default_BB_dist
+            #default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
+            #self.default_BB_dist = default_BB_dist
             
-            Benv = []
-            for B1, B2_list in enumerate(r0): # find the nearest Pb within a cutoff
-                Benv.append([i for i,B2 in enumerate(B2_list) if (B2 > 0.1 and B2 < search_NN1)])
+            res=np.where(np.logical_and(r0<search_NN1,r0>0.1))
+            Benv = [[] for _ in range(r0.shape[0])]
+            for i in range(res[0].shape[0]):
+                Benv[res[0][i]].append(res[1][i])
             Benv = np.array(Benv)
             
             try:
@@ -4381,7 +4108,6 @@ class Dataset:
                 print(f"Need to adjust the range of B atom 1st NN distance (was {search_NN1}).  ")
                 print("See the gap between the populations. \n")
                 test_range = r0.reshape((1,r0.shape[0]**2))
-                import matplotlib.pyplot as plt
                 fig,ax = plt.subplots(1,1)
                 plt.hist(test_range.reshape(-1,),range=[5.3,9.0],bins=100)
                 #ax.scatter(test_range,test_range)
@@ -4390,7 +4116,7 @@ class Dataset:
             self._Benv = Benv
             
             # label the constituent octahedra
-            from pdyna.structural import fit_octahedral_network_defect_tol, octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors
+            from pdyna.structural import fit_octahedral_network_defect_tol, octahedra_coords_into_bond_vectors, calc_distortions_from_bond_vectors_full
             from scipy.spatial.transform import Rotation as sstr
             from pdyna.structural import distance_matrix
             try: 
@@ -4403,16 +4129,16 @@ class Dataset:
                 skipped += 1
                 continue
 
-            disto = np.empty((0,4))
+            disto = np.empty((0,7))
             Rmat = np.zeros((len(Bindex),3,3))
             Rmsd = np.zeros((len(Bindex),1))
             for B_site in range(len(Bindex)): # for each B-site atom
                 raw = Xpos[neigh_list[B_site,:].astype(int),:] - Bpos[B_site,:]
                 bx = octahedra_coords_into_bond_vectors(raw,mymat)
-                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+                dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors_full(bx)
                 Rmat[B_site,:] = rotmat
                 Rmsd[B_site] = rmsd
-                disto = np.concatenate((disto,dist_val.reshape(1,4)),axis = 0)
+                disto = np.concatenate((disto,dist_val.reshape(1,-1)),axis = 0)
             
             T = np.zeros((len(Bindex),3))
             for i in range(Rmat.shape[0]):
@@ -4479,7 +4205,7 @@ class Dataset:
         
         if tilt_corr_NN1:
             Tm = np.empty((0,3))
-            Dm = np.empty((0,4))
+            Dm = np.empty((0,7))
             Cm = np.empty((0,3))
             Fa = []
             for f in range(len(Tf)):
@@ -4491,7 +4217,7 @@ class Dataset:
             Features = np.concatenate((Dm,Tm,Cm),axis=1)
         else:
             Tm = np.empty((0,3))
-            Dm = np.empty((0,4))
+            Dm = np.empty((0,7))
             Fa = []
             for f in range(len(Tf)):
                 Tm = np.concatenate((Tm,Tf[f]),axis=0)
@@ -4516,7 +4242,6 @@ class Dataset:
         self.timing["tilt_distort"] = et1-et0
         self.timing["total"] = sum(list(self.timing.values()))
         print(" ")
-        from pdyna.io import print_time
         print_time(self.timing)
         
 
