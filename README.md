@@ -93,8 +93,8 @@ An alternative way is to directly define the same quantities at the beginning of
     
     _Xsite_species = ['Cl','Br','I'] 
     _Bsite_species = ['Pb'] 
-    _fpg_val_BB = [[3,10], [6.3,9.1]] # empirical values for 3D lead halide perovskites
-    _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for 3D lead halide perovskites
+    _fpg_val_BB = [[5,13.5], [8.2,12]] # the values for above plot
+    _fpg_val_BX = [[1,8], [3,6.8]] # the values for above plot
 
 
 Usage
