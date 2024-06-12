@@ -63,19 +63,20 @@ Install the package with pip
 Pre-definition of the structure
 ------------
 
-To start using the code, the user must define the B and X site elements in the BX6 octahedra. This can be done by defining the B and X sites species and their relative distances with the entry `system_overwrite` in the `dynamics`, for example, `traj.dynamics(..., system_overwrite=user_system)`. The input `new_sys` is a dict with four entries: 
+To start using the code, the user must define the B and X site elements in the BX6 octahedra. This can be done by defining the B and X sites species and their relative distances with the additional entry `system_overwrite` in the `dynamics`, for example, 
+    
+    traj.dynamics(..., system_overwrite=user_system)`
+
+The input `new_sys` is a dict with four entries: 
 
     {'B-sites': ['Sn'], 'X-sites': ['I','Br'], 'fpg_val_BB': [[a,b], [c,d]], 'fpg_val_BX': [[a,b], [c,d]]} 
 
 The four numbers in B-B (`fpg_val_BB`) and B-X (`fpg_val_BX`) connectivity are: 
 
-c: NN1 distance of the connected pair
-
-d: NN2 distance of the connected pair
-
-a: lower bound of a range of distance that covers both and only NN1 and NN2
-
-b: upper bound of a range of distance that covers both and only NN1 and NN2
+    c: NN1 distance of the connected pair
+    d: NN2 distance of the connected pair
+    a: lower bound of a range of distance that covers both and only NN1 and NN2
+    b: upper bound of a range of distance that covers both and only NN1 and NN2
 
 If you are not sure about the relative distances in your system, you can run the `system_test` function with one of your trajectories by calling: 
 
@@ -87,6 +88,13 @@ This will give you two plots as follows:
 <p align="center">
 <img src="distance.png" width="550">
 </p>
+
+An alternative way is to directly define the same quantities at the beginning of the `Trajectory` class if you are working with only one system throughout. 
+    
+    _Xsite_species = ['Cl','Br','I'] 
+    _Bsite_species = ['Pb'] 
+    _fpg_val_BB = [[3,10], [6.3,9.1]] # empirical values for 3D lead halide perovskites
+    _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for 3D lead halide perovskites
 
 
 Usage
