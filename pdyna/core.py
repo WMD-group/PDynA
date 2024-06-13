@@ -3309,6 +3309,61 @@ class Trajectory:
         et1 = time.time()
         self.timing["property_processing"] = et1-et0
 
+    def system_test(self, B_sites=None, X_sites=None):
+        
+        if not B_sites is None:
+            self._Bsite_species = B_sites
+        if not X_sites is None:
+            self._Xsite_species = X_sites
+        
+        # register the atomic symbols   
+        Xindex = []
+        Bindex = []
+        Cindex = []
+        Nindex = []
+        Hindex = []
+        for i,site in enumerate(self.atomic_symbols):
+             if site in self._Xsite_species:
+                 Xindex.append(i)
+             if site in self._Bsite_species:
+                 Bindex.append(i)  
+             if site == 'C':
+                 Cindex.append(i)  
+             if site == 'N':
+                 Nindex.append(i)  
+             if site == 'H':
+                 Hindex.append(i)  
+        
+        st0 = self.st0
+        at0 = aaa.get_atoms(st0)
+        st0Bpos = st0.cart_coords[Bindex,:]
+        st0Xpos = st0.cart_coords[Xindex,:]
+        mymat = st0.lattice.matrix
+        
+        from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
+        cell_lat = st0.lattice.abc
+        angles = st0.lattice.angles
+        if (max(angles) < 100 and min(angles) > 80):
+            r0=distance_matrix_handler(st0Bpos,st0Bpos,mymat)
+        else:
+            r0=distance_matrix_handler(st0Bpos,st0Bpos,at0.cell,at0.cell.array,at0.pbc,False)
+        
+        plt.hist(r0.reshape(-1,),bins=200,range=[0.1,15])
+        plt.xlabel("Distance (Angstrom)")
+        plt.ylabel("Counts")
+        plt.title("B-B distance")
+        plt.show()
+        
+        if (max(angles) < 100 and min(angles) > 80):
+            r0=distance_matrix_handler(st0Bpos,st0Xpos,mymat)
+        else:
+            r0=distance_matrix_handler(st0Bpos,st0Xpos,at0.cell,at0.cell.array,at0.pbc,False)
+        
+        plt.hist(r0.reshape(-1,),bins=200,range=[0,12])
+        plt.xlabel("Distance (Angstrom)")
+        plt.ylabel("Counts")
+        plt.title("B-X distance")
+        plt.show()
 
 @dataclass
 class Frame:
