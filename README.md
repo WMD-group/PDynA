@@ -81,7 +81,7 @@ The four numbers in B-B (`fpg_val_BB`) and B-X (`fpg_val_BX`) connectivity are:
 If you are not sure about the relative distances in your system, you can run the `system_test` function with one of your trajectories by calling: 
 
     traj = Trajectory(filetype,(file_path, MDtup))
-    traj.system_test(B_sites=['Sn'],B_sites=['I','Br']) # with Sn(I/Br) system as an example
+    traj.system_test(B_sites=['Sn'],X_sites=['I','Br']) # with Sn(I/Br) system as an example
 
 This will give you two plots as follows:
 
