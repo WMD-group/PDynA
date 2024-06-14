@@ -831,6 +831,7 @@ class Trajectory:
             self._non_orthogonal = False
             angles = self.st0.lattice.angles
             sides = self.st0.lattice.abc
+            self.complex_pbc = True
             if (max(angles) < 100 and min(angles) > 80):
                 self.complex_pbc = False
             self._flag_cubic_cell = False
