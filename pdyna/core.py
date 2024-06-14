@@ -827,8 +827,15 @@ class Trajectory:
             #ax.set_xlim([5,10])
         
         self._Benv = Benv
+        if structure_type != 1:
+            self._non_orthogonal = False
+            angles = self.st0.lattice.angles
+            sides = self.st0.lattice.abc
+            if (max(angles) < 100 and min(angles) > 80):
+                self.complex_pbc = False
+            self._flag_cubic_cell = False
             
-        if Benv.shape[1] == 6:
+        elif Benv.shape[1] == 6:
             Bcoordenv = np.empty((Benv.shape[0],6,3))
             for i in range(Benv.shape[0]):
                 #Bcoordenv[i,:] = Bpos[0,Benv[i,:],:] - Bpos[0,i,:]
@@ -896,7 +903,7 @@ class Trajectory:
             self._flag_cubic_cell = False
             self._non_orthogonal = False
             self.complex_pbc = True
-            print(f"The B-B environment matrix is {Benv.shape[1]}. This indicates a non-3C polytype (3 or 6). ")
+            #print(f"The B-B environment matrix is {Benv.shape[1]}. This indicates a non-3C polytype (3 or 6). ")
         
             #raise TypeError(f"The environment matrix is incorrect. The connectivity is {Benv.shape[1]} instead of 6. ")
         

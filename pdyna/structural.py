@@ -1154,13 +1154,15 @@ def match_bx_arbitrary(bx):
     Find the order of atoms in octahedron through matching with the reference. 
     Used in structure_type 3.
     """
-    confidence_bound = [0.8,0.2]
+    fitting_tol = 0.4
+    #confidence_bound = [0.8,0.2]
     ref_rot, ideal_coords, rmsd = quick_match_octahedron(bx)
     
     order = []
     for ix in range(6):
         fits = np.dot(bx,ideal_coords[ix,:])
-        if not (fits[fits.argsort()[-1]] > confidence_bound[0] and fits[fits.argsort()[-2]] < confidence_bound[1]):
+        #if not (fits[fits.argsort()[-1]] > confidence_bound[0] and fits[fits.argsort()[-2]] < confidence_bound[1]):
+        if not (fits[fits.argsort()[-1]]-fits[fits.argsort()[-2]]) > fitting_tol:
             print(bx,fits)
             raise ValueError("The fitting of initial octahedron config to rotated reference is not successful. This may happen if the initial configuration is too distorted. ")
         order.append(np.argmax(fits))
