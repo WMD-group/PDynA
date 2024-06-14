@@ -267,9 +267,9 @@ def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,rotate
         bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
         
         if rotated:
-            order1 = match_bx_orthogonal_rotated(bx,mymat,rotmat) 
+            order1 = match_bx_orthogonal_rotated(bx,rotmat) 
         else:
-            order1 = match_bx_orthogonal(bx,mymat) 
+            order1 = match_bx_orthogonal(bx) 
         neigh_list[B_site,:] = np.array(X_idx)[order1]
 
     
@@ -322,13 +322,13 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
                 bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
                 
                 if structure_type == 1:
-                    order1 = match_bx_orthogonal(bx,mymat) 
+                    order1 = match_bx_orthogonal(bx) 
                     neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
                 elif structure_type == 2:
-                    order1, _, rmsd = match_bx_arbitrary(bx,mymat) 
+                    order1, _, rmsd = match_bx_arbitrary(bx) 
                     neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
                 elif structure_type == 3:   
-                    order1, ref1, rmsd = match_bx_arbitrary(bx,mymat) 
+                    order1, ref1, rmsd = match_bx_arbitrary(bx) 
                     neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
                     ref_initial[B_site,:] = ref1
                 #bxfit_rmsd.append(rmsd)
@@ -346,7 +346,12 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
             else:   
                 neigh_list[B_site,:] = np.nan
                 ref_initial[B_site,:] = np.nan
-
+    
+    if np.sum(np.isnan(neigh_list[:,0])) > neigh_list.shape[0]*0.05:
+        raise ValueError(f"There are {np.sum(np.isnan(neigh_list[:,0]))} out of {neigh_list.shape[0]} octahedra contains unsolvable B-X connections.")
+    elif np.sum(np.isnan(neigh_list[:,0])) != 0:
+        print(f"!Structural Resolving: There are {np.sum(np.isnan(neigh_list[:,0]))} out of {neigh_list.shape[0]} octahedra contains unsolvable B-X connections.")
+    
     if structure_type in (1,2):
         return neigh_list
     else:
@@ -396,7 +401,7 @@ def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mym
             bx_raw = Xpos_frame[bxcom,:] - Bpos_frame[B_site,:]
             bx = octahedra_coords_into_bond_vectors(bx_raw,mymat)
 
-            order1 = match_bx_orthogonal_rotated(bx,mymat,rotmat) 
+            order1 = match_bx_orthogonal_rotated(bx,rotmat) 
             neigh_list[B_site,:] = np.array(bxcom)[order1].astype(int)
 
         else:
@@ -1097,7 +1102,7 @@ def quick_match_octahedron(bx):
     return np.linalg.inv(rotmat), new_coords, rmsd
 
 
-def match_bx_orthogonal(bx,mymat):
+def match_bx_orthogonal(bx):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
     Used in structure_type 1.
@@ -1120,7 +1125,7 @@ def match_bx_orthogonal(bx,mymat):
     return order
 
 
-def match_bx_orthogonal_rotated(bx,mymat,rotmat):
+def match_bx_orthogonal_rotated(bx,rotmat):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
     Used in structure_type 2.
@@ -1144,7 +1149,7 @@ def match_bx_orthogonal_rotated(bx,mymat,rotmat):
     return order
 
 
-def match_bx_arbitrary(bx,mymat):
+def match_bx_arbitrary(bx):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
     Used in structure_type 3.

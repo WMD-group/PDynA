@@ -1462,7 +1462,7 @@ class Trajectory:
                 from pdyna.analysis import draw_tilt_evolution_time, draw_tilt_corr_density_time, draw_dist_evolution_time
                 self.Tobj = draw_tilt_evolution_time(T, timeline,uniname, saveFigures=False, smoother=smoother)
                 self.Dobj = draw_dist_evolution_time(Dx, timeline,uniname, saveFigures=False, smoother=smoother)
-                #self.DBobj = draw_dist_evolution_time(Db, timeline,uniname, saveFigures=False, smoother=smoother)
+                self.DBobj = draw_dist_evolution_time(Db, timeline,uniname, saveFigures=False, smoother=smoother)
             
             else:
                 from pdyna.analysis import draw_dist_evolution, draw_tilt_evolution
@@ -1492,13 +1492,13 @@ class Trajectory:
                 #draw_distortion_evolution_sca(Dx, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
                 #draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
                 self.Dobj = draw_dist_evolution(Dx, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
-                #self.DBobj = draw_dist_evolution(Db, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                self.DBobj = draw_dist_evolution(Db, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
                 self.Tobj = draw_tilt_evolution(T, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
                 
         else: # read_mode 1, constant-T MD (equilibration)
             from pdyna.analysis import draw_dist_density, draw_tilt_density, draw_conntype_tilt_density
             Dmu,Dstd = draw_dist_density(Dx, uniname, saveFigures, n_bins = 100, title=None)
-            #DBmu,DBstd = draw_dist_density(Db, uniname, saveFigures, n_bins = 100, title=None)
+            DBmu,DBstd = draw_dist_density(Db, uniname, saveFigures, n_bins = 100, title=None)
             
             if not tilt_corr_NN1:
                 if structure_type == 1 or not hasattr(self, 'octahedral_connectivity'):
@@ -1513,7 +1513,7 @@ class Trajectory:
                         draw_conntype_tilt_density(T, oc, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
             
             self.prop_lib['distortion'] = [Dmu,Dstd]
-            #self.prop_lib['distortion_B'] = [DBmu,DBstd]
+            self.prop_lib['distortion_B'] = [DBmu,DBstd]
             Tval = np.array(compute_tilt_density(T,plot_fitting=False)).reshape((3,-1))
             self.prop_lib['tilting'] = Tval
             
@@ -3127,7 +3127,7 @@ class Trajectory:
                     
                     Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
                     Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
-                    #DBgauss_type, DBgaussstd_type = draw_octatype_dist_density(DBtype, config_types, uniname, saveFigures)
+                    DBgauss_type, DBgaussstd_type = draw_octatype_dist_density(DBtype, config_types, uniname, saveFigures)
                     
                     
                     concent = [] # concentrations recorded
@@ -3149,11 +3149,11 @@ class Trajectory:
                     
                     Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals=tcpconc)
                     Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
-                    #DBgauss_conc, DBgaussstd_conc = draw_halideconc_dist_density(DBconc, concent, uniname, saveFigures)
+                    DBgauss_conc, DBgaussstd_conc = draw_halideconc_dist_density(DBconc, concent, uniname, saveFigures)
                     
                     self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
                     self.dist_wrt_halideconc = [concent,Dgauss_conc]
-                    #self.distB_wrt_halideconc = [concent,DBgauss_conc]
+                    self.distB_wrt_halideconc = [concent,DBgauss_conc]
                     
                     if read_mode == 1:
                         self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
@@ -3279,7 +3279,7 @@ class Trajectory:
                     
                     Tmaxs_type = draw_hetero_tilt_density(Tcls, TCNcls, occs, uniname, saveFigures, corr_vals=tcpcls)
                     Dgauss_type, Dgaussstd_type = draw_hetero_dist_density(Dcls, uniname, saveFigures)
-                    #DBgauss_type, DBgaussstd_type = draw_hetero_dist_density(DBcls, uniname, saveFigures)
+                    DBgauss_type, DBgaussstd_type = draw_hetero_dist_density(DBcls, uniname, saveFigures)
                     
                     # partition tilting correlation length wrt local config
                     if hasattr(self,"spatialCorrLength"):
@@ -3308,7 +3308,8 @@ class Trajectory:
             
         et1 = time.time()
         self.timing["property_processing"] = et1-et0
-
+    
+        
     def system_test(self, B_sites=None, X_sites=None):
         
         if not B_sites is None:
@@ -3364,6 +3365,7 @@ class Trajectory:
         plt.ylabel("Counts")
         plt.title("B-X distance")
         plt.show()
+
 
 @dataclass
 class Frame:
