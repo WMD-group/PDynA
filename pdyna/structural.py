@@ -303,7 +303,7 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
             else: # bad defects
                 raise TypeError("!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
     
-    except ValueError:
+    except (ValueError,TypeError):
         closebx = np.argsort(r, axis=0)[:2, :]
         binx, bcount = np.unique(closebx, return_counts=True)
         if (not np.array_equal(binx,np.arange(0,r.shape[0]))) or (not np.array_equal(bcount,np.ones_like(bcount)*6)):
@@ -333,12 +333,12 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
                     ref_initial[B_site,:] = ref1
                 #bxfit_rmsd.append(rmsd)
             
-            except ValueError: # til here
+            except ValueError: 
                 if structure_type in (1,2):
                     neigh_list[B_site,:] = np.nan
                 else:   
                     neigh_list[B_site,:] = np.nan
-                    ref_initial[B_site,:] = np.nan
+                    ref_initial[B_site,:] = np.nan # til here
 
         else:
             if structure_type in (1,2):
@@ -347,10 +347,10 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
                 neigh_list[B_site,:] = np.nan
                 ref_initial[B_site,:] = np.nan
     
-    if np.sum(np.isnan(neigh_list[:,0])) > neigh_list.shape[0]*0.05:
+    if np.sum(np.isnan(neigh_list[:,0])) > neigh_list.shape[0]*0.05 and np.sum(np.isnan(neigh_list[:,0]))>1:
         raise ValueError(f"There are {np.sum(np.isnan(neigh_list[:,0]))} out of {neigh_list.shape[0]} octahedra contains unsolvable B-X connections.")
-    elif np.sum(np.isnan(neigh_list[:,0])) != 0:
-        print(f"!Structural Resolving: There are {np.sum(np.isnan(neigh_list[:,0]))} out of {neigh_list.shape[0]} octahedra contains unsolvable B-X connections.")
+    #elif np.sum(np.isnan(neigh_list[:,0])) != 0:
+    #    print(f"!Structural Resolving: There are {np.sum(np.isnan(neigh_list[:,0]))} out of {neigh_list.shape[0]} octahedra contains unsolvable B-X connections.")
     
     if structure_type in (1,2):
         return neigh_list
@@ -386,7 +386,7 @@ def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mym
             else: # bad defects
                 raise TypeError("!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
     
-    except ValueError:
+    except (ValueError,TypeError):
         closebx = np.argsort(r, axis=0)[:2, :]
         binx, bcount = np.unique(closebx, return_counts=True)
         if (not np.array_equal(binx,np.arange(0,r.shape[0]))) or (not np.array_equal(bcount,np.ones_like(bcount)*6)):
@@ -713,9 +713,9 @@ def pseudocubic_lat(traj,  # the main class instance
     if len(blist) == 0:
         raise TypeError("Detected zero B site atoms, check B_list")
 
-    dm = distance_matrix_handler(Bpos,Bpos,st0.lattice.matrix,traj.at0.cell,traj.at0.pbc,traj.complex_pbc)
-    dm = dm.reshape((dm.shape[0]**2,1))
-    BBdist = np.mean(dm[np.logical_and(dm>0.1,dm<7)]) # default B-B distance
+    #dm = distance_matrix_handler(Bpos,Bpos,st0.lattice.matrix,traj.at0.cell,traj.at0.pbc,traj.complex_pbc)
+    #dm = dm.reshape((dm.shape[0]**2,1))
+    BBdist = traj.default_BB_dist #np.mean(dm[np.logical_and(dm>0.1,dm<7)])
     
     #if not traj._non_orthogonal:
     celldim = np.cbrt(len(traj.Bindex))
@@ -1471,9 +1471,6 @@ def distance_matrix(v1,v2,latmat,get_vec=False):
     
     dprec = np.float32
     
-    if v1.ndim != 2 or v1.shape[1] != 3 or v2.ndim != 2 or v2.shape[1] != 3:
-        raise TypeError("The input arrays must be in shape N*3. ")
-    
     f1 = get_frac_from_cart(v1,latmat)[:,np.newaxis,:].astype(dprec)
     f2 = get_frac_from_cart(v2,latmat)[np.newaxis,:,:].astype(dprec)
     
@@ -1513,6 +1510,12 @@ def distance_matrix_ase_replace(v1,v2,asecell,newcell,pbc,get_vec=False):
     
 
 def distance_matrix_handler(v1,v2,latmat,asecell=None,pbc=None,complex_pbc=False,replace=True,get_vec=False):
+    if v1.shape == (3,):
+        v1 = v1[np.newaxis,:]
+    if v2.shape == (3,):
+        v2 = v2[np.newaxis,:]
+    if v1.ndim != 2 or v1.shape[1] != 3 or v2.ndim != 2 or v2.shape[1] != 3:
+        raise TypeError("The input arrays must be in shape (N*3) or (3,). ")
     
     if complex_pbc is False:
         r = distance_matrix(v1,v2,latmat,get_vec=get_vec)

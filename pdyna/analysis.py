@@ -1337,9 +1337,20 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, ti
         hrange = [0,45]
         tlabel = [0,15,30,45]
     
-    T_a = T[:,:,0].reshape((T.shape[0]*T.shape[1]))
-    T_b = T[:,:,1].reshape((T.shape[0]*T.shape[1]))
-    T_c = T[:,:,2].reshape((T.shape[0]*T.shape[1]))
+    if type(T) is list:
+        T=np.vstack(T)
+        T_a = T[:,0]
+        T_b = T[:,1]
+        T_c = T[:,2]
+    else:
+        if T.ndim == 3:
+            T_a = T[:,:,0].reshape(-1,)
+            T_b = T[:,:,1].reshape(-1,)
+            T_c = T[:,:,2].reshape(-1,)
+        elif T.ndim == 2:
+            T_a = T[:,0]
+            T_b = T[:,1]
+            T_c = T[:,2]
     tup_T = (T_a,T_b,T_c)
     
     figs, axs = plt.subplots(3, 1)
@@ -3174,6 +3185,165 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
     return por
 
 
+def draw_tilt_and_corr_density_shade_non3D(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
+    """ 
+    Generate the Glazer plot. 
+    """
+    
+    fig_name=f"traj_tilt_corr_density_{uniname}.png"
+    
+    corr_power = 2.5
+    fill_alpha = 0.5
+    
+    if Corr.ndim == 4: # isotropic treatment
+        T_a = T[:,:,0].reshape(-1,)
+        T_b = T[:,:,1].reshape(-1,)
+        T_c = T[:,:,2].reshape(-1,)
+        tup_T = (T_a,T_b,T_c)
+        
+        C = (Corr[:,:,:,0].reshape(-1,),
+             Corr[:,:,:,1].reshape(-1,),
+             Corr[:,:,:,2].reshape(-1,))
+        
+        figs, axs = plt.subplots(3, 1)
+        labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+        colors = ["C0", "C1", "C2"]
+        #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
+        por = [0,0,0]
+        for i in range(3):
+            
+            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yt=y/max(y)
+            axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
+            #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+
+            y,binEdges=np.histogram(C[i],bins=n_bins,range=[-45,45]) 
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yc=y/max(y)
+            yy=yt*yc
+
+            axs[i].fill_between(bincenters, yy, 0, facecolor = colors[i], alpha=fill_alpha, interpolate=True)
+            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=16, verticalalignment='center', transform=axs[i].transAxes, style='italic')
+            
+            axs[i].set_ylim(bottom=0)
+            
+            parneg = np.sum(np.power(yc,corr_power)[bincenters<0])
+            parpos = np.sum(np.power(yc,corr_power)[bincenters>0])
+            por[i] = (-parneg+parpos)/(parneg+parpos)
+            
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel(r'Tilt Angle ($\degree$)', fontsize = 15) # X label
+            ax.set_xlim([-45,45])
+            ax.set_xticks([-45,-30,-15,0,15,30,45])
+            ax.set_yticks([])
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[1].set_xlabel("")
+        axs[2].set_ylabel("")
+
+        if not title is None:
+            axs[0].set_title(title,fontsize=17)
+            
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+            
+        plt.show()
+        
+        div = 0.35
+        scal = 4/3
+        for ci, cval in enumerate(por):
+            if abs(cval) > div:
+                cval = np.sign(cval)*(np.power(((np.abs(cval)-div)/(1-div)),1/scal)*(1-div)+div)
+                por[ci] = np.round(cval,4)
+            else:
+                cval = np.sign(cval)*(np.power(np.abs(cval)/div,scal)*div)
+                por[ci] = np.round(cval,4)
+    
+    elif Corr.ndim == 5:
+        T_a = T[:,:,0].reshape(-1,)
+        T_b = T[:,:,1].reshape(-1,)
+        T_c = T[:,:,2].reshape(-1,)
+        tup_T = (T_a,T_b,T_c)
+        
+        C = (Corr[:,:,:,0].reshape(-1,),
+             Corr[:,:,:,1].reshape(-1,),
+             Corr[:,:,:,2].reshape(-1,))
+        
+        figs, axs = plt.subplots(3, 1)
+        labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
+        colors = ["C0", "C1", "C2"]
+        #rgbcode = np.array([[0,1,0,fill_alpha],[0,0,1,fill_alpha],[1,0,0,fill_alpha]])
+        por = [0,0,0]
+        for i in range(3):
+            
+            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yt=y/max(y)
+            axs[i].plot(bincenters,yt,label = labels[i], color = colors[i],linewidth = 2.4)
+            #axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=14, verticalalignment='center', transform=axs[i].transAxes)
+
+            y,binEdges=np.histogram(C[i],bins=n_bins,range=[-45,45]) 
+            bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+            yc=y/max(y)
+            yy=yt*yc
+
+            axs[i].fill_between(bincenters, yy, 0, facecolor = colors[i], alpha=fill_alpha, interpolate=True)
+            axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=16, verticalalignment='center', transform=axs[i].transAxes, style='italic')
+            
+            axs[i].set_ylim(bottom=0)
+            
+            parneg = np.sum(np.power(yc,corr_power)[bincenters<0])
+            parpos = np.sum(np.power(yc,corr_power)[bincenters>0])
+            por[i] = (-parneg+parpos)/(parneg+parpos)
+            
+        for ax in axs.flat:
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.set_ylabel('Counts (a.u.)', fontsize = 15) # Y label
+            ax.set_xlabel(r'Tilt Angle ($\degree$)', fontsize = 15) # X label
+            ax.set_xlim([-45,45])
+            ax.set_xticks([-45,-30,-15,0,15,30,45])
+            ax.set_yticks([])
+            
+        axs[0].xaxis.set_ticklabels([])
+        axs[1].xaxis.set_ticklabels([])
+        axs[0].yaxis.set_ticklabels([])
+        axs[1].yaxis.set_ticklabels([])
+        axs[2].yaxis.set_ticklabels([])
+        axs[0].set_xlabel("")
+        axs[0].set_ylabel("")
+        axs[1].set_xlabel("")
+        axs[2].set_ylabel("")
+
+        if not title is None:
+            axs[0].set_title(title,fontsize=17)
+            
+        if saveFigures:
+            plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+            
+        plt.show()
+        
+        div = 0.35
+        scal = 4/3
+        for ci, cval in enumerate(por):
+            if abs(cval) > div:
+                cval = np.sign(cval)*(np.power(((np.abs(cval)-div)/(1-div)),1/scal)*(1-div)+div)
+                por[ci] = np.round(cval,4)
+            else:
+                cval = np.sign(cval)*(np.power(np.abs(cval)/div,scal)*div)
+                por[ci] = np.round(cval,4)
+    
+    return por
+
+
 def draw_tilt_and_corr_density_shade_longarray(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
     """ 
     Generate the Glazer plot. 
@@ -3640,7 +3810,7 @@ def Tilt_correlation(T,MDTimestep,smoother=0):
     return x, correlation
 
 
-def quantify_tilt_domain(sc,scnorm):
+def quantify_tilt_domain(sc,scnorm,plot_label='tilt'):
     """ 
     Compute spatial coorelation of tilting.  
     """
@@ -3681,12 +3851,12 @@ def quantify_tilt_domain(sc,scnorm):
             #plt.plot(list(range(nns)),y2,linewidth=1.5)
     
     if pop_warning:
-        print(f"!Tilt Spatial Corr: fitting of decay length may be wrong, a value(s): {pop_warning}")
+        print(f"!Property Spatial Corr: fitting of decay length may be wrong, a value(s): {pop_warning}")
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(nns)),scnorm[0,:,0],linewidth=1.5,label='tilt 0')
-    plt.plot(list(range(nns)),scnorm[1,:,0],linewidth=1.5,label='tilt 1')
-    plt.plot(list(range(nns)),scnorm[2,:,0],linewidth=1.5,label='tilt 2')
+    plt.plot(list(range(nns)),scnorm[0,:,0],linewidth=1.5,label=f'{plot_label} 0')
+    plt.plot(list(range(nns)),scnorm[1,:,0],linewidth=1.5,label=f'{plot_label} 1')
+    plt.plot(list(range(nns)),scnorm[2,:,0],linewidth=1.5,label=f'{plot_label} 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
     plt.title("Correlation along axis 0",fontsize=15)
     ax.set_ylim([-1,1])
@@ -3697,9 +3867,9 @@ def quantify_tilt_domain(sc,scnorm):
     legend.get_frame().set_alpha(0.7)
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(nns)),scnorm[0,:,1],linewidth=1.5,label='tilt 0')
-    plt.plot(list(range(nns)),scnorm[1,:,1],linewidth=1.5,label='tilt 1')
-    plt.plot(list(range(nns)),scnorm[2,:,1],linewidth=1.5,label='tilt 2')
+    plt.plot(list(range(nns)),scnorm[0,:,1],linewidth=1.5,label=f'{plot_label} 0')
+    plt.plot(list(range(nns)),scnorm[1,:,1],linewidth=1.5,label=f'{plot_label} 1')
+    plt.plot(list(range(nns)),scnorm[2,:,1],linewidth=1.5,label=f'{plot_label} 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
     plt.title("Correlation along axis 1",fontsize=15)
     ax.set_ylim([-1,1])
@@ -3710,9 +3880,9 @@ def quantify_tilt_domain(sc,scnorm):
     legend.get_frame().set_alpha(0.7)
     
     fig,ax = plt.subplots()
-    plt.plot(list(range(nns)),scnorm[0,:,2],linewidth=1.5,label='tilt 0')
-    plt.plot(list(range(nns)),scnorm[1,:,2],linewidth=1.5,label='tilt 1')
-    plt.plot(list(range(nns)),scnorm[2,:,2],linewidth=1.5,label='tilt 2')
+    plt.plot(list(range(nns)),scnorm[0,:,2],linewidth=1.5,label=f'{plot_label} 0')
+    plt.plot(list(range(nns)),scnorm[1,:,2],linewidth=1.5,label=f'{plot_label} 1')
+    plt.plot(list(range(nns)),scnorm[2,:,2],linewidth=1.5,label=f'{plot_label} 2')
     plt.axhline(y=0,linestyle='dashed',linewidth=1,color='k')
     plt.title("Correlation along axis 2",fontsize=15)
     ax.set_ylim([-1,1])
@@ -3995,6 +4165,24 @@ def vis3D_domain_frame(cfeat,ss,bin_indices,cmap,clbedge,figname,saveFigures):
     if saveFigures:
         plt.savefig(figname, dpi=350,bbox_inches='tight')
     plt.show()
+
+
+def properties_to_binned_grid(T,D,tcorr,bc,ss,bin_indices):
+    """ 
+    Assign tilting to 3D grids.  
+    """
+    
+    tgval = np.empty((ss,ss,ss,3))
+    dgval = np.empty((ss,ss,ss,7))
+    tcval = np.empty((ss,ss,ss,3))
+    bgval = np.empty((ss,ss,ss,3))
+    for j in range(T.shape[0]):
+        tgval[bin_indices[0,j]-1,bin_indices[1,j]-1,bin_indices[2,j]-1,:] = T[j,:]
+        dgval[bin_indices[0,j]-1,bin_indices[1,j]-1,bin_indices[2,j]-1,:] = D[j,:]
+        tcval[bin_indices[0,j]-1,bin_indices[1,j]-1,bin_indices[2,j]-1,:] = tcorr[j,:]
+        bgval[bin_indices[0,j]-1,bin_indices[1,j]-1,bin_indices[2,j]-1,:] = bc[j,:]
+
+    return tgval, dgval, tcval, bgval
 
 
 def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, smoother=5):

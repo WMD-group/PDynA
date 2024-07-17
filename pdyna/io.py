@@ -422,7 +422,7 @@ def read_lammps_dump(filepath,specorder=None):
     st0 = aaa.get_structure(out_atoms)
     
     maxframe = framenums[-1]
-    if framenums[1]-framenums[0] > framenums[2]-framenums[1]:
+    if framenums[1]-framenums[0] > framenums[-1]-framenums[-2]:
         maxframe -= (framenums[1]-framenums[0])
     
     return asymb, lattice, latmat, Allpos, st0, maxframe, framenums[-1]-framenums[-2]
@@ -953,7 +953,7 @@ def print_time(times):
                        'tilt_distort':        "Tilting & Distortion:  {}",
                        'MO':                  "Molecular Orientation: {}",
                        'RDF':                 "Radial Distribution:   {}",
-                       'A_disp':              "A-site Displacement:   {}",
+                       'site_disp':           "A-site Displacement:   {}",
                        'property_processing': "Property processing:   {}",
                        }
     
