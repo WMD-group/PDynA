@@ -140,6 +140,18 @@ Citation
 ------------
 ["Structural dynamics descriptors for metal halide perovskites" Journal of Physical Chemistry C (2023)](https://pubs.acs.org/doi/full/10.1021/acs.jpcc.3c03377)
 
+```
+@article{pdyna,
+  title={Structural dynamics descriptors for metal halide perovskites},
+  author={Liang, Xia and Klarbring, Johan and Baldwin, William J and Li, Zhenzhu and Cs{\'a}nyi, G{\'a}bor and Walsh, Aron},
+  journal={J. Phys. Chem. C},
+  volume={127},
+  number={38},
+  pages={19141--19151},
+  year={2023}
+}
+```
+
 Used in
 ------------
 ["Phase transitions, dielectric response, and nonlinear optical properties of aziridinium lead halide perovskites" Chemistry of Materials (2023)](https://pubs.acs.org/doi/10.1021/acs.chemmater.3c02200)
