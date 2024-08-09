@@ -132,10 +132,14 @@ class Trajectory:
             print("------------------------------------------------------------")
             print("Loading Trajectory files...")
             
+            nsw = None
             if len(lammps_setting) == 3:
                 atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path)
-            elif len(lammps_setting) == 4:
-                atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path,lammps_setting[3])
+            elif len(lammps_setting) == 5:
+                nsw = lammps_setting[3]
+                atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path,lammps_setting[4])
+            else:
+                raise ValueError("Incorrect MD setting input. ")
             
             if with_init:
                 at0 = aaa.get_atoms(st0)
@@ -147,7 +151,11 @@ class Trajectory:
                 st0 = aaa.get_structure(atn)
             
             self.MDsetting = {}
-            self.MDsetting["nsw"] = max_step
+            if len(lammps_setting) == 3:
+                self.MDsetting["nsw"] = max_step
+            elif len(lammps_setting) == 5:
+                self.MDsetting["nsw"] = nsw
+                max_step = nsw
             self.MDsetting["nblock"] = stepsize
             self.MDsetting["Ti"] = lammps_setting[0]
             self.MDsetting["Tf"] = lammps_setting[1]
@@ -381,7 +389,7 @@ class Trajectory:
         if self.MDsetting['Ti'] == self.MDsetting['Tf']:
             tstr = str(self.MDsetting['Ti'])+"K"
         else:
-            tstr = str(self.MDsetting['Ti'])+"K - "+str(self.MDsetting['Tf'])+"K"
+            tstr = str(self.MDsetting['Ti'])+"K - "+str(self.MDsetting['Tf'])+"K"+f" ({round(self.Tgrad,3)} K/ps)"
         
         return pattern.format(self.formula, self.natom, self.nframe, tstr)
     
@@ -390,7 +398,7 @@ class Trajectory:
         if self.MDsetting['Ti'] == self.MDsetting['Tf']:
             tstr = str(self.MDsetting['Ti'])+"K"
         else:
-            tstr = str(self.MDsetting['Ti'])+"K - "+str(self.MDsetting['Tf'])+"K" 
+            tstr = str(self.MDsetting['Ti'])+"K - "+str(self.MDsetting['Tf'])+"K"+f" ({self.Tgrad} K/ps)"
         return 'PDynA Trajectory({}, {} atoms, {} frames, {})'.format(self.formula, self.natom, self.nframe, tstr)
     
     
@@ -731,7 +739,7 @@ class Trajectory:
         if self.MDsetting["Ti"] == self.MDsetting["Tf"]:
             print("Temperature: "+str(self.MDsetting["Ti"])+"K")
         else:
-            print("Temperature: "+str(self.MDsetting["Ti"])+"K-"+str(self.MDsetting["Tf"])+"K")
+            print("Temperature: "+str(self.MDsetting["Ti"])+"K-"+str(self.MDsetting["Tf"])+"K"+f" ({round(self.Tgrad,3)} K/ps)")
         
         print(" ")
         
@@ -995,7 +1003,7 @@ class Trajectory:
             #self.octahedral_connectivity = conn_category
         
         # label the constituent A-sites
-        if toggle_MO or toggle_site_disp:
+        if toggle_MO or (toggle_site_disp and self._flag_organic_A):
             from pdyna.io import display_A_sites
             
             Nindex = self.Nindex
@@ -1078,7 +1086,7 @@ class Trajectory:
             if (not Asite_reconstruct): # or (not 'reorientation' in self.prop_lib):
                 #if Asite_reconstruct and (not 'reorientation' in self.prop_lib):
                 #    print("!Time-averaged structure: please enable MOautoCorr to allow Asite_reconstruct. ")
-                struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif")
+                struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif",force_periodicity=True)
             else: # Asite_reconstruct is on and reorientation has been calculated
                 if ('reorientation' in self.prop_lib):
                     dec = []
@@ -1096,10 +1104,11 @@ class Trajectory:
                 struct = structure_time_average_ase_organic(self,tavgspan,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif")
 
             self.tavg_struct = struct
-            tavg_dist = simply_calc_distortion(self)[0]
-            print("time-averaged structure distortion mode: ")
-            print(np.round(tavg_dist,4))
-            print(" ")
+            if hasattr(self,"octahedra"):
+                tavg_dist = simply_calc_distortion(self)[0]
+                print("time-averaged structure distortion mode: ")
+                print(np.round(tavg_dist,4))
+                print(" ")
 
             self.prop_lib['distortion_tavg'] = tavg_dist
             
@@ -1727,6 +1736,7 @@ class Trajectory:
                             Corr[:,B1,:,2] = abs_sqrt(T[:,[B1],2]*T[:,Benv[B1],2]) 
                         polarity.append(draw_tilt_and_corr_density_shade_non3D(T, Corr, uniname, saveFigures=False, title=typekey))
                     self.TCP_type = polarity
+                self.Tilting_Corr = Corr
             
         if tilt_domain:
             from pdyna.analysis import compute_tilt_domain
@@ -2543,126 +2553,6 @@ class Trajectory:
         Xindex = self.Xindex
         Hindex = self.Hindex
         
-        # A-site displacements
-        Afa = self.A_sites["FA"]
-        Ama = self.A_sites["MA"]
-        Aazr = self.A_sites["Azr"]
-        Aindex_cs = self.A_sites["Cs"]
-        
-        ABsep = 1.3*self.default_BB_dist
-        st0Bpos = st0pos[Bindex,:]
-        
-        CN_H_tol = 1.35
-        
-        Aindex_fa = []
-        Aindex_ma = []
-        Aindex_azr = []
-        
-        B8envs = {}
-        
-        if len(Afa) > 0:
-            for i,env in enumerate(Afa):
-                dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
-                Aindex_fa.append(env+[Hs])
-                
-                cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Bs = []
-                for j in range(ri.shape[1]):
-                    if ri[0,j] < ABsep:
-                        Bs.append(Bindex[j])
-
-                try:
-                    assert len(Bs) == 8
-                    B8envs[env[0][0]] = Bs
-                except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
-                    cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
-                    ri = np.empty((Allpos.shape[0],len(Bindex)))
-                    for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
-
-                    ri = np.expand_dims(np.average(ri,axis=0),axis=0)
-                    
-                    Bs = []
-                    for j in range(ri.shape[1]):
-                        if ri[0,j] < ABsep:
-                            Bs.append(Bindex[j])
-                    assert len(Bs) == 8
-                    B8envs[env[0][0]] = Bs
-        
-        if len(Ama) > 0:
-            for i,env in enumerate(Ama):
-                dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
-                Aindex_ma.append(env+[Hs])
-                
-                cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                
-                Bs = []
-                for j in range(ri.shape[1]):
-                    if ri[0,j] < ABsep:
-                        Bs.append(Bindex[j])
-                try:
-                    assert len(Bs) == 8
-                    B8envs[env[0][0]] = Bs
-                except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
-                    cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
-                    ri = np.empty((Allpos.shape[0],len(Bindex)))
-                    for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
-
-                    ri = np.expand_dims(np.average(ri,axis=0),axis=0)
-                    
-                    Bs = []
-                    for j in range(ri.shape[1]):
-                        if ri[0,j] < ABsep:
-                            Bs.append(Bindex[j])
-                    assert len(Bs) == 8
-                    B8envs[env[0][0]] = Bs
-        
-        if len(Aazr) > 0:
-            for i,env in enumerate(Aazr):
-                dm = distance_matrix_handler(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
-                Aindex_azr.append(env+[Hs])
-                
-                cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
-                ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                
-                Bs = []
-                for j in range(ri.shape[1]):
-                    if ri[0,j] < ABsep:
-                        Bs.append(Bindex[j])
-                try:
-                    assert len(Bs) == 8
-                    B8envs[env[0][0]] = Bs
-                except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
-                    cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
-                    ri = np.empty((Allpos.shape[0],len(Bindex)))
-                    for fr in range(Allpos.shape[0]):
-                        ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
-                    ri = np.expand_dims(np.average(ri,axis=0),axis=0)
-                    
-                    Bs = []
-                    for j in range(ri.shape[1]):
-                        if ri[0,j] < ABsep:
-                            Bs.append(Bindex[j])
-                    assert len(Bs) == 8
-                    B8envs[env[0]] = Bs        
-        
-                
-        if len(Aindex_cs) > 0:
-            for i,env in enumerate(Aindex_cs):
-                ri=distance_matrix_handler(st0.cart_coords[env,:],st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-                Bs = []
-                for j in range(ri.shape[1]):
-                    if ri[0,j] < ABsep:
-                        Bs.append(Bindex[j])
-                assert len(Bs) == 8
-                B8envs[env] = Bs
-
         ranger = self.nframe
         ranger0 = round(ranger*self.allow_equil)
         
@@ -2670,376 +2560,504 @@ class Trajectory:
         latmatfr = latmat[ranger0:,:]
         
         readTimestep = self.MDTimestep #*read_every
-
-        if len(Aindex_ma) > 0:
-            disp_ma = np.empty((Allposfr.shape[0],len(Aindex_ma),3))
-            for ai, envs in enumerate(Aindex_ma):
-                cent = centmass_organic_vec(Allposfr,latmatfr,envs)
-                disp_ma[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
-            
-            self.disp_ma = disp_ma
-            dispvec_ma = disp_ma.reshape(-1,3)
-            
-            moltype = "MA"
-            peaks_ma = fit_3D_disp_atomwise(disp_ma,readTimestep,uniname,moltype,saveFigures,title=moltype)
-            fit_3D_disp_total(dispvec_ma,uniname,moltype,saveFigures,title=moltype)
-            peaks_3D_scatter(peaks_ma,uniname,moltype,saveFigures)
-            
-        if len(Aindex_azr) > 0:
-            disp_azr = np.empty((Allposfr.shape[0],len(Aindex_azr),3))
-            for ai, envs in enumerate(Aindex_azr):
-                cent = centmass_organic_vec(Allposfr,latmatfr,envs)
-                disp_azr[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
-            
-            self.disp_azr = disp_azr
-            dispvec_azr = disp_azr.reshape(-1,3)
-            
-            moltype = "Azr"
-            peaks_azr = fit_3D_disp_atomwise(disp_azr,readTimestep,uniname,moltype,saveFigures,title=moltype)
-            fit_3D_disp_total(dispvec_azr,uniname,moltype,saveFigures,title=moltype)
-            peaks_3D_scatter(peaks_azr,uniname,moltype,saveFigures)
-            
-        if len(Aindex_fa) > 0:
-            disp_fa = np.empty((Allposfr.shape[0],len(Aindex_fa),3))
-            for ai, envs in enumerate(Aindex_fa):
-                cent = centmass_organic_vec(Allposfr,latmatfr,envs)
-                disp_fa[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
-            
-            self.disp_fa = disp_fa
-            dispvec_fa = disp_fa.reshape(-1,3)    
-            
-            moltype = "FA"
-            peaks_fa = fit_3D_disp_atomwise(disp_fa,readTimestep,uniname,moltype,saveFigures,title=moltype)
-            fit_3D_disp_total(dispvec_fa,uniname,moltype,saveFigures,title=moltype)
-            peaks_3D_scatter(peaks_fa,uniname,moltype,saveFigures)
-
-        if len(Aindex_cs) > 0:
-            disp_cs = np.empty((Allposfr.shape[0],len(Aindex_cs),3))
-            for ai, ind in enumerate(Aindex_cs):
-                cent = Allposfr[:,ind,:]
-                disp_cs[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[ind])
-            
-            self.disp_cs = disp_cs
-            dispvec_cs = disp_cs.reshape(-1,3)
-            
-            moltype = "Cs"
-            peaks_cs = fit_3D_disp_atomwise(disp_cs,readTimestep,uniname,moltype,saveFigures,title=moltype)
-            fit_3D_disp_total(dispvec_cs,uniname,moltype,saveFigures,title=moltype)
-            peaks_3D_scatter(peaks_cs,uniname,moltype,saveFigures)
-            
-            
         
+        if self._flag_organic_A:
+            # A-site displacements
+            Afa = self.A_sites["FA"]
+            Ama = self.A_sites["MA"]
+            Aazr = self.A_sites["Azr"]
+            Aindex_cs = self.A_sites["Cs"]
+            
+            ABsep = 1.3*self.default_BB_dist
+            st0Bpos = st0pos[Bindex,:]
+            
+            CN_H_tol = 1.35
+            
+            Aindex_fa = []
+            Aindex_ma = []
+            Aindex_azr = []
+            
+            B8envs = {}
+            
+            if len(Afa) > 0:
+                for i,env in enumerate(Afa):
+                    dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+                    Aindex_fa.append(env+[Hs])
+                    
+                    cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
+                    ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Bs = []
+                    for j in range(ri.shape[1]):
+                        if ri[0,j] < ABsep:
+                            Bs.append(Bindex[j])
+
+                    try:
+                        assert len(Bs) == 8
+                        B8envs[env[0][0]] = Bs
+                    except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
+                        cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
+                        ri = np.empty((Allpos.shape[0],len(Bindex)))
+                        for fr in range(Allpos.shape[0]):
+                            ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+
+                        ri = np.expand_dims(np.average(ri,axis=0),axis=0)
+                        
+                        Bs = []
+                        for j in range(ri.shape[1]):
+                            if ri[0,j] < ABsep:
+                                Bs.append(Bindex[j])
+                        assert len(Bs) == 8
+                        B8envs[env[0][0]] = Bs
+            
+            if len(Ama) > 0:
+                for i,env in enumerate(Ama):
+                    dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+                    Aindex_ma.append(env+[Hs])
+                    
+                    cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
+                    ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    
+                    Bs = []
+                    for j in range(ri.shape[1]):
+                        if ri[0,j] < ABsep:
+                            Bs.append(Bindex[j])
+                    try:
+                        assert len(Bs) == 8
+                        B8envs[env[0][0]] = Bs
+                    except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
+                        cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
+                        ri = np.empty((Allpos.shape[0],len(Bindex)))
+                        for fr in range(Allpos.shape[0]):
+                            ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+
+                        ri = np.expand_dims(np.average(ri,axis=0),axis=0)
+                        
+                        Bs = []
+                        for j in range(ri.shape[1]):
+                            if ri[0,j] < ABsep:
+                                Bs.append(Bindex[j])
+                        assert len(Bs) == 8
+                        B8envs[env[0][0]] = Bs
+            
+            if len(Aazr) > 0:
+                for i,env in enumerate(Aazr):
+                    dm = distance_matrix_handler(st0pos[env[0]+env[1],:], st0pos[Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
+                    Aindex_azr.append(env+[Hs])
+                    
+                    cent = centmass_organic(st0pos,st0.lattice.matrix,env+[Hs])
+                    ri=distance_matrix_handler(cent,st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    
+                    Bs = []
+                    for j in range(ri.shape[1]):
+                        if ri[0,j] < ABsep:
+                            Bs.append(Bindex[j])
+                    try:
+                        assert len(Bs) == 8
+                        B8envs[env[0][0]] = Bs
+                    except AssertionError: # can't find with threshold distance, try using nearest 8 atoms
+                        cent = centmass_organic_vec(Allpos,latmat,env+[Hs])
+                        ri = np.empty((Allpos.shape[0],len(Bindex)))
+                        for fr in range(Allpos.shape[0]):
+                            ri[fr,:,]=distance_matrix_handler(cent[fr,:],Allpos[fr,Bindex,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
+                        ri = np.expand_dims(np.average(ri,axis=0),axis=0)
+                        
+                        Bs = []
+                        for j in range(ri.shape[1]):
+                            if ri[0,j] < ABsep:
+                                Bs.append(Bindex[j])
+                        assert len(Bs) == 8
+                        B8envs[env[0]] = Bs        
+            
+                    
+            if len(Aindex_cs) > 0:
+                for i,env in enumerate(Aindex_cs):
+                    ri=distance_matrix_handler(st0.cart_coords[env,:],st0Bpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+                    Bs = []
+                    for j in range(ri.shape[1]):
+                        if ri[0,j] < ABsep:
+                            Bs.append(Bindex[j])
+                    assert len(Bs) == 8
+                    B8envs[env] = Bs
+
+            if len(Aindex_ma) > 0:
+                disp_ma = np.empty((Allposfr.shape[0],len(Aindex_ma),3))
+                for ai, envs in enumerate(Aindex_ma):
+                    cent = centmass_organic_vec(Allposfr,latmatfr,envs)
+                    disp_ma[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
+                
+                self.Asite_disp['MA'] = disp_ma
+                dispvec_ma = disp_ma.reshape(-1,3)
+                
+                moltype = "MA"
+                peaks_ma = fit_3D_disp_atomwise(disp_ma,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                fit_3D_disp_total(dispvec_ma,uniname,moltype,saveFigures,title=moltype)
+                peaks_3D_scatter(peaks_ma,uniname,moltype,saveFigures)
+                
+            if len(Aindex_azr) > 0:
+                disp_azr = np.empty((Allposfr.shape[0],len(Aindex_azr),3))
+                for ai, envs in enumerate(Aindex_azr):
+                    cent = centmass_organic_vec(Allposfr,latmatfr,envs)
+                    disp_azr[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
+                
+                self.Asite_disp['Azr'] = disp_azr
+                dispvec_azr = disp_azr.reshape(-1,3)
+                
+                moltype = "Azr"
+                peaks_azr = fit_3D_disp_atomwise(disp_azr,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                fit_3D_disp_total(dispvec_azr,uniname,moltype,saveFigures,title=moltype)
+                peaks_3D_scatter(peaks_azr,uniname,moltype,saveFigures)
+                
+            if len(Aindex_fa) > 0:
+                disp_fa = np.empty((Allposfr.shape[0],len(Aindex_fa),3))
+                for ai, envs in enumerate(Aindex_fa):
+                    cent = centmass_organic_vec(Allposfr,latmatfr,envs)
+                    disp_fa[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[envs[0][0]])
+                
+                self.Asite_disp['FA'] = disp_fa
+                dispvec_fa = disp_fa.reshape(-1,3)    
+                
+                moltype = "FA"
+                peaks_fa = fit_3D_disp_atomwise(disp_fa,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                fit_3D_disp_total(dispvec_fa,uniname,moltype,saveFigures,title=moltype)
+                peaks_3D_scatter(peaks_fa,uniname,moltype,saveFigures)
+
+            if len(Aindex_cs) > 0:
+                disp_cs = np.empty((Allposfr.shape[0],len(Aindex_cs),3))
+                for ai, ind in enumerate(Aindex_cs):
+                    cent = Allposfr[:,ind,:]
+                    disp_cs[:,ai,:] = find_B_cage_and_disp(Allposfr,latmatfr,cent,B8envs[ind])
+                
+                self.Asite_disp['Cs'] = disp_cs
+                dispvec_cs = disp_cs.reshape(-1,3)
+                
+                moltype = "Cs"
+                peaks_cs = fit_3D_disp_atomwise(disp_cs,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                fit_3D_disp_total(dispvec_cs,uniname,moltype,saveFigures,title=moltype)
+                peaks_3D_scatter(peaks_cs,uniname,moltype,saveFigures)
+        
+
         # B-site displacement
         from pdyna.structural import apply_pbc_cart_vecs
-        neigh_list = self.octahedra.astype(int)
+        neigh_list = self.octahedra
         
         Bdisp = []
         for i,b in enumerate(Bindex):
-            temp = Allposfr[:,[b],:] - Allposfr[:,np.array(Xindex)[list(neigh_list[i,:])],:]
-            Bdisppbc = apply_pbc_cart_vecs(temp, latmatfr)
+            ns = neigh_list[i,:]
+            if not np.isnan(ns).any():
+                temp = Allposfr[:,[b],:] - Allposfr[:,np.array(Xindex)[list(ns.astype(int))],:]
+                Bdisppbc = apply_pbc_cart_vecs(temp, latmatfr)
             
-            disp = np.mean(Bdisppbc,axis=1)[:,np.newaxis,:]
-            Bdisp.append(disp)
+                disp = np.mean(Bdisppbc,axis=1)[:,np.newaxis,:]
+                Bdisp.append(disp)
+            else:
+                nanar = np.zeros((Allposfr.shape[0],1,3))
+                nanar[:] = np.nan
+                Bdisp.append(nanar)
         
         Bdisp = np.concatenate(Bdisp,axis=1)
-        
-        # A-B displacement corr
-        ABdisp_corrcoeff = {}
-        if len(Aindex_fa) > 0:
-            ad = []
-            bd = []
-            for ai, a in enumerate(Afa):
-                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
-                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
-                ad.append(disp_fa[:,[ai],:].reshape(-1,3))
-                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
-                
-            ad = np.concatenate(ad,axis=0)
-            bd = np.concatenate(bd,axis=0)
-            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
-            ABdisp_corrcoeff['FA'] = cco
-            
-        if len(Aindex_ma) > 0:
-            ad = []
-            bd = []
-            for ai, a in enumerate(Ama):
-                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
-                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
-                ad.append(disp_ma[:,[ai],:].reshape(-1,3))
-                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
-                
-            ad = np.concatenate(ad,axis=0)
-            bd = np.concatenate(bd,axis=0)
-            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
-            ABdisp_corrcoeff['MA'] = cco
-        
-        if len(Aindex_azr) > 0:
-            ad = []
-            bd = []
-            for ai, a in enumerate(Aazr):
-                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
-                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
-                ad.append(disp_azr[:,[ai],:].reshape(-1,3))
-                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
-                
-            ad = np.concatenate(ad,axis=0)
-            bd = np.concatenate(bd,axis=0)
-            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
-            ABdisp_corrcoeff['Azr'] = cco
-            
-        if len(Aindex_cs) > 0:
-            ad = []
-            bd = []
-            for ai, a in enumerate(Aindex_cs):
-                b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a]]
-                #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
-                ad.append(disp_cs[:,[ai],:].reshape(-1,3))
-                bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
-                
-            ad = np.concatenate(ad,axis=0)
-            bd = np.concatenate(bd,axis=0)
-            cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
-            ABdisp_corrcoeff['Cs'] = cco
-        
-        self.ABdisp_corrcoeff = ABdisp_corrcoeff
-        self.prop_lib['AB_disp_corr'] = self.ABdisp_corrcoeff
-        
-        
-        # B-B displacement corr
-        import math
-        from scipy.stats import binned_statistic_dd as binstat
+        self.Bsite_disp = Bdisp
 
-        cc = self.st0.frac_coords[self.Bindex,:]
-        
-        supercell_size = self.supercell_size
-        
-        clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
-                          [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
-                          [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
-        
-        bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
-                              range=[[clims[0,0]-0.5*(1/supercell_size), 
-                                      clims[0,1]+0.5*(1/supercell_size)], 
-                                     [clims[1,0]-0.5*(1/supercell_size), 
-                                      clims[1,1]+0.5*(1/supercell_size)],
-                                     [clims[2,0]-0.5*(1/supercell_size), 
-                                      clims[2,1]+0.5*(1/supercell_size)]],
-                              expand_binnumbers=True).binnumber
-        # validate the binning
-        atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
-        bincount = np.unique(atom_indices, return_counts=True)[1]
-        if len(bincount) != supercell_size**3:
-            raise TypeError("Incorrect number of bins. ")
-        if max(bincount) != min(bincount):
-            raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
-       
-        bin_indices = bin_indices-1 # 0-indexing
-        
-        # NN1 corr of B-disp
-        num_nn = math.ceil((supercell_size-1)/2)
-        
-        bb1 = []
-        bb2 = []
-        for o in range(bin_indices.shape[1]):
-            si = bin_indices[:,[o]]
-            b2d = []
-            for space in range(3):
-                addit = np.array([[0],[0],[0]])
-                addit[space,0] = 1
-                pos1 = si + addit
-                pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
-                k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
-                
-                b2d.append(Bdisp[:,[k1],:])
-            b1d = Bdisp[:,[o],:]
-            b2d = np.concatenate(b2d,axis=1)
-            bb1.append(b1d)
-            bb2.append(b2d)
-        bb1 = np.array(bb1)
-        bb2 = np.array(bb2)
-        
-        BBdisp_corrcoeff = np.empty((3,3))
-        for tax in range(3):
-            for corrax in range(3):
-                BBdisp_corrcoeff[corrax,tax] = np.corrcoef(bb1[:,:,0,tax].reshape(-1,),bb2[:,:,corrax,tax].reshape(-1,))[0,1]
-        
-        self.BBdisp_corrcoeff = BBdisp_corrcoeff
-        self.prop_lib['BB_disp_corr'] = self.BBdisp_corrcoeff
-        
-        # spatial correlation of B-disp
-        num_nn = math.ceil((supercell_size-1)/2)
-        scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
-        scmnorm[:] = np.nan
-        scm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
-        scm[:] = np.nan
-        for o in range(bin_indices.shape[1]):
-            si = bin_indices[:,[o]]
-            for space in range(3):
-                for n in range(num_nn+1):
+        # B-B displacement corr
+        if hasattr(self, 'supercell_size'):
+            import math
+            from scipy.stats import binned_statistic_dd as binstat
+
+            cc = self.st0.frac_coords[self.Bindex,:]
+            
+            supercell_size = self.supercell_size
+            
+            clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                              [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                              [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+            
+            bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                                  range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                          clims[0,1]+0.5*(1/supercell_size)], 
+                                         [clims[1,0]-0.5*(1/supercell_size), 
+                                          clims[1,1]+0.5*(1/supercell_size)],
+                                         [clims[2,0]-0.5*(1/supercell_size), 
+                                          clims[2,1]+0.5*(1/supercell_size)]],
+                                  expand_binnumbers=True).binnumber
+            # validate the binning
+            atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+            bincount = np.unique(atom_indices, return_counts=True)[1]
+            if len(bincount) != supercell_size**3:
+                raise TypeError("Incorrect number of bins. ")
+            if max(bincount) != min(bincount):
+                raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+           
+            bin_indices = bin_indices-1 # 0-indexing
+            
+            # NN1 corr of B-disp
+            num_nn = math.ceil((supercell_size-1)/2)
+            
+            bb1 = []
+            bb2 = []
+            for o in range(bin_indices.shape[1]):
+                si = bin_indices[:,[o]]
+                b2d = []
+                for space in range(3):
                     addit = np.array([[0],[0],[0]])
-                    addit[space,0] = n
+                    addit[space,0] = 1
                     pos1 = si + addit
                     pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
                     k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
-                    tc1 = np.multiply(Bdisp[:,o,:],Bdisp[:,k1,:])
-                    #if thr != 0:
-                    #    tc1[np.abs(T[:,o,:])<thr] = np.nan
-                    #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
-                    tc = np.nanmean(tc1,axis=0)
-                    #tcnorm = np.nanmean(tc1norm,axis=0)
-                    tcnorm = np.sqrt(np.abs(tc))*np.sign(tc)
-                    scmnorm[o,space,n,:] = tcnorm
-                    scm[o,space,n,:] = tc
-                
                     
-        scm = scm/scm[:,:,[0],:]
-        scmnorm = scmnorm/scmnorm[:,:,[0],:]
-        spatialnn = np.mean(scm,axis=0)
-        spatialnorm = np.mean(scmnorm,axis=0)       
-        
-        scdecay = quantify_tilt_domain(spatialnn,spatialnorm,plot_label='B-disp')
-        print(f"B-site displacement spatial correlation length: \n {np.round(scdecay,3)}")
-        self.prop_lib["spatial_corr_length_Bdisp"] = scdecay 
-        self.spatialCorrLength_Bdisp = scdecay  
-        
-        # A-A displacement corr
-        if len(Aindex_cs) > 0:
-            trajnum = list(range(round(self.nframe*self.allow_equil),self.nframe))
-            latmat = self.latmat[trajnum,:]
-            if not hasattr(self,'MOcenter'):
-                self.MOcenter = {}
-            self.MOcenter["Cs"] = self.Allpos[trajnum,:][:,Aindex_cs,:]
-        
-        if hasattr(self,'MOcenter'):
-            MOcents=self.MOcenter
-            if len(MOcents) == 1: # only run with pure A-site case
-                MOcent = MOcents[list(MOcents.keys())[0]]
-                if len(Aindex_fa) > 0:
-                    Adisp = self.disp_fa
-                if len(Aindex_ma) > 0:
-                    Adisp = self.disp_ma
-                if len(Aindex_cs) > 0:
-                    Adisp = self.disp_cs
-                if len(Aindex_azr) > 0:
-                    Adisp = self.disp_azr
-                
-                safety_margin = np.array([1-1/supercell_size,1])
-                
-                cc = get_frac_from_cart(MOcent, latmatfr)[0,:]
-                
-                rect = [0,0,0]
-                if np.argmin(np.abs(safety_margin - (np.amax(cc[:,0])-np.amin(cc[:,0])))): 
-                    cc[:,0] = cc[:,0]-(np.amax(cc[:,0])-(1-1/supercell_size/2))
-                    rect[0] = 1
-                if np.argmin(np.abs(safety_margin - (np.amax(cc[:,1])-np.amin(cc[:,1])))): 
-                    cc[:,1] = cc[:,1]-(np.amax(cc[:,1])-(1-1/supercell_size/2))
-                    rect[1] = 1
-                if np.argmin(np.abs(safety_margin - (np.amax(cc[:,2])-np.amin(cc[:,2])))): 
-                    cc[:,2] = cc[:,2]-(np.amax(cc[:,2])-(1-1/supercell_size/2))
-                    rect[2] = 1
-                
-                for i in range(3):
-                    if rect[i] == 0:
-                        if np.amin(cc[:,i]) < 1/supercell_size/4:
-                            cc[:,i] = cc[:,i] + 1/supercell_size/8*3
-                        if np.amin(cc[:,i]) > 1-1/supercell_size/4:
-                            cc[:,i] = cc[:,i] - 1/supercell_size/8*3
-                
-                for i in range(cc.shape[0]):
-                    for j in range(cc.shape[1]):
-                        if cc[i,j] > 1:
-                            cc[i,j] = cc[i,j]-1
-                        if cc[i,j] < 0:
-                            cc[i,j] = cc[i,j]+1
-                
-                clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
-                                  [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
-                                  [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
-                
-                bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
-                                      range=[[clims[0,0]-0.5*(1/supercell_size), 
-                                              clims[0,1]+0.5*(1/supercell_size)], 
-                                             [clims[1,0]-0.5*(1/supercell_size), 
-                                              clims[1,1]+0.5*(1/supercell_size)],
-                                             [clims[2,0]-0.5*(1/supercell_size), 
-                                              clims[2,1]+0.5*(1/supercell_size)]],
-                                      expand_binnumbers=True).binnumber
-                # validate the binning
-                atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
-                bincount = np.unique(atom_indices, return_counts=True)[1]
-                if len(bincount) != supercell_size**3:
-                    raise TypeError("Incorrect number of bins. ")
-                    
-                if max(bincount) != min(bincount):
-                    raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
-               
-                bin_indices = bin_indices-1 # 0-indexing
-                
-                num_nn = math.ceil((supercell_size-1)/2)
-                
-                aa1 = []
-                aa2 = []
-                for o in range(bin_indices.shape[1]):
-                    si = bin_indices[:,[o]]
-                    a2d = []
-                    for space in range(3):
+                    b2d.append(Bdisp[:,[k1],:])
+                b1d = Bdisp[:,[o],:]
+                b2d = np.concatenate(b2d,axis=1)
+                bb1.append(b1d)
+                bb2.append(b2d)
+            bb1 = np.array(bb1)
+            bb2 = np.array(bb2)
+            
+            BBdisp_corrcoeff = np.empty((3,3))
+            for tax in range(3):
+                for corrax in range(3):
+                    BBdisp_corrcoeff[corrax,tax] = np.corrcoef(bb1[:,:,0,tax].reshape(-1,),bb2[:,:,corrax,tax].reshape(-1,))[0,1]
+            
+            self.BBdisp_corrcoeff = BBdisp_corrcoeff
+            self.prop_lib['BB_disp_corr'] = self.BBdisp_corrcoeff
+            
+            # spatial correlation of B-disp
+            num_nn = math.ceil((supercell_size-1)/2)
+            scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+            scmnorm[:] = np.nan
+            scm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+            scm[:] = np.nan
+            for o in range(bin_indices.shape[1]):
+                si = bin_indices[:,[o]]
+                for space in range(3):
+                    for n in range(num_nn+1):
                         addit = np.array([[0],[0],[0]])
-                        addit[space,0] = 1
+                        addit[space,0] = n
                         pos1 = si + addit
                         pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
                         k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+                        tc1 = np.multiply(Bdisp[:,o,:],Bdisp[:,k1,:])
+                        #if thr != 0:
+                        #    tc1[np.abs(T[:,o,:])<thr] = np.nan
+                        #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
+                        tc = np.nanmean(tc1,axis=0)
+                        #tcnorm = np.nanmean(tc1norm,axis=0)
+                        tcnorm = np.sqrt(np.abs(tc))*np.sign(tc)
+                        scmnorm[o,space,n,:] = tcnorm
+                        scm[o,space,n,:] = tc
+                    
                         
-                        a2d.append(Adisp[:,[k1],:])
-                    a1d = Adisp[:,[o],:]
-                    a2d = np.concatenate(a2d,axis=1)
-                    aa1.append(a1d)
-                    aa2.append(a2d)
-                aa1 = np.array(aa1)
-                aa2 = np.array(aa2)
-                
-                AAdisp_corrcoeff = np.empty((3,3))
-                for tax in range(3):
-                    for corrax in range(3):
-                        AAdisp_corrcoeff[corrax,tax] = np.corrcoef(aa1[:,:,0,tax].reshape(-1,),aa2[:,:,corrax,tax].reshape(-1,))[0,1]
-                
-                self.AAdisp_corrcoeff = AAdisp_corrcoeff
-                self.prop_lib['AA_disp_corr'] = self.AAdisp_corrcoeff
-                
-                # spatial correlation of A-disp
-                num_nn = math.ceil((supercell_size-1)/2)
-                scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
-                scmnorm[:] = np.nan
-                scm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
-                scm[:] = np.nan
-                for o in range(bin_indices.shape[1]):
-                    si = bin_indices[:,[o]]
-                    for space in range(3):
-                        for n in range(num_nn+1):
+            scm = scm/scm[:,:,[0],:]
+            scmnorm = scmnorm/scmnorm[:,:,[0],:]
+            spatialnn = np.mean(scm,axis=0)
+            spatialnorm = np.mean(scmnorm,axis=0)       
+            
+            scdecay = quantify_tilt_domain(spatialnn,spatialnorm,plot_label='B-disp')
+            print(f"B-site displacement spatial correlation length: \n {np.round(scdecay,3)}")
+            self.prop_lib["spatial_corr_length_Bdisp"] = scdecay 
+            self.spatialCorrLength_Bdisp = scdecay  
+        
+        if self._flag_organic_A:
+            # A-A displacement corr
+            if len(Aindex_cs) > 0:
+                trajnum = list(range(round(self.nframe*self.allow_equil),self.nframe))
+                latmat = self.latmat[trajnum,:]
+                if not hasattr(self,'MOcenter'):
+                    self.MOcenter = {}
+                self.MOcenter["Cs"] = self.Allpos[trajnum,:][:,Aindex_cs,:]
+            
+            if hasattr(self,'MOcenter'):
+                MOcents=self.MOcenter
+                if len(MOcents) == 1: # only run with pure A-site case
+                    MOcent = MOcents[list(MOcents.keys())[0]]
+                    if len(Aindex_fa) > 0:
+                        Adisp = self.Asite_disp['FA']
+                    if len(Aindex_ma) > 0:
+                        Adisp = self.Asite_disp['MA']
+                    if len(Aindex_cs) > 0:
+                        Adisp = self.Asite_disp['Cs']
+                    if len(Aindex_azr) > 0:
+                        Adisp = self.Asite_disp['Azr']
+                    
+                    safety_margin = np.array([1-1/supercell_size,1])
+                    
+                    cc = get_frac_from_cart(MOcent, latmatfr)[0,:]
+                    
+                    rect = [0,0,0]
+                    if np.argmin(np.abs(safety_margin - (np.amax(cc[:,0])-np.amin(cc[:,0])))): 
+                        cc[:,0] = cc[:,0]-(np.amax(cc[:,0])-(1-1/supercell_size/2))
+                        rect[0] = 1
+                    if np.argmin(np.abs(safety_margin - (np.amax(cc[:,1])-np.amin(cc[:,1])))): 
+                        cc[:,1] = cc[:,1]-(np.amax(cc[:,1])-(1-1/supercell_size/2))
+                        rect[1] = 1
+                    if np.argmin(np.abs(safety_margin - (np.amax(cc[:,2])-np.amin(cc[:,2])))): 
+                        cc[:,2] = cc[:,2]-(np.amax(cc[:,2])-(1-1/supercell_size/2))
+                        rect[2] = 1
+                    
+                    for i in range(3):
+                        if rect[i] == 0:
+                            if np.amin(cc[:,i]) < 1/supercell_size/4:
+                                cc[:,i] = cc[:,i] + 1/supercell_size/8*3
+                            if np.amin(cc[:,i]) > 1-1/supercell_size/4:
+                                cc[:,i] = cc[:,i] - 1/supercell_size/8*3
+                    
+                    for i in range(cc.shape[0]):
+                        for j in range(cc.shape[1]):
+                            if cc[i,j] > 1:
+                                cc[i,j] = cc[i,j]-1
+                            if cc[i,j] < 0:
+                                cc[i,j] = cc[i,j]+1
+                    
+                    clims = np.array([[(np.quantile(cc[:,0],1/(supercell_size**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(supercell_size**2))+np.amax(cc[:,0]))/2],
+                                      [(np.quantile(cc[:,1],1/(supercell_size**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(supercell_size**2))+np.amax(cc[:,1]))/2],
+                                      [(np.quantile(cc[:,2],1/(supercell_size**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(supercell_size**2))+np.amax(cc[:,2]))/2]])
+                    
+                    bin_indices = binstat(cc, None, 'count', bins=[supercell_size,supercell_size,supercell_size], 
+                                          range=[[clims[0,0]-0.5*(1/supercell_size), 
+                                                  clims[0,1]+0.5*(1/supercell_size)], 
+                                                 [clims[1,0]-0.5*(1/supercell_size), 
+                                                  clims[1,1]+0.5*(1/supercell_size)],
+                                                 [clims[2,0]-0.5*(1/supercell_size), 
+                                                  clims[2,1]+0.5*(1/supercell_size)]],
+                                          expand_binnumbers=True).binnumber
+                    # validate the binning
+                    atom_indices = np.array([bin_indices[0,i]+(bin_indices[1,i]-1)*supercell_size+(bin_indices[2,i]-1)*supercell_size**2 for i in range(bin_indices.shape[1])])
+                    bincount = np.unique(atom_indices, return_counts=True)[1]
+                    if len(bincount) != supercell_size**3:
+                        raise TypeError("Incorrect number of bins. ")
+                        
+                    if max(bincount) != min(bincount):
+                        raise ValueError("Not all bins contain exactly the same number of atoms (1). ")
+                   
+                    bin_indices = bin_indices-1 # 0-indexing
+                    
+                    num_nn = math.ceil((supercell_size-1)/2)
+                    
+                    aa1 = []
+                    aa2 = []
+                    for o in range(bin_indices.shape[1]):
+                        si = bin_indices[:,[o]]
+                        a2d = []
+                        for space in range(3):
                             addit = np.array([[0],[0],[0]])
-                            addit[space,0] = n
+                            addit[space,0] = 1
                             pos1 = si + addit
                             pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
                             k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
-                            tc1 = np.multiply(Adisp[:,o,:],Adisp[:,k1,:])
-                            #if thr != 0:
-                            #    tc1[np.abs(T[:,o,:])<thr] = np.nan
-                            #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
-                            tc = np.nanmean(tc1,axis=0)
-                            #tcnorm = np.nanmean(tc1norm,axis=0)
-                            tcnorm = np.sqrt(np.abs(tc))*np.sign(tc)
-                            scmnorm[o,space,n,:] = tcnorm
-                            scm[o,space,n,:] = tc
-                        
                             
-                scm = scm/scm[:,:,[0],:]
-                scmnorm = scmnorm/scmnorm[:,:,[0],:]
-                spatialnn = np.mean(scm,axis=0)
-                spatialnorm = np.mean(scmnorm,axis=0)       
+                            a2d.append(Adisp[:,[k1],:])
+                        a1d = Adisp[:,[o],:]
+                        a2d = np.concatenate(a2d,axis=1)
+                        aa1.append(a1d)
+                        aa2.append(a2d)
+                    aa1 = np.array(aa1)
+                    aa2 = np.array(aa2)
+                    
+                    AAdisp_corrcoeff = np.empty((3,3))
+                    for tax in range(3):
+                        for corrax in range(3):
+                            AAdisp_corrcoeff[corrax,tax] = np.corrcoef(aa1[:,:,0,tax].reshape(-1,),aa2[:,:,corrax,tax].reshape(-1,))[0,1]
+                    
+                    self.AAdisp_corrcoeff = AAdisp_corrcoeff
+                    self.prop_lib['AA_disp_corr'] = self.AAdisp_corrcoeff
+                    
+                    # spatial correlation of A-disp
+                    num_nn = math.ceil((supercell_size-1)/2)
+                    scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+                    scmnorm[:] = np.nan
+                    scm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
+                    scm[:] = np.nan
+                    for o in range(bin_indices.shape[1]):
+                        si = bin_indices[:,[o]]
+                        for space in range(3):
+                            for n in range(num_nn+1):
+                                addit = np.array([[0],[0],[0]])
+                                addit[space,0] = n
+                                pos1 = si + addit
+                                pos1[pos1>supercell_size-1] = pos1[pos1>supercell_size-1]-supercell_size
+                                k1 = np.where(np.all(bin_indices==pos1,axis=0))[0][0]
+                                tc1 = np.multiply(Adisp[:,o,:],Adisp[:,k1,:])
+                                #if thr != 0:
+                                #    tc1[np.abs(T[:,o,:])<thr] = np.nan
+                                #tc1norm = np.sqrt(np.abs(tc1))*np.sign(tc1)
+                                tc = np.nanmean(tc1,axis=0)
+                                #tcnorm = np.nanmean(tc1norm,axis=0)
+                                tcnorm = np.sqrt(np.abs(tc))*np.sign(tc)
+                                scmnorm[o,space,n,:] = tcnorm
+                                scm[o,space,n,:] = tc
+                            
+                                
+                    scm = scm/scm[:,:,[0],:]
+                    scmnorm = scmnorm/scmnorm[:,:,[0],:]
+                    spatialnn = np.mean(scm,axis=0)
+                    spatialnorm = np.mean(scmnorm,axis=0)       
+                    
+                    scdecay = quantify_tilt_domain(spatialnn,spatialnorm,plot_label='A-disp')
+                    print(f"A-site displacement spatial correlation length: \n {np.round(scdecay,3)}")
+                    self.prop_lib["spatial_corr_length_Adisp"] = scdecay 
+                    self.spatialCorrLength_Adisp = scdecay  
+            
+            # A-B displacement corr
+            ABdisp_corrcoeff = {}
+            if len(Aindex_fa) > 0:
+                ad = []
+                bd = []
+                for ai, a in enumerate(Afa):
+                    b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
+                    #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                    ad.append(disp_fa[:,[ai],:].reshape(-1,3))
+                    bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                    
+                ad = np.concatenate(ad,axis=0)
+                bd = np.concatenate(bd,axis=0)
+                cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+                ABdisp_corrcoeff['FA'] = cco
                 
-                scdecay = quantify_tilt_domain(spatialnn,spatialnorm,plot_label='A-disp')
-                print(f"A-site displacement spatial correlation length: \n {np.round(scdecay,3)}")
-                self.prop_lib["spatial_corr_length_Adisp"] = scdecay 
-                self.spatialCorrLength_Adisp = scdecay  
+            if len(Aindex_ma) > 0:
+                ad = []
+                bd = []
+                for ai, a in enumerate(Ama):
+                    b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
+                    #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                    ad.append(disp_ma[:,[ai],:].reshape(-1,3))
+                    bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                    
+                ad = np.concatenate(ad,axis=0)
+                bd = np.concatenate(bd,axis=0)
+                cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+                ABdisp_corrcoeff['MA'] = cco
+            
+            if len(Aindex_azr) > 0:
+                ad = []
+                bd = []
+                for ai, a in enumerate(Aazr):
+                    b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a[0][0]]]
+                    #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                    ad.append(disp_azr[:,[ai],:].reshape(-1,3))
+                    bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                    
+                ad = np.concatenate(ad,axis=0)
+                bd = np.concatenate(bd,axis=0)
+                cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+                ABdisp_corrcoeff['Azr'] = cco
+                
+            if len(Aindex_cs) > 0:
+                ad = []
+                bd = []
+                for ai, a in enumerate(Aindex_cs):
+                    b8 = [bi for bi, b in enumerate(Bindex) if b in B8envs[a]]
+                    #np.multiply(disp_fa[:,[ai],:],Bdisp[:,b8,:])
+                    ad.append(disp_cs[:,[ai],:].reshape(-1,3))
+                    bd.append(np.mean(Bdisp[:,b8,:],axis=1).reshape(-1,3))
+                    
+                ad = np.concatenate(ad,axis=0)
+                bd = np.concatenate(bd,axis=0)
+                cco = [np.corrcoef(ad[:,i],bd[:,i])[0,1] for i in range(3)]
+                ABdisp_corrcoeff['Cs'] = cco
+            
+            self.ABdisp_corrcoeff = ABdisp_corrcoeff
+            self.prop_lib['AB_disp_corr'] = self.ABdisp_corrcoeff
         
         et1 = time.time()
         self.timing["site_disp"] = et1-et0
@@ -3069,6 +3087,10 @@ class Trajectory:
             Bpos = self.Allpos[:,self.Bindex,:]
             Xpos = self.Allpos[:,self.Xindex,:]
             neigh_list = self.octahedra
+            
+            if read_mode == 2:
+                stepsL = self.Ltempline
+                stepsT = self.TDtempline
             
             mymat = st0.lattice.matrix
             
@@ -3129,7 +3151,7 @@ class Trajectory:
                 r = distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:],self.at0.cell,self.at0.pbc,self.complex_pbc)
                 Xcodemaster = np.empty((len(Bindex),Xonehot.shape[1]))
                 for B_site, X_list in enumerate(r): # for each B-site atom
-                    Xcoeff = 1/np.power(X_list,1.2)
+                    Xcoeff = 1/np.power(X_list,1.0)
                     Xcode = Xonehot.copy()
                     Xcode = Xcode[Xcoeff>(1/env_BX_distance),:]
                     Xcoeff = Xcoeff[Xcoeff>(1/env_BX_distance)]
@@ -3169,6 +3191,7 @@ class Trajectory:
                     
                 bincent = (Bins[1:]+Bins[:-1])/2
             
+            
             # partition properties
             if octa_locality == 'homo':
                 
@@ -3183,7 +3206,7 @@ class Trajectory:
                         TCN = self.Tilting_Corr
                         #TCN = get_norm_corr(TCN,T)
                         
-                    from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density
+                    from pdyna.analysis import draw_octatype_tilt_density, draw_octatype_dist_density, draw_halideconc_tilt_density, draw_halideconc_dist_density, draw_halideconc_lat_density, draw_octatype_lat_density, draw_octatype_tilt_density_transient, draw_halideconc_tilt_density_transient
                     
                     Dtype = []
                     DBtype = []
@@ -3199,11 +3222,7 @@ class Trajectory:
                     if len(TCNtype) == 0:
                         tcptype = None
                     
-                    Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
-                    Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
-                    DBgauss_type, DBgaussstd_type = draw_octatype_dist_density(DBtype, config_types, uniname, saveFigures)
-                    
-                    
+
                     concent = [] # concentrations recorded
                     Dconc = []
                     DBconc = []
@@ -3221,20 +3240,27 @@ class Trajectory:
                     if len(TCNconc) == 0:
                         tcpconc = None
                     
-                    Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals=tcpconc)
-                    Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
-                    DBgauss_conc, DBgaussstd_conc = draw_halideconc_dist_density(DBconc, concent, uniname, saveFigures)
-                    
-                    self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
-                    self.dist_wrt_halideconc = [concent,Dgauss_conc]
-                    self.distB_wrt_halideconc = [concent,DBgauss_conc]
                     
                     if read_mode == 1:
+                        Tmaxs_conc = draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals=tcpconc)
+                        Dgauss_conc, Dgaussstd_conc = draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures)
+                        DBgauss_conc, DBgaussstd_conc = draw_halideconc_dist_density(DBconc, concent, uniname, saveFigures)
+                    
+                        self.tilt_wrt_halideconc = [concent,Tmaxs_conc]
+                        self.dist_wrt_halideconc = [concent,Dgauss_conc]
+                        self.distB_wrt_halideconc = [concent,DBgauss_conc]
+                    
                         self.prop_lib['distortion_halideconc'] = self.dist_wrt_halideconc
                         self.prop_lib['distortion_B_halideconc'] = self.distB_wrt_halideconc
                         self.prop_lib['tilting_halideconc'] = self.tilt_wrt_halideconc
+                        
+                        Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
+                        Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
+                        DBgauss_type, DBgaussstd_type = draw_octatype_dist_density(DBtype, config_types, uniname, saveFigures)
                     
-                    
+                    elif read_mode == 2:
+                        self.tilt_wrt_octatype_transient = draw_octatype_tilt_density_transient(Ttype, stepsT, typelib, config_types, uniname, saveFigures)
+                        self.tilt_wrt_halideconc_transient = draw_halideconc_tilt_density_transient(Tconc, stepsT, concent, uniname, saveFigures)
                     
                     # partition tilting correlation length wrt local config
                     if hasattr(self,"spatialCorrLength"):
@@ -3249,8 +3275,6 @@ class Trajectory:
                             temp = temp/temp[:,:,[0],:]
                             TCtype.append(temp)
                         
-                        Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
-                        
                         concent = [] # concentrations recorded
                         TCconc = []
                         for ii,item in enumerate(brbins):
@@ -3260,10 +3284,12 @@ class Trajectory:
                             temp = temp/temp[:,:,[0],:]
                             TCconc.append(temp)
                         
-                        Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
-
+                        if read_mode == 1:
+                            Tmaxs_conc = quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures)
+                            Tmaxs_type = quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures)
+                            
                     
-                if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
+                if hasattr(self,"Lat") and np.array(self.Lat).ndim == 3: #partition lattice parameter as well
                     L = self.Lat
                     Ltype = []
                     for ti, types in enumerate(typelib):
@@ -3276,11 +3302,12 @@ class Trajectory:
                         concent.append(bincent[ii])
                         Lconc.append(L[:,item,:])
                         
-                    Lgauss_conc, Lgaussstd_conc = draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures)
-                    Lgauss_type, Lgaussstd_type = draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures)
-
-                    self.lat_wrt_halideconc = [concent,Lgauss_conc]
+                    
                     if read_mode == 1:
+                        Lgauss_conc, Lgaussstd_conc = draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures)
+                        Lgauss_type, Lgaussstd_type = draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures)
+
+                        self.lat_wrt_halideconc = [concent,Lgauss_conc]
                         self.prop_lib['lattice_halideconc'] = self.lat_wrt_halideconc
                     
                 # get distribution of partitioning
@@ -3351,9 +3378,10 @@ class Trajectory:
                     if len(TCNcls) == 0:
                         tcpcls = None
                     
-                    Tmaxs_type = draw_hetero_tilt_density(Tcls, TCNcls, occs, uniname, saveFigures, corr_vals=tcpcls)
-                    Dgauss_type, Dgaussstd_type = draw_hetero_dist_density(Dcls, uniname, saveFigures)
-                    DBgauss_type, DBgaussstd_type = draw_hetero_dist_density(DBcls, uniname, saveFigures)
+                    if read_mode == 1:
+                        Tmaxs_type = draw_hetero_tilt_density(Tcls, TCNcls, occs, uniname, saveFigures, corr_vals=tcpcls)
+                        Dgauss_type, Dgaussstd_type = draw_hetero_dist_density(Dcls, uniname, saveFigures)
+                        DBgauss_type, DBgaussstd_type = draw_hetero_dist_density(DBcls, uniname, saveFigures)
                     
                     # partition tilting correlation length wrt local config
                     if hasattr(self,"spatialCorrLength"):
@@ -3368,7 +3396,8 @@ class Trajectory:
                             temp = temp/temp[:,:,[0],:]
                             TCcls.append(temp)
                         
-                        Tmaxs_type = quantify_hetero_tilt_domain(TCcls, uniname, saveFigures)
+                        if read_mode == 1:
+                            Tmaxs_type = quantify_hetero_tilt_domain(TCcls, uniname, saveFigures)
 
                     
                 if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
@@ -3376,8 +3405,9 @@ class Trajectory:
                     Lcls = []
                     for ti, types in enumerate(occs):
                         Lcls.append(L[:,types,:])
-                        
-                    Lgauss_type, Lgaussstd_type = draw_hetero_lat_density(Lcls, uniname, saveFigures)
+                    
+                    if read_mode == 1:
+                        Lgauss_type, Lgaussstd_type = draw_hetero_lat_density(Lcls, uniname, saveFigures)
                     
             
         et1 = time.time()

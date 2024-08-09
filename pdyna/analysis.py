@@ -726,6 +726,9 @@ def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim
 
 
 def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = None): #"curve"
+    
+    def fold_abs(arr):
+        return arr[:(len(arr)//2)][::-1] + arr[(len(arr)//2):], (len(arr)//2)
 
     tup_T = (T[:,:,0].reshape((-1,)),T[:,:,1].reshape((-1,)),T[:,:,2].reshape((-1,)))
     zero_threshold = 1.5
@@ -737,11 +740,11 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
             method = "curve"
      
     if method == "curve":
-        n_bins = 200
+        n_bins = 300
         
         Y = []
         for i in range(3):
-            y,binEdges=np.histogram(np.abs(tup_T[i]),bins=n_bins,range=[0,45])
+            y,binEdges=np.histogram(tup_T[i],bins=n_bins,range=[-45,45])
             bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
             if i == 0:
                 Y.append(bincenters)
@@ -749,12 +752,13 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
         Y = np.transpose(np.array(Y))
         
         maxs = []
-        window_size = n_bins/4
+        window_size = round(n_bins/15)
         if window_size%2==0:
             window_size+=1
         for i in range(3):
             temp = savitzky_golay(Y[:,i+1], window_size=window_size, order=3, deriv=0, rate=1)
-            maxs.append(abs(Y[:,0][np.argmax(temp)]))
+            temp, foldind = fold_abs(temp)
+            maxs.append(round(abs(Y[foldind:,0][np.argmax(temp)]),4))
     
     elif method == "kmean":
         from scipy.cluster.vq import kmeans
@@ -1467,6 +1471,77 @@ def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n
     plt.show()
 
 
+def draw_octatype_tilt_density_transient(Ttype, steps, typelib, config_types, uniname, saveFigures, smoother = 0):
+    """ 
+    Isolate tilting pattern wrt. the local halide configuration.  
+    """
+    
+    from pdyna.structural import periodicity_fold
+    fig_name=f"tilt_octatype_density_evo_{uniname}.png"
+    fig_name1=f"tilt_octatype_density_tcp_evo_{uniname}.png"
+    
+    typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
+                 "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
+    typexval = [0,1,1.83,2.17,2.83,3.17,3.83,4.17,5,6]
+    typextick = ['0','1','2c','2t','3f','3m','4c','4t','5','6']
+    
+    config_types = list(config_types)
+    config_involved = []
+    
+    awside = 14
+    
+    Tarr = []
+    for ti, T in enumerate(Ttype):
+        if T.shape[1] < 35: continue # ignore population that is too small
+        Tmax = []
+        for i in range(T.shape[0]):
+            fi = max(0,i-awside)
+            ff = min(T.shape[0],i+awside)
+            temp = T[list(range(fi,ff)),:,:]
+            #temp1 = temp[np.where(np.logical_and(temp<20,temp>-20))]
+            fitted = np.array(compute_tilt_density(temp,method='curve'))
+            Tmax.append(fitted)
+        Tmax = np.array(Tmax)
+        Tarr.append(Tmax)
+        config_involved.append(config_types[ti])  
+    Tarr = np.array(Tarr)
+    
+    if smoother != 0:
+        sgw = smoother
+        if sgw<5: sgw = 5
+        if sgw%2==0: sgw+=1
+        for i in range(Tarr.shape[0]):
+            for j in range(3):
+                Tarr[i,:,j] = savitzky_golay(Tarr[i,:,j],window_size=sgw)
+
+    
+    lw = 1.4
+    fig, axs = plt.subplots(3,1,figsize=(5.1,3.5),sharey=True,sharex=True)
+    colors = plt.cm.plasma(np.linspace(0, 1, 10))
+    for ti in range(Tarr.shape[0]):
+        axs[0].plot(steps,Tarr[ti,:,0],label = typesname[config_types[ti]],alpha=0.7,linewidth=lw, color=colors[config_involved[ti]])
+        axs[1].plot(steps,Tarr[ti,:,1],alpha=0.7,linewidth=lw, color=colors[config_involved[ti]])
+        axs[2].plot(steps,Tarr[ti,:,2],alpha=0.7,linewidth=lw, color=colors[config_involved[ti]])  
+
+    axs[2].set_xlabel('Temperature (K)', fontsize=14)
+    axs[1].set_ylabel('Tilting (deg)', fontsize=14)
+    axs[0].legend(prop={'size': 8},ncol=4,frameon=True)
+    axs[0].set_title("Tilting with Types", fontsize=15)
+    if steps[0]>steps[1]:
+        axs[2].set_xlim([max(steps),min(steps)])
+    else:
+        axs[2].set_xlim([min(steps),max(steps)])
+    
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.15, hspace=0.05)
+        
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return config_involved, steps, Tarr
+
+
 def draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals = None, n_bins = 100, symm_n_fold = 4):
     """ 
     Isolate tilting pattern wrt. the local halide configuration.  
@@ -2084,7 +2159,76 @@ def print_partition(typelib,config_types,brconc,halcounts):
     plt.ylabel("Counts",fontsize=12)
     plt.show()
 
+
+def draw_halideconc_tilt_density_transient(Tconc, steps, concent, uniname, saveFigures, smoother = 0):
+    """ 
+    Isolate tilting pattern wrt. the local halide concentration.  
+    """
     
+    from pdyna.structural import periodicity_fold
+    from matplotlib.colors import LinearSegmentedColormap, Normalize
+    from matplotlib.cm import ScalarMappable
+
+    fig_name=f"tilt_halideconc_density_evo_{uniname}.png"
+    fig_name1=f"tilt_halideconc_density_tcp_ev0_{uniname}.png"
+    
+    awside = 5
+    
+    Tarr = []
+    for ti, T in enumerate(Tconc):
+        Tmax = []
+        for i in range(T.shape[0]):
+            fi = max(0,i-awside)
+            ff = min(T.shape[0],i+awside)
+            temp = T[list(range(fi,ff)),:,:]
+            #temp1 = temp[np.where(np.logical_and(temp<20,temp>-20))]
+            fitted = np.array(compute_tilt_density(temp,method='curve'))
+            Tmax.append(fitted)
+        Tmax = np.array(Tmax)
+        Tarr.append(Tmax)
+    Tarr = np.array(Tarr)
+    
+    if smoother != 0:
+        sgw = smoother
+        if sgw<5: sgw = 5
+        if sgw%2==0: sgw+=1
+        for i in range(Tarr.shape[0]):
+            for j in range(3):
+                Tarr[i,:,j] = savitzky_golay(Tarr[i,:,j],window_size=sgw)
+    
+    lw = 1.4
+    fig, axs = plt.subplots(3,1,figsize=(5.1,3.5),sharey=True,sharex=True)
+    scalecolor = (np.array(concent)-np.amin(concent))/(np.amax(concent)-np.amin(concent))
+    colors = plt.cm.viridis(scalecolor)
+    for ti in range(Tarr.shape[0]):
+        axs[0].plot(steps,Tarr[ti,:,0],alpha=0.7,linewidth=lw, color=colors[ti])
+        axs[1].plot(steps,Tarr[ti,:,1],alpha=0.7,linewidth=lw, color=colors[ti])
+        axs[2].plot(steps,Tarr[ti,:,2],alpha=0.7,linewidth=lw, color=colors[ti])  
+
+    axs[2].set_xlabel('Temperature (K)', fontsize=14)
+    axs[1].set_ylabel('Tilting (deg)', fontsize=14)
+    axs[0].set_title("Tilting with Concentrations", fontsize=15)
+    if steps[0]>steps[1]:
+        axs[2].set_xlim([max(steps),min(steps)])
+    else:
+        axs[2].set_xlim([min(steps),max(steps)])
+    
+    
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.15, hspace=0.05)
+    
+    norm = Normalize(vmin=np.amin(concent), vmax=np.amax(concent))
+    #clb = plt.colorbar(ScalarMappable(norm=norm, cmap='coolwarm'),ax=axs[1], pad=0.025)
+    clb = fig.colorbar(ScalarMappable(norm=norm, cmap='viridis'), ax=axs, shrink=0.8, pad=0.025)
+    clb.ax.set_ylabel('Br Conc.',rotation=270,labelpad=10)
+    #clb.ax.set_title('Halide Concentration')
+ 
+    if saveFigures:
+        plt.savefig(fig_name, dpi=350,bbox_inches='tight')
+    plt.show()
+    
+    return concent, steps, Tarr
+ 
 
 def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals = None, n_bins = 100, symm_n_fold = 4):
     """ 

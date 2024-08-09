@@ -754,20 +754,32 @@ def pseudocubic_lat(traj,  # the main class instance
         return run_pcl(zdrc)         
 
 
-def structure_time_average_ase(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None):
+def structure_time_average_ase(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None, force_periodicity = False):
     """ 
     Compute the time-averaged structure. 
     """
     import pymatgen.io.ase
     # current problem: can't average lattice parameters and angles; can't deal with organic A-site
     
-    frac = get_frac_from_cart(traj.Allpos, traj.latmat)
-    
-    # time averaging
-    lat_param = np.mean(traj.latmat[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
-    CC = np.mean(frac[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
+    if force_periodicity:
+        lat_param = np.mean(traj.latmat[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
+        ap = traj.Allpos
+        for i in range(ap.shape[1]):
+            for j in range(ap.shape[2]):
+                temp = ap[:,i,j]
+                if np.amax(temp)-np.amin(temp) > lat_param[j,j]/2:
+                    temp[temp>lat_param[j,j]/2] = temp[temp>lat_param[j,j]/2]-lat_param[j,j]
+                    ap[:,i,j] = temp    
+                
+        frac = get_frac_from_cart(ap, traj.latmat)
+        CC = np.mean(frac[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
+        carts = np.dot(CC,lat_param)
+    else:
+        frac = get_frac_from_cart(traj.Allpos, traj.latmat)
+        lat_param = np.mean(traj.latmat[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
+        CC = np.mean(frac[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
+        carts = np.dot(CC,lat_param)
 
-    carts = np.dot(CC,lat_param)
 
     at=pymatgen.io.ase.AseAtomsAdaptor.get_atoms(traj.st0)
     at.positions = carts
@@ -839,7 +851,7 @@ def simply_calc_distortion(traj):
         else:
             raw = Xpos[neigh_list[B_site,:].astype(int),:] - Bpos[B_site,:]
             bx = octahedra_coords_into_bond_vectors(raw,mymat)
-            dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+            dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors_full(bx)
             Rmat[B_site,:] = rotmat
             Rmsd[B_site] = rmsd
             disto = np.concatenate((disto,dist_val.reshape(1,dist_dim)),axis = 0)

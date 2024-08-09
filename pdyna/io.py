@@ -30,6 +30,7 @@ def read_lammps_settings(infile): # internal use
     ti = None
     tf = None
     tstep = None
+    nsw = 0
     for line in lines:
         if line.startswith("velocity"):
             tvelo = float(line.split()[3])
@@ -38,11 +39,13 @@ def read_lammps_settings(infile): # internal use
             tf = float(line.split()[6])
         if line.startswith("timestep"):
             tstep = float(line.split()[1])*1000
+        if line.startswith("run"):
+            nsw = float(line.split()[1])
     
     #if tvelo != ti:
     #    print("!Lammps in file: the thermalization temperature is different from the initial temperature.")
 
-    return {"Ti":ti, "Tf":tf, "tstep":tstep}    
+    return {"Ti":ti, "Tf":tf, "tstep":tstep, "nsw":nsw}    
 
 
 def read_ase_md_settings(fdir): # internal use 
