@@ -174,7 +174,7 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,latmat,fpg_
                     if not rtr is None:
                         bx = np.matmul(bx,rtr)
          
-                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors_full(bx)
 
                     Rmat[B_site,:] = rotmat
                     Rmsd[B_site] = rmsd
@@ -210,7 +210,7 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,latmat,fpg_
                     if not rtr is None:
                         bx = np.matmul(bx,rtr)
                     
-                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors(bx)
+                    dist_val,rotmat,rmsd = calc_distortions_from_bond_vectors_full(bx)
                         
                     Rmat[B_site,:] = rotmat
                     Rmsd[B_site] = rmsd
