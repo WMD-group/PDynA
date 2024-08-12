@@ -516,7 +516,7 @@ def find_polytype_network(Bpos_frame,Xpos_frame,r,mymat,neigh_list):
 def pseudocubic_lat(traj,  # the main class instance
                     allow_equil = 0, #take the first x fraction of the trajectory as equilibration
                     zdrc = 2,  # zdrc: the z direction for pseudo-cubic lattice paramter reading. a,b,c = 0,1,2
-                    lattice_tilt = None # if primary B-B bond is not along orthogonal directions, in degrees
+                    lattice_tilt = None, # if primary B-B bond is not along orthogonal directions, in degrees
                     ): 
     
     """ 
@@ -537,8 +537,8 @@ def pseudocubic_lat(traj,  # the main class instance
                        [[-1,1,0],[1,1,0],[0,0,2]]]) # setting of pseuso-cubic lattice parameter vectors
         
         mappings = BBdist*ma
-        maps = mappings[zdrc,:,:] # select out of x,y,z
-        maps_frac = ma[zdrc,:,:]
+        maps = mappings[zi,:,:] # select out of x,y,z
+        maps_frac = ma[zi,:,:]
         
         if not lattice_tilt is None:
             maps = np.dot(maps,lattice_tilt)
@@ -637,7 +637,7 @@ def pseudocubic_lat(traj,  # the main class instance
             else:
                 return Lati_off
         
-        else:
+        else: # cells larger than 222 supercell
             
             #Bcart = st0.cart_coords[blist,:]
             Bnet = np.zeros((len(blist),3))
@@ -722,9 +722,17 @@ def pseudocubic_lat(traj,  # the main class instance
     if not celldim.is_integer():
         raise ValueError("The cell is not in cubic shape, please use lat_method = 1. ")
     
+    tss = traj.supercell_size
     cc = st0.frac_coords[blist]
     
-    tss = traj.supercell_size
+    for i in range(3):
+        if np.amax(cc[:,i])>(1-1/tss/4) and np.amin(cc[:,i])<1/tss/4:
+            addit = np.zeros((1,3))
+            addit[0,i] = 1/tss/2
+            cc = cc+addit
+    cc[cc>1] = cc[cc>1]-1
+    cc[cc<0] = cc[cc<0]+1
+    
     clims = np.array([[(np.quantile(cc[:,0],1/(tss**2))+np.amin(cc[:,0]))/2,(np.quantile(cc[:,0],1-1/(tss**2))+np.amax(cc[:,0]))/2],
                       [(np.quantile(cc[:,1],1/(tss**2))+np.amin(cc[:,1]))/2,(np.quantile(cc[:,1],1-1/(tss**2))+np.amax(cc[:,1]))/2],
                       [(np.quantile(cc[:,2],1/(tss**2))+np.amin(cc[:,2]))/2,(np.quantile(cc[:,2],1-1/(tss**2))+np.amax(cc[:,2]))/2]])

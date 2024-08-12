@@ -671,7 +671,7 @@ def process_lammps_data(
         frac_coords = get_frac_from_cart(cart_coords,cell)
     else:
         frac_coords = scaled_positions
-        cart_coords = get_cart_from_frac(frac_coords, cell)
+        cart_coords = get_cart_from_frac(frac_coords, cell) - celldisp
 
     return list(elements), cell, l6, frac_coords, cart_coords  
 

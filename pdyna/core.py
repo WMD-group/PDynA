@@ -578,8 +578,6 @@ class Trajectory:
         print("Current sample:",uniname)
         print("Time Span:",round(self.nframe*self.MDTimestep,3),"ps")
         print("Frame count:",self.nframe)
-        if allow_equil != 0:
-            print("Reading from frame no.{}".format(round(self.nframe*allow_equil)))
         
         # reset timing
         self.timing = {"reading": self.timing["reading"]}
@@ -688,6 +686,9 @@ class Trajectory:
         
         if read_mode == 2:
             allow_equil = 0
+        
+        if allow_equil != 0:
+            print("Reading from frame no.{}".format(round(self.nframe*allow_equil)))
         
         self.allow_equil = allow_equil
         
@@ -3910,7 +3911,7 @@ class Frame:
             cc = self.st0.frac_coords[self.Bindex,:]
             supercell_size = round(np.mean(cell_lat)/default_BB_dist)
             for i in range(3):
-                if abs(np.amax(cc[:,i])-1)<0.01 or abs(np.amin(cc[:,i]))<0.01:
+                if np.amax(cc[:,i])>(1-1/supercell_size/4) and np.amin(cc[:,i])<1/supercell_size/4:
                     addit = np.zeros((1,3))
                     addit[0,i] = 1/supercell_size/2
                     cc = cc+addit

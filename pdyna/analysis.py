@@ -255,10 +255,10 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis
     if xaxis_type == 'T':
         if steps[0] > steps[-1]:
             #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+            ax.set_title(f'Cooling ({round(Tgrad,2)} K/ps)', fontsize=14)
         elif steps[0] < steps[-1]:
             #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+            ax.set_title(f'Heating ({round(Tgrad,2)} K/ps)', fontsize=14)
         else:
             #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
             ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
@@ -312,10 +312,10 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis
     if xaxis_type == 'T':
         if steps[0] > steps[-1]:
             #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+            ax.set_title(f'Cooling ({round(Tgrad,2)} K/ps)', fontsize=14)
         elif steps[0] < steps[-1]:
             #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+            ax.set_title(f'Heating ({round(Tgrad,2)} K/ps)', fontsize=14)
         else:
             #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
             ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
@@ -420,10 +420,10 @@ def draw_tilt_evolution(T, steps, Tgrad, uniname, saveFigures = False, xaxis_typ
     if xaxis_type == 'T':
         if steps[0] > steps[-1]:
             #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+            ax.set_title(f'Cooling ({round(Tgrad,2)} K/ps)', fontsize=14)
         elif steps[0] < steps[-1]:
             #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-            ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+            ax.set_title(f'Heating ({round(Tgrad,2)} K/ps)', fontsize=14)
         else:
             #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
             ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
@@ -531,10 +531,10 @@ def draw_dist_evolution(D, steps, Tgrad, uniname, saveFigures = False, xaxis_typ
         if xaxis_type == 'T':
             if steps[0] > steps[-1]:
                 #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-                ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+                ax.set_title(f'Cooling ({round(Tgrad,2)} K/ps)', fontsize=14)
             elif steps[0] < steps[-1]:
                 #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-                ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+                ax.set_title(f'Heating ({round(Tgrad,2)} K/ps)', fontsize=14)
             else:
                 #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
                 ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
@@ -578,10 +578,10 @@ def draw_dist_evolution(D, steps, Tgrad, uniname, saveFigures = False, xaxis_typ
         if xaxis_type == 'T':
             if steps[0] > steps[-1]:
                 #ax.text(0.22, 0.95, f'Cooling ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-                ax.set_title(f'Cooling ({round(Tgrad,1)} K/ps)', fontsize=14)
+                ax.set_title(f'Cooling ({round(Tgrad,2)} K/ps)', fontsize=14)
             elif steps[0] < steps[-1]:
                 #ax.text(0.22, 0.95, f'Heating ({round(Tgrad,1)} K/ps)', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
-                ax.set_title(f'Heating ({round(Tgrad,1)} K/ps)', fontsize=14)
+                ax.set_title(f'Heating ({round(Tgrad,2)} K/ps)', fontsize=14)
             else:
                 #ax.text(0.22, 0.95, f'Heat bath at {Ti}K', horizontalalignment='center', fontsize=14, verticalalignment='center', transform=ax.transAxes)
                 ax.set_title(f'Heat bath at {Ti}K', fontsize=14)
