@@ -612,7 +612,7 @@ def process_lammps_data(
     specorder=None,
     units="metal",):
     
-    from pdyna.structural import get_frac_from_cart
+    from pdyna.structural import get_frac_from_cart, get_cart_from_frac
 
     # read IDs if given and order if needed
     if "id" in colnames:
@@ -666,8 +666,12 @@ def process_lammps_data(
     
     l6 = process_lat(cell)
     
-    cart_coords = positions-celldisp
-    frac_coords = get_frac_from_cart(cart_coords,cell)
+    if positions is not None:
+        cart_coords = positions - celldisp
+        frac_coords = get_frac_from_cart(cart_coords,cell)
+    else:
+        frac_coords = scaled_positions
+        cart_coords = get_cart_from_frac(frac_coords, cell)
 
     return list(elements), cell, l6, frac_coords, cart_coords  
 
@@ -975,14 +979,3 @@ def display_A_sites(A_sites):
         if sites > 0:
             prstr.append(key+": "+str(sites))
     print("A-sites are ->",", ".join(prstr))
-            
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
