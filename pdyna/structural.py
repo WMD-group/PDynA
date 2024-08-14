@@ -298,7 +298,7 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
         ndef = None
         if np.amax(bxc) != 6 or np.amin(bxc) != 6:
             ndef = np.sum(bxc!=6) 
-            if np.amax(bxc) == 7 and np.amin(bxc) == 5: # benign defects
+            if np.amax(bxc) < 8 and np.amin(bxc) > 4: # benign defects
                 print(f"!Structure Resolving: the initial structure contains {ndef} out of {len(bxc)} octahedra with defects. The algorithm has screened them out of the population. ")
             else: # bad defects
                 raise TypeError("!Structure Resolving: the initial structure contains octahedra with complex defect configuration, leading to unresolvable connectivity. ")
