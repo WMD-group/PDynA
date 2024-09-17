@@ -13,52 +13,26 @@ if os.path.exists("style.mplstyle"):
     plt.style.use("style.mplstyle")
 
 def savitzky_golay(y, window_size=51, order=3, deriv=0, rate=1):
-    r"""Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
-    The Savitzky-Golay filter removes high frequency noise from data.
-    It has the advantage of preserving the original shape and
-    features of the signal better than other types of filtering
-    approaches, such as moving averages techniques.
-    Parameters
-    ----------
-    y : array_like, shape (N,)
-        the values of the Time history of the signal.
-    window_size : int
-        the length of the window. Must be an odd integer number.
-    order : int
-        the order of the polynomial used in the filtering.
-        Must be less then `window_size` - 1.
-    deriv: int
-        the order of the derivative to compute (default = 0 means only smoothing)
-    Returns
-    -------
-    ys : ndarray, shape (N)
-        the smoothed signal (or it's n-th derivative).
-    Notes
-    -----
-    The Savitzky-Golay is a type of low-pass filter, particularly
-    suited for smoothing noisy data. The main idea behind this
-    approach is to make for each point a least-square fit with a
-    polynomial of high order over a odd-sized window centered at
-    the point.
-    Examples
-    --------
-    t = np.linspace(-4, 4, 500)
-    y = np.exp( -t**2 ) + np.random.normal(0, 0.05, t.shape)
-    ysg = savitzky_golay(y, window_size=31, order=4)
-    import matplotlib.pyplot as plt
-    plt.plot(t, y, label='Noisy signal')
-    plt.plot(t, np.exp(-t**2), 'k', lw=1.5, label='Original signal')
-    plt.plot(t, ysg, 'r', label='Filtered signal')
-    plt.legend()
-    plt.show()
+    """
+    Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
+
     References
-    ----------
-    .. [1] A. Savitzky, M. J. E. Golay, Smoothing and Differentiation of
-       Data by Simplified Least Squares Procedures. Analytical
-       Chemistry, 1964, 36 (8), pp 1627-1639.
-    .. [2] Numerical Recipes 3rd Edition: The Art of Scientific Computing
-       W.H. Press, S.A. Teukolsky, W.T. Vetterling, B.P. Flannery
-       Cambridge University Press ISBN-13: 9780521880688
+    [1] A. Savitzky, M. J. E. Golay, Smoothing and Differentiation of
+        Data by Simplified Least Squares Procedures. Analytical
+        Chemistry, 1964, 36 (8), pp 1627-1639.
+    [2] Numerical Recipes 3rd Edition: The Art of Scientific Computing
+        W.H. Press, S.A. Teukolsky, W.T. Vetterling, B.P. Flannery
+        Cambridge University Press ISBN-13: 9780521880688
+
+    Args:   
+        y (numpy.ndarray): the input signal
+        window_size (int): the length of the window (must be an odd integer)
+        order (int): the order of the polynomial used in the filtering
+        deriv (int): the order of the derivative to compute (default is 0 means only smoothing)
+        rate (int): rate of change of the x values (default is 1)
+
+    Returns:
+        numpy.ndarray: the smoothed signal
     """
     from math import factorial
     
@@ -86,6 +60,21 @@ def savitzky_golay(y, window_size=51, order=3, deriv=0, rate=1):
 
 
 def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_crop = 0, screen = None, title = None):
+    """
+    Draws the lattice density distribution for a given lattice parameter array.
+
+    Args:
+        Lat (numpy.ndarray): The lattice parameter array.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): The number of bins for the histogram.
+        num_crop (int): The number of initial rows to crop from the array.
+        screen (list): The range of values to screen.
+        title (str): The title of the plot.
+
+    Returns:
+        tuple: Mean and standard deviation of the lattice parameters.
+    """
     
     fig_name = f"lattice_density_{uniname}.png"
     
@@ -229,6 +218,24 @@ def draw_lattice_density(Lat, uniname, saveFigures = False, n_bins = 50, num_cro
 
 
 def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
+    """
+    Draws the evolution of lattice parameters over time or temperature or MD steps.
+
+    Args:
+        dm (numpy.ndarray): The lattice parameter array.
+        steps (numpy.ndarray): The time or MD steps.
+        Tgrad (float): The temperature gradient.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        xaxis_type (str): The type of x-axis ('N', 't', or 'T').
+        Ti (float): Initial temperature.
+        x_lims (list): Limits for the x-axis.
+        y_lims (list): Limits for the y-axis.
+        invert_x (bool): Whether to invert the x-axis.
+
+    Returns:
+        None
+    """
     
     fig_name = f"lattice_evo_{uniname}.png"
     lw = 3
@@ -346,6 +353,22 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis
 
 
 def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0, x_lims = None, y_lims = None):
+    """
+    Draws the evolution of lattice parameters over time.
+
+    Args:
+        dm (numpy.ndarray): The lattice parameter array.
+        steps (numpy.ndarray): The time or MD steps.
+        Ti (float): Initial temperature.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): The smoothing factor.
+        x_lims (list): Limits for the x-axis.
+        y_lims (list): Limits for the y-axis.
+
+    Returns:
+        tuple: The steps and the smoothed lattice parameters.
+    """
     
     fig_name = f"lattice_time_{uniname}.png"
     
@@ -393,22 +416,55 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0
     return (steps,La,Lb,Lc)
 
 
-def draw_tilt_evolution(T, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
+def draw_tilt_evolution(T, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False, use_gaussian = False):
+    """
+    Draws the evolution of tilt angles over time or temperature or MD steps.
+
+    Args:
+        T (numpy.ndarray): The tilt angle array.
+        steps (numpy.ndarray): The time or MD steps.
+        Tgrad (float): The temperature gradient.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        xaxis_type (str): The type of x-axis ('N', 't', or 'T').
+        Ti (float): Initial temperature.
+        x_lims (list): Limits for the x-axis.
+        y_lims (list): Limits for the y-axis.
+        invert_x (bool): Whether to invert the x-axis.
+        use_gaussian (bool): Whether to use Gaussian fitting (require a large enough data).
+
+    Returns:
+        tuple: The steps and the tilt angles.
+    """
     
     fig_name = f"tilt_evo_{uniname}.png"
     lw=2
     #print(dm.shape[0],len(steps))
-
-    aw = round(T.shape[0]/40)
     
-    Tm = []
-    for i in range(T.shape[0]):
-        f1 = max(0,i-aw)
-        f2 = min(i+aw,T.shape[0])
-        #print(list(range(f1,f2)))
-        Tm.append(compute_tilt_density(T[list(range(f1,f2)),:,:],method='curve'))
-    Tm = np.array(Tm)
-    
+    if use_gaussian:
+        from tqdm import tqdm
+        nstep = 20
+        subdiv = np.round(np.linspace(0,T.shape[0]+1,nstep+1)).astype(int)
+        Tm = []
+        for i in tqdm(range(subdiv.shape[0]-1)):
+            Tm.append(compute_tilt_density(T[list(range(subdiv[i],subdiv[i]+1)),:,:],method='gaussian',plot_fitting=True))
+        Tm = np.array(Tm)
+        subdiv = np.round(np.linspace(0,T.shape[0]-1,nstep+1)).astype(int) # endpoint difference
+        newsteps = []
+        for i in range(subdiv.shape[0]-1):
+            newsteps.append((steps[subdiv[i]]+steps[subdiv[i+1]])/2)
+        steps = np.array(newsteps)
+        
+    else:
+        aw = round(T.shape[0]/40)
+        
+        Tm = []
+        for i in range(T.shape[0]):
+            f1 = max(0,i-aw)
+            f2 = min(i+aw,T.shape[0])
+            #print(list(range(f1,f2)))
+            Tm.append(compute_tilt_density(T[list(range(f1,f2)),:,:],method='curve'))
+        Tm = np.array(Tm)
     
     plt.subplots(1,1)
     
@@ -456,6 +512,20 @@ def draw_tilt_evolution(T, steps, Tgrad, uniname, saveFigures = False, xaxis_typ
 
 
 def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim = None):
+    """
+    Draws the evolution of tilt angles over time.
+
+    Args:
+        T (numpy.ndarray): The tilt angle array.
+        steps (numpy.ndarray): The time or MD steps.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): The smoothing factor.
+        y_lim (list): Limits for the y-axis.
+
+    Returns:
+        tuple: The steps and the smoothed tilt angles.
+    """
     
     fig_name = f"traj_tilt_time_{uniname}.png"
     
@@ -512,7 +582,25 @@ def draw_tilt_evolution_time(T, steps, uniname, saveFigures, smoother = 0, y_lim
     return (steps[:(len(steps)-aw+1)],Ta,Tb,Tc)
 
 
-def draw_dist_evolution(D, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):
+def draw_dist_evolution(D, steps, Tgrad, uniname, saveFigures = False, xaxis_type = 'N', Ti = None, x_lims = None, y_lims = None, invert_x = False):  
+    """
+    Draws the evolution of distortion parameters over time or temperature or MD steps.
+
+    Args:
+        D (numpy.ndarray): The distortion array.
+        steps (numpy.ndarray): The time or MD steps.
+        Tgrad (float): The temperature gradient.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        xaxis_type (str): The type of x-axis ('N', 't', or 'T').
+        Ti (float): Initial temperature.
+        x_lims (list): Limits for the x-axis.
+        y_lims (list): Limits for the y-axis.
+        invert_x (bool): Whether to invert the x-axis.
+
+    Returns:
+        tuple: The steps and the distortion parameters.
+    """
     
     Dm = np.nanmean(D,axis=1)
     
@@ -614,6 +702,20 @@ def draw_dist_evolution(D, steps, Tgrad, uniname, saveFigures = False, xaxis_typ
 
 
 def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim = None):
+    """
+    Draws the evolution of distortion over time.
+
+    Args:
+        D (numpy.ndarray): The distortion array.
+        steps (numpy.ndarray): The time or MD steps.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): The smoothing factor.
+        y_lim (list): Limits for the y-axis.
+
+    Returns:
+        tuple: The steps and the smoothed distortion parameters.
+    """
     
     assert D.ndim == 3
     assert D.shape[0] == len(steps)
@@ -726,8 +828,21 @@ def draw_dist_evolution_time(D, steps, uniname, saveFigures, smoother = 0, y_lim
 
 
 def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = None): #"curve"
+    """
+    Computes the tilt density from the given tilt angles.
+
+    Args:   
+        T (numpy.ndarray): The tilt angle array.
+        method (str): The method for computing tilt density ('auto', 'curve', 'kmean', or 'gaussian').
+        plot_fitting (bool): Whether to plot the fitted peaks, only for the Gaussian mode.
+        corr_vals (list): NN1 Correlation values for the tilt angles.
+
+    Returns:
+        numpy.ndarray: The fitted tilt angles for each axis.
+    """
     
     def fold_abs(arr):
+        """Helper function to fold and reverse the array."""
         return arr[:(len(arr)//2)][::-1] + arr[(len(arr)//2):], (len(arr)//2)
 
     tup_T = (T[:,:,0].reshape((-1,)),T[:,:,1].reshape((-1,)),T[:,:,2].reshape((-1,)))
@@ -911,6 +1026,20 @@ def compute_tilt_density(T, method = "auto", plot_fitting = False, corr_vals = N
 
 
 def draw_tilt_prediction(c,pred,preds,yc,maxs,override=[False,False,False]):
+    """
+    Draws the tilt prediction based on the computed density.
+
+    Args:
+        c (numpy.ndarray): The computed density.
+        pred (list): The total density.
+        preds (list): The individual peaks.
+        yc (numpy.ndarray): The y-coordinates for the density plot.
+        maxs (list): The maximum values for each tilt angle.
+        override (list): Flags to override the predictions.
+
+    Returns:
+        None
+    """
     
     figs, axs = plt.subplots(3, 1)
     labels = [r'$\mathit{a}$',r'$\mathit{b}$',r'$\mathit{c}$']
@@ -921,8 +1050,8 @@ def draw_tilt_prediction(c,pred,preds,yc,maxs,override=[False,False,False]):
         if not override[i]:
             axs[i].plot(yc,preds[i][:,0],linewidth=1,alpha=0.7,color='C5')
             axs[i].plot(yc,preds[i][:,1],linewidth=1,alpha=0.7,color='C5')
-        axs[i].text(0.03, 0.82, labels[i], horizontalalignment='center', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
-        axs[i].text(0.08, 0.52, str(maxs[i])+r'$\degree$', horizontalalignment='center', fontsize=13.6, verticalalignment='center', transform=axs[i].transAxes)
+        axs[i].text(0.02, 0.82, labels[i], horizontalalignment='left', fontsize=15, verticalalignment='center', transform=axs[i].transAxes)
+        axs[i].text(0.02, 0.52, str(maxs[i])+r'$\degree$', horizontalalignment='left', fontsize=13.6, verticalalignment='center', transform=axs[i].transAxes)
         
     for ax in axs.flat:
         #ax.set(xlabel=r'Tilt Angle ($\degree$)', ylabel='Counts (a.u.)')
@@ -949,7 +1078,22 @@ def draw_tilt_prediction(c,pred,preds,yc,maxs,override=[False,False,False]):
 
 
 def draw_distortion_evolution_sca(D, steps, uniname, saveFigures, xaxis_type = 'N', scasize = 2.5, y_lim = 0.4):
-    
+    """
+    Draws the evolution of distortion parameters over time or temperature or MD steps.
+
+    Args:
+        D (numpy.ndarray): The distortion array.
+        steps (numpy.ndarray): The time or MD steps.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        xaxis_type (str): The type of x-axis ('N', 't', or 'T').
+        scasize (float): Size of the scatter points.
+        y_lim (float): Limit for the y-axis.
+
+    Returns:
+        None
+    """
+
     fig_name = f"traj_dist_sca_{uniname}.png"
     
     assert D.shape[0] == len(steps)
@@ -983,6 +1127,21 @@ def draw_distortion_evolution_sca(D, steps, uniname, saveFigures, xaxis_type = '
 
 
 def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', scasize = 2.5, y_lim = None):
+    """
+    Draws the evolution of tilt angles over time or temperature or MD steps.
+
+    Args:
+        T (numpy.ndarray): The tilt angle array.
+        steps (numpy.ndarray): The time or MD steps.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        xaxis_type (str): The type of x-axis ('N', 't', or 'T').
+        scasize (float): Size of the scatter points.
+        y_lim (list): Limits for the y-axis.
+
+    Returns:
+        None
+    """
     
     fig_name = f"traj_tilt_sca_{uniname}.png"
     
@@ -1017,6 +1176,21 @@ def draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', sc
 
 
 def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], gaus_fit = True, title = None):
+    """
+    Draws the density of distortion parameters.
+
+    Args:
+        D (numpy.ndarray): The distortion array.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        xrange (list): Range for the x-axis.
+        gaus_fit (bool): Whether to fit a Gaussian to the plot.
+        title (str): Title for the plot.
+
+    Returns:
+        tuple: The mean and standard deviation of the fitted Gaussian if gaus_fit = True.
+    """
     
     if D.shape[-1] == 4:
         fig_name = f"traj_dist_density_{uniname}.png"
@@ -1150,6 +1324,19 @@ def draw_dist_density(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5], g
 
 
 def draw_dist_density_frame(D, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
+    """
+    Draws the density of distortion parameters for frames.
+
+    Args:
+        D (numpy.ndarray): The distortion array.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        xrange (list): Range for the x-axis.
+
+    Returns:
+        list of float: The mean of the fitted Gaussian for each distortion parameter.
+    """
     
     fig_name1 = f"frame_dist_{uniname}.png"
     fig_name2 = f"frame_distB_{uniname}.png"
@@ -1300,6 +1487,17 @@ def draw_dist_density_frame(D, uniname, saveFigures, n_bins = 100, xrange = [0,0
 
 
 def if_arrays_are_different(arr,tol=0.2):
+    """
+    Checks if the maximum and minimum values of an array are significantly different.
+
+    Args:
+        arr (numpy.ndarray): The input array.
+        tol (float): The tolerance value for comparison.
+
+    Returns:
+        tuple: A tuple indicating the category of difference.
+    """
+
     arrmaxs = np.amax(arr,axis=0)
     arrmins = np.amin(arr,axis=0)
     
@@ -1325,6 +1523,20 @@ def if_arrays_are_different(arr,tol=0.2):
 
 
 def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, title = None):
+    """
+    Draws the density of tilt angles.
+
+    Args:   
+        T (numpy.ndarray): The tilt angle array.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        symm_n_fold (int): Symmetry fold for periodicity.
+        title (str): Title for the plot.
+
+    Returns:
+        None
+    """
     
     fig_name=f"traj_tilt_density_{uniname}.png"
     
@@ -1398,6 +1610,18 @@ def draw_tilt_density(T, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, ti
 def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n_fold = 4, title = None):
     """ 
     Isolate tilting pattern wrt. the connectivity type.  
+
+    Args:
+        T (numpy.ndarray): The tilt angle array.
+        oc (list): The connectivity type list.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        symm_n_fold (int): Symmetry fold for periodicity.
+        title (str): Title for the plot.
+
+    Returns:
+        None
     """
     
     fig_name=f"traj_tilt_density_{uniname}.png"
@@ -1473,7 +1697,19 @@ def draw_conntype_tilt_density(T, oc, uniname, saveFigures, n_bins = 100, symm_n
 
 def draw_octatype_tilt_density_transient(Ttype, steps, typelib, config_types, uniname, saveFigures, smoother = 0):
     """ 
-    Isolate tilting pattern wrt. the local halide configuration.  
+    Isolate tilting pattern wrt. the local halide configuration in transient mode.  
+
+    Args:
+        Ttype (list): The tilt angle array for each type.
+        steps (numpy.ndarray): The time or MD steps.
+        typelib (list): The types.
+        config_types (list): The configuration types.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): Smoothing window size.
+
+    Returns:
+        tuple: The configuration types, steps, and tilt angles.
     """
     
     from pdyna.structural import periodicity_fold
@@ -1545,6 +1781,19 @@ def draw_octatype_tilt_density_transient(Ttype, steps, typelib, config_types, un
 def draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals = None, n_bins = 100, symm_n_fold = 4):
     """ 
     Isolate tilting pattern wrt. the local halide configuration.  
+
+    Args:
+        Ttype (list): The tilt angle array for each type.
+        typelib (list): The types.
+        config_types (list): The configuration types.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        corr_vals (list): The correlation values.
+        n_bins (int): Number of bins for the histogram.
+        symm_n_fold (int): Symmetry fold for periodicity.
+
+    Returns:    
+        list: The fitted tilt angles.
     """
     
     from pdyna.structural import periodicity_fold
@@ -1858,6 +2107,17 @@ def draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigure
 def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
     """ 
     Isolate distortion mode wrt. the local halide configuration.  
+
+    Args:
+        Dtype (list): The distortion array for each type.
+        config_types (list): The configuration types.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        xrange (list): Range for the histogram.
+
+    Returns:
+        tuple: The distortion values, and distortion standard deviations.
     """
     
     typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
@@ -2005,6 +2265,16 @@ def draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures, n_bins
 def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins = 100):
     """ 
     Isolate distortion mode wrt. the local halide configuration.  
+
+    Args:
+        Ltype (list): The lattice parameter array for each type.
+        config_types (list): The configuration types.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        tuple: The lattice values, and lattice standard deviations.
     """
     
     fig_name=f"lat_octatype_density_{uniname}.png"
@@ -2116,6 +2386,19 @@ def draw_octatype_lat_density(Ltype, config_types, uniname, saveFigures, n_bins 
 
 
 def print_partition(typelib,config_types,brconc,halcounts):
+    """
+    Print the partition of the halide configurations.
+
+    Args:
+        typelib (list): The list of halide configurations.
+        config_types (list): The configuration types.
+        brconc (list): The bromine concentration.
+        halcounts (list): The counts of halides.
+
+    Returns:    
+        None
+    """
+
     #typesname = ["I6 Br0","I5 Br1","I4 Br2: cis","I4 Br2: trans","I3 Br3: fac",
     #             "I3 Br3: mer","I2 Br4: cis","I2 Br4: trans","I1 Br5","I0 Br6"]
     #typextick = ['0','1','2c','2t','3f','3m','4c','4t','5','6']
@@ -2163,6 +2446,17 @@ def print_partition(typelib,config_types,brconc,halcounts):
 def draw_halideconc_tilt_density_transient(Tconc, steps, concent, uniname, saveFigures, smoother = 0):
     """ 
     Isolate tilting pattern wrt. the local halide concentration.  
+
+    Args:
+        Tconc (list): The tilting data of each concentraion level.
+        steps (list): The x-axis steps.
+        concent (list): The halide concentrations.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): The smoothing window size.
+
+    Returns:
+        tuple: The halide concentrations, steps, and tilting data.
     """
     
     from pdyna.structural import periodicity_fold
@@ -2233,6 +2527,19 @@ def draw_halideconc_tilt_density_transient(Tconc, steps, concent, uniname, saveF
 def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, corr_vals = None, n_bins = 100, symm_n_fold = 4):
     """ 
     Isolate tilting pattern wrt. the local halide concentration.  
+
+    Args:
+        Tconc (list): The tilting data of each concentraion level.
+        brconc (list): The bromine concentration.
+        concent (list): The halide concentrations.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        corr_vals (list): The correlation values.
+        n_bins (int): Number of bins for the histogram.
+        symm_n_fold (int): The symmetry fold.
+
+    Returns:
+        tuple: The fitted tilt angles
     """
     
     from pdyna.structural import periodicity_fold
@@ -2494,6 +2801,17 @@ def draw_halideconc_tilt_density(Tconc, brconc, concent, uniname, saveFigures, c
 def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
     """ 
     Isolate distortion mode wrt. the local halide concentration.  
+
+    Args:   
+        Dconc (list): The distortion data of each concentraion level.
+        concent (list): The halide concentrations.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        xrange (list): The range for the histogram.
+
+    Returns:
+        tuple: The fitted distortion, distortion standard deviation.
     """
     
     if Dconc[0].shape[2] == 4:
@@ -2608,6 +2926,16 @@ def draw_halideconc_dist_density(Dconc, concent, uniname, saveFigures, n_bins = 
 def draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures, n_bins = 100):
     """ 
     Isolate lattice parameter wrt. the local halide concentration.  
+
+    Args:
+        Lconc (list): The lattice data of each concentraion level.
+        concent (list): The halide concentrations.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        tuple: The fitted lattice parameters, lattice parameter standard deviation.
     """
     
     fig_name=f"lat_halideconc_density_{uniname}.png"
@@ -2712,6 +3040,19 @@ def draw_halideconc_lat_density(Lconc, concent, uniname, saveFigures, n_bins = 1
 def draw_hetero_tilt_density(Tcls, TCNcls, typelib, uniname, saveFigures, corr_vals = None, n_bins = 100, symm_n_fold = 4):
     """ 
     Isolate tilting pattern wrt. the local halide configuration.  
+
+    Args:
+        Tcls (list): The tilt data of each configuration.
+        TCNcls (list): The tilt data of each configuration.
+        typelib (str): The type of tilt.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        corr_vals (list): The correlation values.
+        n_bins (int): Number of bins for the histogram.
+        symm_n_fold (int): The symmetry fold.
+
+    Returns:
+        list of floats: The maximum tilt values.
     """
     
     from pdyna.structural import periodicity_fold
@@ -2945,6 +3286,16 @@ def draw_hetero_tilt_density(Tcls, TCNcls, typelib, uniname, saveFigures, corr_v
 def draw_hetero_dist_density(Dcls, uniname, saveFigures, n_bins = 100, xrange = [0,0.5]):
     """ 
     Isolate distortion mode wrt. the local halide configuration.  
+
+    Args:
+        Dcls (list): The distortion data of each configuration.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        xrange (list): The range for the histogram.
+
+    Returns:
+        tuple: The fitted distortion, distortion standard deviation.
     """
     from sklearn.decomposition import PCA
     
@@ -3118,6 +3469,15 @@ def draw_hetero_dist_density(Dcls, uniname, saveFigures, n_bins = 100, xrange = 
 def draw_hetero_lat_density(Lcls, uniname, saveFigures, n_bins = 100):
     """ 
     Isolate distortion mode wrt. the local halide configuration.  
+
+    Args:
+        Lcls (list): The lattice data of each configuration.
+        uniname (str): The user-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        tuple: The fitted lattice parameters, lattice parameter standard deviation.
     """
     
     fig_name=f"lat_octatype_density_{uniname}.png"
@@ -3181,10 +3541,27 @@ def draw_hetero_lat_density(Lcls, uniname, saveFigures, n_bins = 100):
 
 
 def abs_sqrt(m):
+    """Calculate the sign-conversing square root of a number."""
+
     return np.sqrt(np.abs(m))*np.sign(m)
 
 
 def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't', scasize = 1.5, y_lim = [-1,1]):
+    """
+    Draw the tilt correlation evolution.
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        steps (numpy.ndarray): Steps data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        xaxis_type (str): Type of x-axis ('N', 'T', or 't').
+        scasize (float): Size of scatter points.
+        y_lim (list): Y-axis limits.
+
+    Returns:
+        None
+    """
     
     fig_name=f"traj_tilt_corr_{uniname}.png"
     
@@ -3240,6 +3617,17 @@ def draw_tilt_corr_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 't
 def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
     """ 
     Generate the Glazer plot. 
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        Corr (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        title (str): Title of the plot.
+
+    Returns:
+        list of floats: tilt correlation polarity (TCP) values of each axis.
     """
     
     fig_name=f"traj_tilt_corr_density_{uniname}.png"
@@ -3331,7 +3719,18 @@ def draw_tilt_and_corr_density_shade(T, Corr, uniname, saveFigures, n_bins = 100
 
 def draw_tilt_and_corr_density_shade_non3D(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
     """ 
-    Generate the Glazer plot. 
+    Generate the Glazer plot for non-3D structures.
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        Corr (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        title (str): Title of the plot.
+
+    Returns:
+        list of floats: tilt correlation polarity (TCP) values of each axis.
     """
     
     fig_name=f"traj_tilt_corr_density_{uniname}.png"
@@ -3490,7 +3889,18 @@ def draw_tilt_and_corr_density_shade_non3D(T, Corr, uniname, saveFigures, n_bins
 
 def draw_tilt_and_corr_density_shade_longarray(T, Corr, uniname, saveFigures, n_bins = 100, title = None):
     """ 
-    Generate the Glazer plot. 
+    Generate the Glazer plot for a reshaped array. 
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        Corr (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        title (str): Title of the plot.
+
+    Returns:
+        list of floats: tilt correlation polarity (TCP) values of each axis.
     """
     
     fig_name=f"traj_tilt_corr_density_{uniname}.png"
@@ -3580,7 +3990,17 @@ def draw_tilt_and_corr_density_shade_longarray(T, Corr, uniname, saveFigures, n_
 
 def draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures, n_bins = 100):
     """ 
-    Generate the Glazer plot. 
+    Generate the Glazer plot for a single frame. 
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        Corr (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        list of floats: tilt correlation polarity (TCP) values of each axis.
     """
     
     fig_name=f"frame_tilts_{uniname}.png"
@@ -3667,6 +4087,19 @@ def draw_tilt_and_corr_density_shade_frame(T, Corr, uniname, saveFigures, n_bins
 
 
 def draw_tilt_coaxial(T, uniname, saveFigures, n_bins = 171, title = None):
+    """
+    Draw the coaxial tilting correlation plots.
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        title (str): Title of the plot.
+
+    Returns:
+        None
+    """
     
     fig_name1=f"traj_tilt_coaxial_xy_{uniname}.png"
     fig_name2=f"traj_tilt_coaxial_xz_{uniname}.png"
@@ -3713,6 +4146,20 @@ def draw_tilt_coaxial(T, uniname, saveFigures, n_bins = 171, title = None):
 
 
 def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, title = None):
+    """
+    Generate the full 3-by-3 array of Glazer plots including the off-diagonal correlations.
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        Cf (numpy.ndarray): Full correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        title (str): Title of the plot.
+
+    Returns:
+        numpy.ndarray: tilt correlation polarity (TCP) values of each axis and direction.
+    """
     
     fig_name=f"traj_tilt_corr_density_full_{uniname}.png"
     
@@ -3798,6 +4245,21 @@ def draw_tilt_and_corr_density_full(T, Cf, uniname, saveFigures, n_bins = 100, t
 
 
 def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother = 0, n_bins = 50):
+    """
+    Generate the time evolution of correlation density plots for tilting.
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        Corr (numpy.ndarray): Correlation data.
+        steps (numpy.ndarray): Time steps.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): Smoothing window size.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        tuple: Time steps and correlation values for each axis.
+    """
     
     fig_name = f"traj_tilt_corr_time_{uniname}.png"
     
@@ -3850,7 +4312,7 @@ def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother =
     plt.plot(steps[:(len(steps)-aw+1)],Cb,label = r'$\mathit{b}$',linewidth=2.5)
     plt.plot(steps[:(len(steps)-aw+1)],Cc,label = r'$\mathit{c}$',linewidth=2.5)    
 
-    ax.set_ylim([-1,1])
+    ax.set_ylim([-1.05,1.05])
     plt.axhline(y=0,linestyle='dashed',color='k',linewidth=1)
     
     ax.tick_params(axis='both', which='major', labelsize=12)
@@ -3866,6 +4328,18 @@ def draw_tilt_corr_density_time(T, Corr, steps, uniname, saveFigures, smoother =
 
 
 def draw_tilt_spatial_corr(C, uniname, saveFigures, n_bins = 100):
+    """
+    Generate the spatial correlation plots for tilting.
+
+    Args:   
+        C (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        None
+    """
     
     fig_name = f"traj_tilt_spatial_corr_{uniname}.png"
     
@@ -3899,6 +4373,14 @@ def draw_tilt_spatial_corr(C, uniname, saveFigures, n_bins = 100):
 def Tilt_correlation(T,MDTimestep,smoother=0):
     """ 
     Compute time-correlation of tilting.  
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        MDTimestep (float): Time step in picoseconds.
+        smoother (int): Smoothing window size.
+
+    Returns:
+        tuple: delta-t and self-correlation values of tilting.
     """
     
     if T.shape[0] > 1500:
@@ -3957,6 +4439,14 @@ def Tilt_correlation(T,MDTimestep,smoother=0):
 def quantify_tilt_domain(sc,scnorm,plot_label='tilt'):
     """ 
     Compute spatial coorelation of tilting.  
+
+    Args:
+        sc (numpy.ndarray): Spatial correlation data.
+        scnorm (numpy.ndarray): Normalized spatial correlation data.
+        plot_label (str): Label for plotting.
+
+    Returns:
+        numpy.ndarray: Decay lengths for each tilt axis and spatial direction.
     """
     
     if_crosszero = np.sum(np.abs(np.diff(np.sign(sc+0.03),axis=1)),axis=1)>1
@@ -4042,6 +4532,16 @@ def quantify_tilt_domain(sc,scnorm,plot_label='tilt'):
 def quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures, n_bins = 100):
     """ 
     Isolate tilting pattern wrt. the local halide concentration.  
+
+    Args:
+        TCconc (numpy.ndarray): Tilt correlation data.
+        concent (list): List of halide concentrations.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        numpy.ndarray: Correlation lengths (diagonal and off-diagonal) for each concentration
     """
     
     fig_name=f"tilt_domain_halideconc_{uniname}.png"
@@ -4092,6 +4592,16 @@ def quantify_halideconc_tilt_domain(TCconc, concent, uniname, saveFigures, n_bin
 def quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures, n_bins = 100):
     """ 
     Isolate tilting pattern wrt. the local halide configuration.  
+
+    Args:
+        TCtype (numpy.ndarray): Tilt correlation data for each type.
+        config_types (list): List of halide configurations.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        numpy.ndarray: Correlation lengths (diagonal and off-diagonal) for each configuration type.
     """
     
     fig_name=f"tilt_domain_octatype_{uniname}.png"
@@ -4168,7 +4678,16 @@ def quantify_octatype_tilt_domain(TCtype, config_types, uniname, saveFigures, n_
 
 def quantify_hetero_tilt_domain(TCcls, uniname, saveFigures, n_bins = 100):
     """ 
-    Isolate tilting pattern wrt. the local halide configuration.  
+    Isolate tilting pattern wrt. the local halide configuration in hetero-mode.  
+
+    Args:
+        TCcls (numpy.ndarray): Tilt correlation data for each type.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+
+    Returns:
+        numpy.ndarray: Correlation lengths (diagonal and off-diagonal) for each configuration type.
     """
     
     fig_name=f"tilt_domain_hetero_{uniname}.png"
@@ -4241,7 +4760,18 @@ def quantify_hetero_tilt_domain(TCcls, uniname, saveFigures, n_bins = 100):
 
 def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
     """ 
-    Visualise tilting in 3D animation.  
+    Visualise tilting in 3D animation. Better visual effects can be done with professional software.
+
+    Args:
+        cfeat (numpy.ndarray): Color feature data.
+        frs (list): Frame indices.
+        tstep (float): Time step.
+        ss (int): Supercell size of the grid.
+        bin_indices (numpy.ndarray): Binned indices of B-sites.
+        figname (str): Name of the figure file.
+
+    Returns:
+        None
     """
     from matplotlib.animation import FuncAnimation, PillowWriter
     from matplotlib.colors import LightSource
@@ -4285,7 +4815,19 @@ def vis3D_domain_anime(cfeat,frs,tstep,ss,bin_indices,figname):
 
 def vis3D_domain_frame(cfeat,ss,bin_indices,cmap,clbedge,figname,saveFigures):
     """ 
-    Visualise tilting in 3D animation.  
+    Visualise tilting in 3D for a single frame. 
+
+    Args: 
+        cfeat (numpy.ndarray): Color feature data.
+        ss (int): Supercell size of the grid.
+        bin_indices (numpy.ndarray): Binned indices of B-sites.
+        cmap (str): Color map.
+        clbedge (float): Color bar edge.
+        figname (str): Name of the figure file.
+        saveFigures (bool): Whether to save the figure.
+
+    Returns:
+        None
     """
     
     x1, x2, x3 = np.indices((ss+1,ss+1,ss+1))
@@ -4313,7 +4855,18 @@ def vis3D_domain_frame(cfeat,ss,bin_indices,cmap,clbedge,figname,saveFigures):
 
 def properties_to_binned_grid(T,D,tcorr,bc,ss,bin_indices):
     """ 
-    Assign tilting to 3D grids.  
+    Assign tilting and distortion to 3D grids.  
+
+    Args:
+        T (numpy.ndarray): Tilt data.
+        D (numpy.ndarray): Distortion data.
+        tcorr (numpy.ndarray): Time correlation data.
+        bc (numpy.ndarray): B-site displacement data.
+        ss (int): Supercell size of the grid.
+        bin_indices (numpy.ndarray): Binned indices of B-sites.
+
+    Returns:
+        tuple: Gridded tilt, distortion, time correlation, and B-site displacement values.
     """
     
     tgval = np.empty((ss,ss,ss,3))
@@ -4332,6 +4885,18 @@ def properties_to_binned_grid(T,D,tcorr,bc,ss,bin_indices):
 def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, smoother=5):
     """ 
     Compute tilt domain lifetime.  
+
+    Args:
+        Corr (numpy.ndarray): Correlation data.
+        timestep (float): Time step in picoseconds.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for the histogram.
+        tol (float): Tolerance for zero crossing.
+        smoother (int): Smoothing window size.
+
+    Returns:
+        None
     """
     
     fig_name = f"traj_tilt_domain_time_{uniname}.png"
@@ -4477,6 +5042,16 @@ def compute_tilt_domain(Corr, timestep, uniname, saveFigures, n_bins=42, tol=0, 
     
 
 def spherical_coordinates(cn):
+    """
+    Convert Cartesian coordinates to spherical coordinates.
+
+    Args:
+        cn (numpy.ndarray): Cartesian coordinates (x, y, z).
+
+    Returns:
+        tuple: Spherical coordinates (theta, phi).
+    """
+
 #    cn=sorted(abs(cn),reverse=True) #This forces symmetry exploitation. Used for figuring out what [x,y,z] corresponds to which point in the figure
     l=np.linalg.norm(cn)
     x=cn[0]
@@ -4488,9 +5063,19 @@ def spherical_coordinates(cn):
     return (theta,phi)
 
 
-### ANALYSIS code below here; from merged files
-
 def MO_correlation(cnsn,MDTimestep,SaveFigures,uniname):
+    """
+    Calculate the self-correlation of molecular vectors.
+
+    Args:
+        cnsn (numpy.ndarray): Molecular vectors.
+        MDTimestep (float): Molecular dynamics time step.
+        SaveFigures (bool): Whether to save the figure.
+        uniname (str): User-defined name for printing and figure saving.
+
+    Returns:
+        tuple: Time and correlation values.
+    """
 
     if cnsn.shape[0] > 1500:
         T=1000
@@ -4530,6 +5115,19 @@ def MO_correlation(cnsn,MDTimestep,SaveFigures,uniname):
 
 
 def orientation_density_3D_dots(cnsn,moltype,SaveFigures,uniname,title=None):
+    """
+    Visualize the orientation density of molecular vectors in 3D.
+
+    Args:
+        cnsn (numpy.ndarray): Molecular vectors.
+        moltype (str): Molecular type name.
+        SaveFigures (bool): Whether to save the figure.
+        uniname (str): User-defined name for printing and figure saving.
+        title (str): Title for the plot.
+
+    Returns:
+        None
+    """
     
     def fibonacci_sphere(samples):
 
@@ -4603,19 +5201,68 @@ def orientation_density_3D_dots(cnsn,moltype,SaveFigures,uniname,title=None):
         fig.savefig(f"MO_{moltype}_orientation_density_3D_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
 
 
+def sphere_mesh(res = 80):
+    """
+    Create a sphere mesh for visualization.
+    
+    Args:
+        res (int): Resolution of the sphere mesh.
+
+    Returns:
+        tuple: Mesh coordinates (x, y, z) and sampled points.
+    """
+
+    u = np.linspace(0, 2*np.pi, 2*res)
+    v = np.linspace(0, np.pi, res )
+    # create the sphere surface
+    xmesh = np.outer(np.cos(u), np.sin(v))
+    ymesh = np.outer(np.sin(u), np.sin(v))
+    zmesh = np.outer(np.ones(np.size(u)), np.cos(v))
+    points = np.concatenate((xmesh[:,:,np.newaxis],ymesh[:,:,np.newaxis],zmesh[:,:,np.newaxis]),axis=2)
+    return xmesh, ymesh, zmesh, points
+
+
+def sphere_bin_count(cnsn):
+    """
+    Count the number of molecular vectors in spherical bins.
+
+    Args:
+        cnsn (numpy.ndarray): Molecular vectors.
+
+    Returns:
+        tuple: Mesh coordinates (x, y, z), counts array, and variance (spread metric).
+    """
+
+    xmesh, ymesh, zmesh, points = sphere_mesh(80)
+    #points = np.moveaxis(points,[2],[0])
+    s = list(points.shape[:2])
+    counting = np.zeros((s[0],s[1]))
+    cnsn = cnsn.reshape(-1,3)
+    for i in range(cnsn.shape[0]):
+        dots = np.dot(points,cnsn[i,:])
+        maxx = np.where(dots > 0.995)
+        #maxx = np.where(dots==np.amax(dots))
+        counting[list(maxx[0]),list(maxx[1])] += 1
+    return xmesh, ymesh, zmesh, counting, np.var(counting/np.mean(counting))
+
+
 def orientation_density_3D_sphere(cnsn,moltype,SaveFigures,uniname,title=None):
+    """
+    Visualize the orientation density of molecular vectors in 3D using a sphere.
+
+    Args:
+        cnsn (numpy.ndarray): Molecular vectors.
+        moltype (str): Molecular type name.
+        SaveFigures (bool): Whether to save the figure.
+        uniname (str): User-defined name for printing and figure saving.
+        title (str): Title for the plot.
+
+    Returns:
+        float: Variance of the counts (spread metric).
+    """
+
     from matplotlib.animation import FuncAnimation, PillowWriter
     from matplotlib import cm
-    
-    def sphere_mesh(res = 80):
-        u = np.linspace(0, 2*np.pi, 2*res)
-        v = np.linspace(0, np.pi, res )
-        # create the sphere surface
-        xmesh = np.outer(np.cos(u), np.sin(v))
-        ymesh = np.outer(np.sin(u), np.sin(v))
-        zmesh = np.outer(np.ones(np.size(u)), np.cos(v))
-        points = np.concatenate((xmesh[:,:,np.newaxis],ymesh[:,:,np.newaxis],zmesh[:,:,np.newaxis]),axis=2)
-        return xmesh, ymesh, zmesh, points
 
     def init():
         #v = np.array([[1, 1, 1], [1, 1, -1],
@@ -4637,9 +5284,12 @@ def orientation_density_3D_sphere(cnsn,moltype,SaveFigures,uniname,title=None):
     cnsn = cnsn.reshape(-1,3)
     for i in range(cnsn.shape[0]):
         dots = np.dot(points,cnsn[i,:])
-        maxx = np.where(dots > 0.98)
+        maxx = np.where(dots > 0.995)
         counting[list(maxx[0]),list(maxx[1])] += 1
     myheatmap = counting / np.amax(counting)
+    movar = np.var(counting/np.mean(counting))
+    #xmesh, ymesh, zmesh, portion, movar = sphere_bin_count(cnsn)
+    #myheatmap = portion / np.amax(portion)
     
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -4654,25 +5304,53 @@ def orientation_density_3D_sphere(cnsn,moltype,SaveFigures,uniname,title=None):
     anim = FuncAnimation(fig, animate, init_func=init, frames=list(np.linspace(0,360,91)), interval=30, blit=True)
     writer = PillowWriter(fps=25)
     anim.save(f"MO_{moltype}_orientation_density_3D_{uniname}.gif", writer=writer)
-    #anim.save("link-anim.gif", writer=writer)
     plt.show()
     
     # also save a snapshot
+    framecolor = 'grey'
+    framelw = 1
+    framebound = 1
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
     ax.grid(True)
+    ax.set_axis_off()
     ax.plot_surface(xmesh, ymesh, zmesh, alpha=0.8, cstride=1, rstride=1, facecolors=cm.plasma(myheatmap))
+    ax.plot([-framebound,-framebound],[1.04,framebound],[-framebound,framebound],color=framecolor,linewidth=framelw)
+    ax.plot([framebound,framebound],[framebound,framebound],[-framebound,framebound],color=framecolor,linewidth=framelw)
+    ax.plot([framebound,framebound],[-framebound,-framebound],[-framebound,framebound],color=framecolor,linewidth=framelw)
+    ax.plot([framebound,-framebound],[-framebound,-framebound],[-framebound,-framebound],color=framecolor,linewidth=framelw)
+    ax.plot([framebound,-framebound],[framebound,framebound],[-framebound,-framebound],color=framecolor,linewidth=framelw)
+    ax.plot([-framebound,-framebound],[framebound,-framebound],[-framebound,-framebound],color=framecolor,linewidth=framelw)
+    ax.plot([framebound,framebound],[framebound,-framebound],[-framebound,-framebound],color=framecolor,linewidth=framelw)
+    ax.plot([framebound,framebound],[framebound,-framebound],[framebound,framebound],color=framecolor,linewidth=framelw)
+    ax.plot([framebound,-framebound],[framebound,framebound],[framebound,framebound],color=framecolor,linewidth=framelw)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
     ax.set_xlim([-1.05,1.05])
     ax.set_ylim([-1.05,1.05])
     ax.set_zlim([-1.05,1.05])
-    ax.view_init(elev=20, azim=0)
+    ax.view_init(elev=20, azim=225)
     fig.savefig(f"MO_{moltype}_3D_sphere_{uniname}.png",bbox_inches='tight', pad_inches=0,dpi=350)
+    
+    return movar
 
     
 def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=False):
+    """
+    Visualize the orientation density of molecular vectors in 2D polar plot.
+
+    Args:
+        cnsn (numpy.ndarray): Molecular vectors.
+        moltype (str): Molecular type name.
+        SaveFigures (bool): Whether to save the figure.
+        uniname (str): User-defined name for printing and figure saving.
+        title (str): Title for the plot.
+        miller_mask (bool): Whether to apply Miller indices masking.
+
+    Returns:
+        None
+    """
     
     thetas=[] # List to collect data for later histogramming
     phis=[]
@@ -4778,6 +5456,21 @@ def orientation_density(cnsn,moltype,SaveFigures,uniname,title=None,miller_mask=
 
 
 def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,miller_mask=True):
+    """
+    Visualize the orientation density of molecular vectors in 2D with two panels.
+
+    Args:
+        cnsn (numpy.ndarray): First molecular vectors.
+        nnsn (numpy.ndarray): Secondary molecular vectors.
+        moltype (str): Molecular type name.
+        SaveFigures (bool): Whether to save the figure.
+        uniname (str): User-defined name for printing and figure saving.
+        title (str): Title for the plot.
+        miller_mask (bool): Whether to apply Miller indices masking.
+
+    Returns:
+        None
+    """
     
     thetas=[] # List to collect data for later histogramming
     phis=[]
@@ -4916,6 +5609,16 @@ def orientation_density_2pan(cnsn,nnsn,moltype,SaveFigures,uniname,title=None,mi
 
 
 def get_norm_corr(TC,T):
+    """
+    Calculate normalized correlation from tensor components, converting 6 neighbours to three principle directions.
+
+    Args:
+        TC (numpy.ndarray): Tilting correlation components.
+        T (numpy.ndarray): Tilting magnitudes.
+
+    Returns:
+        numpy.ndarray: Normalized correlation values.
+    """
     T = np.abs(T)
     v1 = np.mean(np.divide(TC[:,:,[0,1]],T[:,:,[0]]),axis=2)[:,:,np.newaxis]
     v2 = np.mean(np.divide(TC[:,:,[2,3]],T[:,:,[1]]),axis=2)[:,:,np.newaxis]
@@ -4924,6 +5627,15 @@ def get_norm_corr(TC,T):
 
 
 def get_tcp_from_list(TC):
+    """
+    Calculate TCP from a list of tensor components.
+
+    Args:
+        TC (list of numpy.ndarray): Tilting correlation components.
+
+    Returns:
+        numpy.ndarray: TCP values.
+    """
     corr_power = 2.5
     p = []
     for g in TC:
@@ -4945,6 +5657,18 @@ def get_tcp_from_list(TC):
     
 
 def fit_exp_decay(x,y,allow_redo=True):
+    """
+    Fit an exponential decay to the given data.
+
+    Args:
+        x (numpy.ndarray): Independent variable data.
+        y (numpy.ndarray): Dependent variable data.
+        allow_redo (bool): Whether to allow a second fitting attempt.
+
+    Returns:
+        float: The fitted decay constant.
+    """
+
     from scipy.optimize import curve_fit
     def model_func(x, a, k1, k2):
         return a * np.exp(-k1*x) + (1-a) * np.exp(-k2*x)
@@ -5010,6 +5734,17 @@ def fit_exp_decay(x,y,allow_redo=True):
 
 
 def fit_exp_decay_both(x,y):
+    """
+    Fit a two-component exponential decay to the given data.
+
+    Args:
+        x (numpy.ndarray): Independent variable data.
+        y (numpy.ndarray): Dependent variable data.
+
+    Returns:
+        tuple: The fitted decay constants and coefficients.
+    """
+
     from scipy.optimize import curve_fit
     def model_func(x, a, k1, k2):
         return a * np.exp(-k1*x) + (1-a) * np.exp(-k2*x)
@@ -5042,6 +5777,17 @@ def fit_exp_decay_both(x,y):
 
 
 def fit_exp_decay_both_correct(x,y):
+    """
+    Fit a two-component exponential decay to the given data with correction term.
+
+    Args:
+        x (numpy.ndarray): Independent variable data.
+        y (numpy.ndarray): Dependent variable data.
+
+    Returns:
+        tuple: The fitted decay constants, coefficients, and correction term.
+    """
+
     from scipy.optimize import curve_fit
     def model_func(x, a, k1, k2, c):
         return a * np.exp(-k1*x) + (1-a) * np.exp(-k2*x) + c
@@ -5077,6 +5823,18 @@ def fit_exp_decay_both_correct(x,y):
 
 
 def fit_exp_decay_fixed(x,y,aconst = 0.9):
+    """
+    Fit a two-component exponential decay with a fixed coefficient to the given data.
+
+    Args:
+        x (numpy.ndarray): Independent variable data.
+        y (numpy.ndarray): Dependent variable data.
+        aconst (float): Fixed coefficient for the first exponential term.
+
+    Returns:
+        float: The fitted decay constant.
+    """
+
     from scipy.optimize import curve_fit
     def model_func(x, k1, k2):
         return aconst * np.exp(-k1*x) + (1-aconst) * np.exp(-k2*x)
@@ -5113,6 +5871,17 @@ def fit_exp_decay_fixed(x,y,aconst = 0.9):
 
 
 def fit_exp_decay_single(x,y):
+    """
+    Fit a single exponential decay to the given data.
+
+    Args:
+        x (numpy.ndarray): Independent variable data.
+        y (numpy.ndarray): Dependent variable data.
+
+    Returns:
+        float: The fitted decay constant.
+    """
+
     from scipy.optimize import curve_fit
     def model_func1(x, a, k1):
         return a * np.exp(-k1*x)
@@ -5145,6 +5914,17 @@ def fit_exp_decay_single(x,y):
 
 
 def fit_damped_oscillator(x,y):
+    """
+    Fit a damped oscillator model to the given data.
+
+    Args:
+        x (numpy.ndarray): Independent variable data.
+        y (numpy.ndarray): Dependent variable data.
+
+    Returns:
+        float: The fitted frequency.
+    """
+
     from scipy.optimize import curve_fit
     #def model_func1(x, omega, gamma):
     #    tau = 2/gamma
@@ -5193,6 +5973,20 @@ def fit_damped_oscillator(x,y):
 
 
 def draw_MO_spatial_corr_time(C, steps, uniname, saveFigures, smoother = 0, n_bins = 50):
+    """
+    Draw the evolution of spatial correlation of molecular orientations over time.
+
+    Args:
+        C (numpy.ndarray): Correlation data.
+        steps (numpy.ndarray): Time steps.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): Smoothing window size.
+        n_bins (int): Number of bins for histogram.
+
+    Returns:
+        tuple: The time axis and the correlation data.
+    """
     
     fig_name = f"traj_MO_time_{uniname}.png"
     
@@ -5294,6 +6088,20 @@ def draw_MO_spatial_corr_time(C, steps, uniname, saveFigures, smoother = 0, n_bi
 
 
 def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = 0, n_bins = 50):
+    """
+    Draw the evolution of molecular order over time.
+
+    Args:
+        C (numpy.ndarray): Correlation data.
+        steps (numpy.ndarray): Time steps.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        smoother (int): Smoothing window size.
+        n_bins (int): Number of bins for histogram.
+
+    Returns:
+        tuple: The time axis and the correlation data.
+    """
     
     fig_name = f"traj_MO_order_time_{uniname}.png"
     
@@ -5394,6 +6202,18 @@ def draw_MO_order_time(C, steps, uniname, saveFigures, smoother = 0, n_bins = 50
 
 
 def draw_MO_spatial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
+    """ 
+    Draw the spatial correlation of molecular orientations for NN1 and NN2.
+
+    Args:
+        C (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for histogram.
+
+    Returns:
+        None
+    """
     
     fig_name = f"traj_MO_spatial_corr_NN12_{uniname}.png"
     
@@ -5440,6 +6260,18 @@ def draw_MO_spatial_corr_NN12(C, uniname, saveFigures, n_bins = 100):
 
 
 def draw_MO_spatial_corr(C, uniname, saveFigures, n_bins = 50):
+    """
+    Draw the spatial correlation of molecular orientations.
+
+    Args:
+        C (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for histogram.
+
+    Returns:
+        None
+    """
     
     fig_name = f"traj_MO_spatial_corr_{uniname}.png"
     
@@ -5481,6 +6313,18 @@ def draw_MO_spatial_corr(C, uniname, saveFigures, n_bins = 50):
 
 
 def draw_MO_spatial_corr_norm_var(C, uniname, saveFigures, n_bins=30):
+    """
+    Draw the normalized spatial correlation of molecular orientations.
+
+    Args:
+        C (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for histogram.
+
+    Returns:
+        numpy.ndarray: The normalized spatial correlation data.
+    """
     
     fig_name = f"traj_MO_spatial_corr_norm_{uniname}.png"
     
@@ -5548,6 +6392,18 @@ def draw_MO_spatial_corr_norm_var(C, uniname, saveFigures, n_bins=30):
 
     
 def draw_MO_spatial_corr_norm(C, uniname, saveFigures, n_bins=30):
+    """
+    Draw the normalized spatial correlation of molecular orientations.
+
+    Args:   
+        C (numpy.ndarray): Correlation data.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for histogram.
+
+    Returns:
+        numpy.ndarray: The normalized spatial correlation data.
+    """
     
     fig_name = f"traj_MO_spatial_corr_norm_{uniname}.png"
     
@@ -5615,6 +6471,19 @@ def draw_MO_spatial_corr_norm(C, uniname, saveFigures, n_bins=30):
 
 
 def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
+    """
+    Draw the radial distribution function (RDF) histogram.
+
+    Args:
+        da (numpy.ndarray): Data for RDF.
+        rdftype (str): Type of RDF ('CN' or 'BX').
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for histogram.
+
+    Returns:
+        None
+    """
     
     if rdftype == "CN":
         fig_name = f"RDF_CN_{uniname}.png"
@@ -5647,7 +6516,19 @@ def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
 
 def fit_3D_disp_atomwise(disp,readTimestep,uniname,moltype,saveFigures,n_bins=50,title=None):
     """ 
-    A-site displacement calculation.  
+    A-site displacement calculation to extract vibration of atoms about their average position.  
+
+    Args:
+        disp (numpy.ndarray): Displacement data.
+        readTimestep (float): Time step for reading data.
+        uniname (str): User-defined name for printing and figure saving.
+        moltype (str): Type of molecule.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for histogram.
+        title (str): Title for the plot.
+
+    Returns:
+        numpy.ndarray: The peaks of the displacement data.
     """
     from scipy.fft import fft, fftfreq
     fig_name=f"traj_A_vib_center_{moltype}_{uniname}.png"
@@ -5789,7 +6670,18 @@ def fit_3D_disp_atomwise(disp,readTimestep,uniname,moltype,saveFigures,n_bins=50
 
 def fit_3D_disp_total(dispt,uniname,moltype,saveFigures,n_bins=100,title=None):
     """ 
-    A-site displacement calculation (total displacement).  
+    A-site displacement calculation (total displacement for all given sites). 
+
+    Args:
+        dispt (numpy.ndarray): Total displacement data.
+        uniname (str): User-defined name for printing and figure saving.
+        moltype (str): Type of molecule.
+        saveFigures (bool): Whether to save the figure.
+        n_bins (int): Number of bins for histogram.
+        title (str): Title for the plot.
+
+    Returns:
+        None 
     """
     
     fig_name=f"traj_A_disp_{moltype}_{uniname}.png"
@@ -5834,6 +6726,19 @@ def fit_3D_disp_total(dispt,uniname,moltype,saveFigures,n_bins=100,title=None):
 
 
 def peaks_3D_scatter(peaks, uniname, moltype, saveFigures):
+    """
+    Draw a 3D scatter plot of peaks.
+
+    Args:
+        peaks (numpy.ndarray): Peaks data.
+        uniname (str): User-defined name for printing and figure saving.
+        moltype (str): Type of molecule.
+        saveFigures (bool): Whether to save the figure.
+
+    Returns:
+        None
+    """
+
     from scipy.spatial import distance_matrix as scipydm
     
     fig_name=f"traj_A_vib_center_3D_{moltype}_{uniname}.png"
@@ -5879,6 +6784,19 @@ def peaks_3D_scatter(peaks, uniname, moltype, saveFigures):
 
 
 def defect_3D_scatter(peaks, uniname, deftype, saveFigures):
+    """
+    Draw a 3D scatter plot of defects.
+
+    Args:
+        peaks (numpy.ndarray): Peaks data.
+        uniname (str): User-defined name for printing and figure saving.
+        deftype (str): Type of defect.
+        saveFigures (bool): Whether to save the figure.
+
+    Returns:
+        None
+    """
+
     from scipy.spatial import distance_matrix as scipydm
     
     fig_name=f"traj_defect_3D_{deftype}_{uniname}.png"
@@ -5923,6 +6841,20 @@ def defect_3D_scatter(peaks, uniname, deftype, saveFigures):
 
 
 def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
+    """
+    Draw transient properties of the system.
+
+    Args:
+        Lobj (list): List containing lattice parameters.
+        Tobj (list): List containing tilting properties.
+        Cobj (list): List containing tilting correlation properties.
+        Mobj (list): List containing molecular properties.
+        uniname (str): User-defined name for printing and figure saving.
+        saveFigures (bool): Whether to save the figure.
+
+    Returns:
+        None
+    """
     
     lwid = 2
     colors = ["C0","C1","C2","C3","C4","C5","C6"]
@@ -6002,12 +6934,23 @@ def draw_transient_properties(Lobj,Tobj,Cobj,Mobj,uniname,saveFigures):
 
 
 def get_cube(limits=None):
-    """get the vertices, edges, and faces of a cuboid defined by its limits
-
-    limits = np.array([[x_min, x_max],
-                   [y_min, y_max],
-                   [z_min, z_max]])
     """
+    Get the vertices, edges, and faces of a cuboid defined by its limits.
+
+    Args:
+        limits (numpy.ndarray): A 2D array of shape (3, 2) defining the limits of the cuboid.
+            Example:
+                limits = np.array([[x_min, x_max],
+                                   [y_min, y_max],
+                                   [z_min, z_max]])
+
+    Returns:
+        tuple: A tuple containing:
+            - vertices (numpy.ndarray): An array of the coordinates of the cuboid vertices.
+            - edges (numpy.ndarray): An array of paired indices for connecting vertices that form an edge.
+            - faces (numpy.ndarray): An array of groups of four indices that form a face.
+    """
+
     v = np.array([[0, 0, 0], [0, 0, 1],
                   [0, 1, 0], [0, 1, 1],
                   [1, 0, 0], [1, 0, 1],
@@ -6032,6 +6975,15 @@ def get_cube(limits=None):
 
 
 def set_axes_equal(ax):
+    """
+    Set the aspect ratio of a 3D plot to be equal.
+
+    Args:
+        ax (matplotlib.axes._axes.Axes): The axes object to set the aspect ratio for.
+
+    Returns:
+        None
+    """
 
     x_limits = ax.get_xlim3d()
     y_limits = ax.get_ylim3d()

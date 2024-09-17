@@ -44,6 +44,20 @@ def tqdm_joblib(tqdm_object):
 
 
 def traj_time_average(Allpos,latmat,MDTimestep,twindow):
+    """
+    Compute the time-averaged structure from coordinates.
+    
+    Args:   
+        Allpos (numpy.ndarray): Coordinate array of all atoms.
+        latmat (numpy.ndarray): Lattice matrix of all frames, with a shape of (N, 3, 3).
+        MDTimestep (float): Time step of the MD simulation.
+        twindow (float): Time window for averaging.
+    
+    Returns: 
+        numpy.ndarray: Time-averaged coordinates.
+        numpy.ndarray: Time-averaged lattice matrix.
+        int: Number of atoms in the time-averaged structure.
+    """
     avgfr = round(twindow/MDTimestep)
     fracs = get_frac_from_cart(Allpos,latmat)
     ftavg = np.empty((fracs.shape[0]-avgfr+1,fracs.shape[1],3))
@@ -78,30 +92,33 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,latmat,fpg_
     Compute octahedral tilting and distortion from the trajectory coordinates and octahedral connectivity.
 
     Args:
-        Bpos (Numpy array): coordinate array of B-sites
-        Xpos (Numpy array): coordinate array of X-sites
-        readfr (list): list of frame numbers to be computed 
-        at0 (ASE Atoms): Atoms object of the initial frame
-        enable_refit (bool): enabling of structure refitting during computation if a large distortion is found
-        latmat (Numpy array): lattice matrix of all frames, with a shape of (N,3,3)
-        fpg_val_BX (list): defined B-X bond information at the beginning of the class
-        neigh_list (Numpy array): the B-X connectivity matrix of octahedra with shape (N,6)
-        orthogonal_frame (bool): if the structure is 3D perovskite and are aligned in the orthogonal directions
-        structure_type (int): structure type indicating orientation and connectivity of octahedra
-        complex_pbc (bool): if the cell has strong tilts
-        ref_initial (Numpy array): for non-orthogonal structure, the individual reference for each octahedron
-        rtr (Numpy array): a (3,3) rotation matrix from orthogonal directions if specified
-        
-    Returns:
-        Di (Numpy array): computed array of octahedral distortion with a shape of (N,dist_dim)
-        T (Numpy array): computed array of octahedral tilting with a shape of (N,3)
-        refits (Numpy array): record of structural refitting if parameter enable_refit is True, shape is (N,2), giving a frame number and a bool indicating if refit is performed
+        Bpos (numpy.ndarray): Coordinate array of B-sites.
+        Xpos (numpy.ndarray): Coordinate array of X-sites.
+        readfr (list): List of frame numbers to be computed.
+        at0 (ASE Atoms): Atoms object of the initial frame.
+        enable_refit (bool): Enabling of structure refitting during computation if a large distortion is found.
+        multi_thread (bool): Enable multi-threading for computation.
+        latmat (numpy.ndarray): Lattice matrix of all frames, with a shape of (N, 3, 3).
+        fpg_val_BX (list): Defined B-X bond information at the beginning of the class.
+        neigh_list (numpy.ndarray): The B-X connectivity matrix of octahedra with shape (N, 6).
+        orthogonal_frame (bool): If the structure is 3D perovskite and aligned in the orthogonal directions.
+        structure_type (int): Structure type indicating orientation and connectivity of octahedra.
+        complex_pbc (bool): If the cell has strong tilts.
+        ref_initial (numpy.ndarray, optional): For non-orthogonal structure, the individual reference for each octahedron.
+        rtr (numpy.ndarray, optional): A (3, 3) rotation matrix from orthogonal directions if specified.
 
+    Returns:
+        numpy.ndarray: Computed array of octahedral distortion with a shape of (N, dist_dim).
+        numpy.ndarray: Computed array of octahedral tilting with a shape of (N, 3).
+        numpy.ndarray: Record of structural refitting if parameter enable_refit is True, shape is (N, 2), giving a frame number and a bool indicating if refit is performed.
     """
     from tqdm import tqdm
     from scipy.spatial.transform import Rotation as sstr
     
     def frame_wise(fr):
+        """
+        Compute octahedral tilting and distortion for a single frame, can be parallelized with multi-threading.
+        """
         mymat=latmat[fr,:]
         
         disto = np.empty((0,dist_dim))
@@ -253,6 +270,18 @@ def resolve_octahedra(Bpos,Xpos,readfr,at0,enable_refit,multi_thread,latmat,fpg_
 def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,rotated,rotmat):
     """ 
     Resolve the octahedral connectivity. 
+
+    Args:
+        Bpos_frame (numpy.ndarray): Coordinate array of B-sites.
+        Xpos_frame (numpy.ndarray): Coordinate array of X-sites.
+        r (numpy.ndarray): Distance matrix of B-X sites.
+        mymat (numpy.ndarray): Lattice matrix of the frame.
+        fpg_val_BX (list): Defined B-X bond information at the beginning of the class.
+        rotated (bool): If the structure is rotated.
+        rotmat (numpy.ndarray): Rotation matrix of the structure to align with orthogonal directions.
+
+    Returns:
+        numpy.ndarray: The B-X connectivity matrix of octahedra with shape (N, 6). 
     """
 
     max_BX_distance = find_population_gap(r, fpg_val_BX[0], fpg_val_BX[1])
@@ -282,6 +311,17 @@ def fit_octahedral_network_frame(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,rotate
 def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,structure_type):
     """ 
     Resolve the octahedral connectivity with a defect tolerance. 
+
+    Args:
+        Bpos_frame (numpy.ndarray): Coordinate array of B-sites.
+        Xpos_frame (numpy.ndarray): Coordinate array of X-sites.
+        r (numpy.ndarray): Distance matrix of B-X sites.
+        mymat (numpy.ndarray): Lattice matrix of the frame.
+        fpg_val_BX (list): Defined B-X bond information at the beginning of the class.
+        structure_type (int): Structure type indicating orientation and connectivity of octahedra.
+
+    Returns:    
+        numpy.ndarray: The B-X connectivity matrix of octahedra with shape (N, 6).
     """
     
     try:
@@ -347,7 +387,7 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
                 neigh_list[B_site,:] = np.nan
                 ref_initial[B_site,:] = np.nan
     
-    if np.sum(np.isnan(neigh_list[:,0])) > neigh_list.shape[0]*0.05 and np.sum(np.isnan(neigh_list[:,0]))>1:
+    if np.sum(np.isnan(neigh_list[:,0])) > neigh_list.shape[0]*0.1 and np.sum(np.isnan(neigh_list[:,0]))>1:
         raise ValueError(f"There are {np.sum(np.isnan(neigh_list[:,0]))} out of {neigh_list.shape[0]} octahedra contains unsolvable B-X connections.")
     #elif np.sum(np.isnan(neigh_list[:,0])) != 0:
     #    print(f"!Structural Resolving: There are {np.sum(np.isnan(neigh_list[:,0]))} out of {neigh_list.shape[0]} octahedra contains unsolvable B-X connections.")
@@ -361,6 +401,18 @@ def fit_octahedral_network_defect_tol(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,s
 def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mymat,fpg_val_BX,structure_type,rotmat):
     """ 
     Resolve the octahedral connectivity with a defect tolerance. 
+    
+    Args:
+        Bpos_frame (numpy.ndarray): Coordinate array of B-sites.
+        Xpos_frame (numpy.ndarray): Coordinate array of X-sites.
+        r (numpy.ndarray): Distance matrix of B-X sites.
+        mymat (numpy.ndarray): Lattice matrix of the frame.
+        fpg_val_BX (list): Defined B-X bond information at the beginning of the class.
+        structure_type (int): Structure type indicating orientation and connectivity of octahedra.
+        rotmat (numpy.ndarray): Rotation matrix of the structure to align with orthogonal directions.
+
+    Returns:
+        numpy.ndarray: The B-X connectivity matrix of octahedra with shape (N, 6).
     """
     
     if structure_type != 1:
@@ -411,6 +463,15 @@ def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mym
 
 
 def convert_xb_to_bx(xb):
+    """
+    Convert the X-to-B connectivity matrix to the ordinary B-to-X connectivity matrix.
+
+    Args:
+        xb (numpy.ndarray): The X-to-B connectivity matrix of octahedra.
+        
+    Returns:
+        numpy.ndarray: The B-X connectivity matrix with shape (N, 6).
+    """
     
     bx = [[] for i in range(int(xb.shape[1]/3))]
     for i in range(xb.shape[1]):
@@ -425,12 +486,27 @@ def convert_xb_to_bx(xb):
 def find_polytype_network(Bpos_frame,Xpos_frame,r,mymat,neigh_list):
     """ 
     Resolve the octahedral connectivity and output the polytype information. 
+
+    Args:   
+        Bpos_frame (numpy.ndarray): Coordinate array of B-sites.
+        Xpos_frame (numpy.ndarray): Coordinate array of X-sites.
+        r (numpy.ndarray): Distance matrix of B-X sites.
+        mymat (numpy.ndarray): Lattice matrix of the frame.
+        neigh_list (numpy.ndarray): The B-X connectivity matrix of octahedra with shape (N, 6).
+
+    Returns:
+        list: List of strings indicating the local polytype connecivity of each octahedron.
+        list: List of arrays indicating the shared X-sites with neighbouring B-sites.
+        dict: Dictionary of octahedra categories.
     """
     
     if np.isnan(neigh_list).any():
         raise TypeError("Polytype recognition is not compatible with initial structure with defects at the moment.")
     
     def category_register(cat,typestr,b):
+        """
+        Register the octahedra into categories dict.
+        """
         if not typestr in cat:
             cat[typestr] = []
         cat[typestr].append(b)
@@ -514,13 +590,22 @@ def find_polytype_network(Bpos_frame,Xpos_frame,r,mymat,neigh_list):
         
 
 def pseudocubic_lat(traj,  # the main class instance
-                    allow_equil = 0, #take the first x fraction of the trajectory as equilibration
+                    allow_equil = 0, # take the first x fraction of the trajectory as equilibration
                     zdrc = 2,  # zdrc: the z direction for pseudo-cubic lattice paramter reading. a,b,c = 0,1,2
                     lattice_tilt = None, # if primary B-B bond is not along orthogonal directions, in degrees
                     ): 
     
     """ 
     Compute the pseudo-cubic lattice parameters. 
+
+    Args:
+        traj (Trajectory): The main class instance.
+        allow_equil (float): The fraction of the trajectory to be considered as equilibration.
+        zdrc (int): The z direction for pseudo-cubic lattice paramter reading. a,b,c = 0,1,2.
+        lattice_tilt (numpy.ndarray): If the primary B-B bond is not along orthogonal directions, in degrees.
+
+    Returns:
+        numpy.ndarray: The pseudo-cubic lattice parameters.
     """
                
     from scipy.stats import norm
@@ -764,24 +849,30 @@ def pseudocubic_lat(traj,  # the main class instance
 
 def structure_time_average_ase(traj, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None, force_periodicity = False):
     """ 
-    Compute the time-averaged structure. 
+    Compute the time-averaged structure through the ASE interface. 
+
+    Args:
+        traj (Trajectory): The main class instance.
+        start_ratio (float): The starting ratio of the trajectory to be considered.
+        end_ratio (float): The ending ratio of the trajectory to be considered.
+        cif_save_path (str): The path to save the CIF file.
+        force_periodicity (bool): If the periodic images are considered.
+        
+    Returns:
+        pymatgen.Structure: The time-averaged Pymatgen structure object
     """
     import pymatgen.io.ase
     # current problem: can't average lattice parameters and angles; can't deal with organic A-site
     
     if force_periodicity:
         lat_param = np.mean(traj.latmat[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
-        ap = traj.Allpos
-        for i in range(ap.shape[1]):
-            for j in range(ap.shape[2]):
-                temp = ap[:,i,j]
-                if np.amax(temp)-np.amin(temp) > lat_param[j,j]/2:
-                    temp[temp>lat_param[j,j]/2] = temp[temp>lat_param[j,j]/2]-lat_param[j,j]
-                    ap[:,i,j] = temp    
-                
-        frac = get_frac_from_cart(ap, traj.latmat)
-        CC = np.mean(frac[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
-        carts = np.dot(CC,lat_param)
+        ap = traj.Allpos[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:]
+        
+        dispp = ap-ap[-1,:,:]
+        dispp = apply_pbc_cart_vecs(dispp,traj.latmat[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:])
+        
+        carts = np.mean(dispp,axis=0)+ap[-1,:,:]
+        
     else:
         frac = get_frac_from_cart(traj.Allpos, traj.latmat)
         lat_param = np.mean(traj.latmat[round(traj.nframe*start_ratio):round(traj.nframe*end_ratio),:],axis=0)
@@ -803,6 +894,16 @@ def structure_time_average_ase(traj, start_ratio = 0.5, end_ratio = 0.98, cif_sa
 def structure_time_average_ase_organic(traj, tavgspan, start_ratio = 0.5, end_ratio = 0.98, cif_save_path = None):
     """ 
     Compute the time-averaged structure, with the organic A-site treated differently. 
+
+    Args:
+        traj (Trajectory): The main class instance.
+        tavgspan (int): The time span for averaging.
+        start_ratio (float): The starting ratio of the trajectory to be considered.
+        end_ratio (float): The ending ratio of the trajectory to be considered.
+        cif_save_path (str): The path to save the CIF file.
+
+    Returns:
+        pymatgen.Structure: The time-averaged Pymatgen structure object
     """
     import pymatgen.io.ase
     # current problem: can't average lattice parameters and angles; can't deal with organic A-site
@@ -833,7 +934,14 @@ def structure_time_average_ase_organic(traj, tavgspan, start_ratio = 0.5, end_ra
 
 def simply_calc_distortion(traj):
     """ 
-    Compute the octahedral distortion for a single frame. 
+    Compute the octahedral distortion of the time-averaged structure. 
+
+    Args:
+        traj (Trajectory): The main class instance.
+        
+    Returns:
+        numpy.ndarray: The octahedral distortion.
+        numpy.ndarray: The standard deviations of octahedral distortion.    
     """
     
     struct = traj.tavg_struct
@@ -880,6 +988,13 @@ def simply_calc_distortion(traj):
 def octahedra_coords_into_bond_vectors(raw,mymat):
     """ 
     Convert the coordinates of an octahedron to six B-X bond vectors. 
+
+    Args:
+        raw (numpy.ndarray): The raw coordinates of an octahedron.
+        mymat (numpy.ndarray): The lattice matrix of the structure.
+
+    Returns:
+        numpy.ndarray: The six B-X bond vectors.
     """
     bx1 = apply_pbc_cart_vecs(raw, mymat) 
     bx = bx1/np.mean(np.linalg.norm(bx1,axis=1))
@@ -889,6 +1004,14 @@ def octahedra_coords_into_bond_vectors(raw,mymat):
 def calc_distortions_from_bond_vectors(bx):
     """ 
     Compute the tilting and distortion from the six B-X bond vectors. 
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+
+    Returns:
+        numpy.ndarray: The octahedral distortion.
+        numpy.ndarray: Rotation matrix of the octahedron with respect to the reference.
+        float: The RMSD of the fitting.
     """
     # constants
     ideal_coords = [[-1, 0,  0],
@@ -937,6 +1060,14 @@ def calc_distortions_from_bond_vectors(bx):
 def calc_distortions_from_bond_vectors_full(bx):
     """ 
     Compute the tilting and distortion from the six B-X bond vectors. 
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+
+    Returns:
+        numpy.ndarray: The octahedral distortion.
+        numpy.ndarray: Rotation matrix of the octahedron with respect to the reference.
+        float: The RMSD of the fitting.
     """
     # constants
     ideal_coords = [[-1, 0,  0],
@@ -985,6 +1116,13 @@ def calc_distortions_from_bond_vectors_full(bx):
 def calc_rotation_from_arbitrary_order(bx):
     """ 
     Compute the rotation of six bond vectors with arbitrary order, used in non-ortho structure. 
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+
+    Returns:
+        numpy.ndarray: The rotation angles.
+        numpy.ndarray: The rotation matrix.
     """
     from scipy.spatial.transform import Rotation as sstr
     
@@ -1027,6 +1165,16 @@ def calc_rotation_from_arbitrary_order(bx):
 def calc_distortion_from_order_manual(bx,ideal_coords,dict_basis):
     """ 
     Compute the rotation of six bond vectors with arbitrary order, used in non-ortho structure. 
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+        ideal_coords (numpy.ndarray): The ideal coordinates.
+        dict_basis (dict): The basis dictionary imported.
+
+    Returns:
+        numpy.ndarray: The distortion amplitudes.
+        numpy.ndarray: The rotation matrix.
+        float: The RMSD of the fitting.
     """
     from scipy.spatial.transform import Rotation as sstr
     
@@ -1070,6 +1218,14 @@ def quick_match_octahedron(bx):
     """ 
     Compute the rotation status of an octahedron with a reference. 
     Used in connectivity type 3.
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+
+    Returns:    
+        numpy.ndarray: The rotation matrix.
+        numpy.ndarray: The rotated coordinates.
+        float: The RMSD of the fitting.
     """
     
     def calc_match(bx):
@@ -1126,6 +1282,12 @@ def match_bx_orthogonal(bx):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
     Used in structure_type 1.
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+
+    Returns:    
+        list: The order of atoms matching to the reference.
     """
     fitting_tol = 0.3
     ideal_coords = np.array([[-1, 0,  0],
@@ -1149,6 +1311,13 @@ def match_bx_orthogonal_rotated(bx,rotmat):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
     Used in structure_type 2.
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+        rotmat (numpy.ndarray): The rotation matrix for alignment.
+
+    Returns:
+        list: The order of atoms matching to the reference.
     """
     fitting_tol = 0.3
     ideal_coords = np.array([[-1, 0,  0],
@@ -1173,6 +1342,14 @@ def match_bx_arbitrary(bx):
     """ 
     Find the order of atoms in octahedron through matching with the reference. 
     Used in structure_type 3.
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+
+    Returns:
+        list: The order of atoms matching to the reference.
+        numpy.ndarray: rotation matrices for alignment.
+        float: The RMSD of the fitting.
     """
     fitting_tol = 0.4
     #confidence_bound = [0.8,0.2]
@@ -1193,6 +1370,15 @@ def match_bx_arbitrary(bx):
 def match_molecules_extra(molecule_transform, molecule_reference):
     """ 
     Hungarian matching to output the transformation matrix
+
+    Args:
+        molecule_transform (pymatgen.Molecule): The molecule to be transformed.
+        molecule_reference (pymatgen.Molecule): The reference molecule.
+
+    Returns:    
+        pymatgen.Molecule: The transformed molecule.
+        numpy.ndarray: The rotation matrix.
+        float: The RMSD of the fitting.
     """
     
     # match molecules
@@ -1212,12 +1398,34 @@ def match_molecules_extra(molecule_transform, molecule_reference):
 
 
 def calc_displacement(pymatgen_molecule, pymatgen_molecule_ideal, irrep_distortions):
+    """
+    Compute the displacement of the atoms in the molecule for matching.
+    
+    Args:
+        pymatgen_molecule (pymatgen.Molecule): The molecule to be transformed.
+        pymatgen_molecule_ideal (pymatgen.Molecule): The reference molecule.
+        irrep_distortions (numpy.ndarray): The basis irreps for matching.
+
+    Returns:    
+        numpy.ndarray: The processed displacement of the atoms.
+    """
     
     return np.tensordot(irrep_distortions,
                         (pymatgen_molecule.cart_coords - pymatgen_molecule_ideal.cart_coords).ravel()[3:],
                         axes=1)
 
 def calc_displacement_full(pymatgen_molecule, pymatgen_molecule_ideal, irrep_distortions):
+    """
+    Compute the displacement of the atoms in the molecule for matching.
+
+    Args:
+        pymatgen_molecule (pymatgen.Molecule): The molecule to be transformed.
+        pymatgen_molecule_ideal (pymatgen.Molecule): The reference molecule.
+        irrep_distortions (numpy.ndarray): The basis irreps for matching.
+
+    Returns:
+        numpy.ndarray: The processed displacement of the atoms.
+    """
     
     return np.tensordot(irrep_distortions,
                         (pymatgen_molecule.cart_coords - pymatgen_molecule_ideal.cart_coords).ravel(),
@@ -1227,6 +1435,13 @@ def calc_displacement_full(pymatgen_molecule, pymatgen_molecule_ideal, irrep_dis
 def match_mixed_halide_octa_dot(bx,hals):
     """ 
     Find the configuration class in binary-mixed halide octahedron.
+
+    Args:
+        bx (numpy.ndarray): The six B-X bond vectors.
+        hals (list): The list of symbols of halide species.
+
+    Returns:
+        tuple: The configuration class and the configuration
     """
     
     distinct_thresh = 20
@@ -1305,6 +1520,14 @@ def match_mixed_halide_octa_dot(bx,hals):
 def centmass_organic(st0pos,latmat,env):
     """ 
     Find the center of mass of organic A-site.
+
+    Args:
+        st0pos (numpy.ndarray): The atomic positions.
+        latmat (numpy.ndarray): The lattice matrix.
+        env (list): The environment of the A-site.
+
+    Returns:
+        numpy.ndarray: The center of mass positions.
     """
     
     c = env[0]
@@ -1324,6 +1547,14 @@ def centmass_organic(st0pos,latmat,env):
 def centmass_organic_vec(pos,latmat,env):
     """ 
     Find the center of mass of organic A-site. (vectorised version)
+
+    Args:
+        pos (numpy.ndarray): The atomic positions.
+        latmat (numpy.ndarray): The lattice matrix.
+        env (list): The environment of the A-site.
+
+    Returns:
+        numpy.ndarray: The center of mass positions.
     """
     
     c = env[0]
@@ -1343,6 +1574,15 @@ def centmass_organic_vec(pos,latmat,env):
 def find_B_cage_and_disp(pos,mymat,cent,Bs):
     """ 
     Find the displacement of A-site with respect to the capsulating B-X cage.
+
+    Args:
+        pos (numpy.ndarray): The atomic positions.
+        mymat (numpy.ndarray): The lattice matrix.
+        cent (numpy.ndarray): The center of mass of A-site.
+        Bs (list): The indices of the B-site atoms.
+
+    Returns:
+        numpy.ndarray: The relative displacement of A-site to its surrounding.
     """
     
     B8pos = pos[:,Bs,:]
@@ -1362,6 +1602,13 @@ def find_B_cage_and_disp(pos,mymat,cent,Bs):
 def periodicity_fold(arrin,n_fold=4):
     """ 
     Handle abnormal tilting numbers. 
+
+    Args:
+        arrin (numpy.ndarray): The input array of tilting angles.
+        n_fold (int): nfold of angle range.
+
+    Returns:
+        numpy.ndarray: The folded tilting angles.
     """
     from copy import deepcopy
     arr = deepcopy(arrin)
@@ -1385,6 +1632,13 @@ def periodicity_fold(arrin,n_fold=4):
 def get_cart_from_frac(frac,latmat):
     """ 
     Get cartesian coordinates from fractional coordinates. 
+
+    Args:
+        frac (numpy.ndarray): The fractional coordinates.
+        latmat (numpy.ndarray): The lattice matrix.
+
+    Returns:
+        numpy.ndarray: The corresponding cartesian coordinates.
     """
     if frac.ndim != latmat.ndim:
         raise ValueError("The dimension of the input arrays do not match. ")
@@ -1405,6 +1659,13 @@ def get_cart_from_frac(frac,latmat):
 def get_frac_from_cart(cart,latmat):
     """ 
     Get fractional coordinates from cartesian coordinates. 
+
+    Args:
+        cart (numpy.ndarray): The cartesian coordinates.
+        latmat (numpy.ndarray): The lattice matrix.
+                
+    Returns:
+        numpy.ndarray: The corresponding fractional coordinates.
     """
     if cart.ndim != latmat.ndim:
         raise ValueError("The dimension of the input arrays do not match. ")
@@ -1424,7 +1685,14 @@ def get_frac_from_cart(cart,latmat):
 
 def apply_pbc_cart_vecs(vecs, mymat):
     """ 
-    Apply PBC to a set of vectors wrt. lattice matrix.(vectorised version)
+    Apply PBC to a set of vectors wrt. lattice matrix. (vectorised version)
+
+    Args:
+        vecs (numpy.ndarray): The vectors.
+        mymat (numpy.ndarray): The lattice matrix.
+
+    Returns:
+        numpy.ndarray: The corresponding vectors with PBC applied.
     """
     vecs_frac = get_frac_from_cart(vecs, mymat)
     vecs_pbc = get_cart_from_frac(vecs_frac-np.round(vecs_frac), mymat)
@@ -1433,6 +1701,13 @@ def apply_pbc_cart_vecs(vecs, mymat):
 def apply_pbc_cart_vecs_single_frame(vecs, mymat):
     """ 
     Apply PBC to a set of vectors wrt. lattice matrix.  
+
+    Args:   
+        vecs (numpy.ndarray): The vectors.
+        mymat (numpy.ndarray): The lattice matrix.
+
+    Returns:
+        numpy.ndarray: The corresponding vectors with PBC applied.
     """
     vecs_frac = np.matmul(vecs,np.linalg.inv(mymat))
     vecs_pbc = np.matmul(vecs_frac-np.round(vecs_frac), mymat)
@@ -1442,6 +1717,15 @@ def apply_pbc_cart_vecs_single_frame(vecs, mymat):
 def find_population_gap(r,find_range,init,tol=0):
     """ 
     Find the 1D classifier value to separate two populations. 
+
+    Args:
+        r (numpy.ndarray): The input distance matrix array. 
+        find_range (list): The distance range to find the classifier. 
+        init (numpy.ndarray): The initial guess of the classifier. 
+        tol (float): The tolerance of the classifier. 
+
+    Returns:    
+        float: The classifier value.
     """
     from scipy.cluster.vq import kmeans
     
@@ -1464,6 +1748,17 @@ def find_population_gap(r,find_range,init,tol=0):
 
 
 def get_volume(lattice):
+
+    """ 
+    Calculate the volume of the lattice.
+
+    Args:
+        lattice (numpy.ndarray): The lattice matrix.
+
+    Returns:
+        float: The volume of the lattice.   
+    """
+
     
     if lattice.shape == (6,):
         A,B,C,a,b,c = lattice
@@ -1488,6 +1783,19 @@ def get_volume(lattice):
 
 
 def distance_matrix(v1,v2,latmat,get_vec=False):
+    """
+    Compute the distance matrix between two sets of vectors, using the apparent matrix multiplication method. 
+    Should only be used for the case with alpha, beta, gamma angles all close to 90 degrees.
+
+    Args:
+        v1 (numpy.ndarray): The first set of coordinate vectors.
+        v2 (numpy.ndarray): The second set of coordinate vectors.
+        latmat (numpy.ndarray): The lattice matrix.
+        get_vec (bool): Whether to return the distance vectors.
+
+    Returns:
+        numpy.ndarray: The distance matrix.
+    """
     
     dprec = np.float32
     
@@ -1504,7 +1812,21 @@ def distance_matrix(v1,v2,latmat,get_vec=False):
         return np.linalg.norm(df,axis=2)
   
     
-def distance_matrix_ase(v1,v2,asecell,pbc,get_vec=False):
+def distance_matrix_ase(v1,v2,asecell,pbc,get_vec=False):   
+    """
+    Compute the distance matrix between two sets of vectors, using the algorithm implemented in ASE.
+
+    Args:
+        v1 (numpy.ndarray): The first set of coordinate vectors.
+        v2 (numpy.ndarray): The second set of coordinate vectors.
+        asecell (ase.Atoms): The Atoms object of the system.
+        pbc (list of bool): Periodic boudary condition in three directions as defined in ASE.
+        get_vec (bool): Whether to return the distance vectors.
+
+    Returns:
+        numpy.ndarray: The distance matrix.
+    """
+
     from ase.geometry import get_distances
     
     D, D_len = get_distances(v1,v2,cell=asecell, pbc=pbc)
@@ -1516,6 +1838,22 @@ def distance_matrix_ase(v1,v2,asecell,pbc,get_vec=False):
     
     
 def distance_matrix_ase_replace(v1,v2,asecell,newcell,pbc,get_vec=False):
+    """
+    Compute the distance matrix between two sets of vectors, using the algorithm implemented in ASE, with a new cell.
+    Uses not the cell object in the Atoms object, but a new cell matrix.
+
+    Args:
+        v1 (numpy.ndarray): The first set of coordinate vectors.
+        v2 (numpy.ndarray): The second set of coordinate vectors.
+        asecell (ase.Atoms): The Atoms object of the system.
+        newcell (numpy.ndarray): The new cell matrix.
+        pbc (list of bool): Periodic boudary condition in three directions as defined in ASE.
+        get_vec (bool): Whether to return the distance vectors.
+
+    Returns:
+        numpy.ndarray: The distance matrix.
+    """
+
     from ase.geometry import get_distances
     
     celltemp = asecell.copy()
@@ -1530,6 +1868,23 @@ def distance_matrix_ase_replace(v1,v2,asecell,newcell,pbc,get_vec=False):
     
 
 def distance_matrix_handler(v1,v2,latmat,asecell=None,pbc=None,complex_pbc=False,replace=True,get_vec=False):
+    """
+    Compute the distance matrix between two sets of vectors, with different methods depending on requirement.
+
+    Args:
+        v1 (numpy.ndarray): The first set of coordinate vectors.
+        v2 (numpy.ndarray): The second set of coordinate vectors.
+        latmat (numpy.ndarray): The lattice matrix.
+        asecell (ase.Atoms): The Atoms object of the system.
+        pbc (list of bool): Periodic boudary condition in three directions as defined in ASE.
+        complex_pbc (bool): Whether to use the ASE algorithm.
+        replace (bool): Whether to use a new cell matrix.
+        get_vec (bool): Whether to return the distance vectors.
+
+    Returns:
+        numpy.ndarray: The distance matrix.
+    """
+    
     if v1.shape == (3,):
         v1 = v1[np.newaxis,:]
     if v2.shape == (3,):

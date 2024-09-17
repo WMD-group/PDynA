@@ -10,6 +10,17 @@ from ase.calculators.lammps import convert
 
 
 def read_lammps_dir(fdir,allow_multi=False):
+    """
+    Read the LAMMPS input files in the directory and extract the simulation settings.
+
+    Args:
+        fdir (str): The directory path.
+        allow_multi (bool): Allow multiple LAMMPS input files in the directory.
+
+    Returns:
+        dict or list of dict: The simulation settings.
+    """
+
     from glob import glob
     filelist = glob(fdir+"*.in")
     if len(filelist) == 0:
@@ -24,6 +35,16 @@ def read_lammps_dir(fdir,allow_multi=False):
     
 
 def read_lammps_settings(infile): # internal use 
+    """
+    Read the LAMMPS input file and extract the simulation settings.
+
+    Args:
+        infile (str): The LAMMPS input file.
+
+    Returns:
+        dict: The simulation settings
+    """
+
     with open(infile,"r") as fp:
         lines = fp.readlines()
     tvelo = 0
@@ -49,6 +70,15 @@ def read_lammps_settings(infile): # internal use
 
 
 def read_ase_md_settings(fdir): # internal use 
+    """
+    Read the ASE MD input file and extract the simulation settings.
+
+    Args:
+        fdir (str): The directory path.
+
+    Returns:
+        tuple: The simulation settings
+    """
 
     from glob import glob
 
@@ -85,6 +115,12 @@ def read_ase_md_settings(fdir): # internal use
 def process_lat(m):
     """ 
     Convert lattice matrix to abc and three angles.  
+
+    Args:
+        m (numpy.ndarray): The lattice matrix.
+
+    Returns:
+        numpy.ndarray: The abc lattice vectors and three angles.
     """
     
     abc = np.sqrt(np.sum(m**2, axis=1))
@@ -101,6 +137,12 @@ def process_lat_reverse(cellpar):
     """ 
     Convert abc and three angles to lattice matrix.  
     Modified from ASE functions.
+
+    Args:
+        cellpar (numpy.ndarray): The abc lattice vectors and three angles.  
+
+    Returns:
+        numpy.ndarray: The lattice matrix.
     """
 
     X = np.array([1., 0., 0.])
@@ -160,6 +202,17 @@ def process_lat_reverse(cellpar):
 
 
 def read_xdatcar(filename,natom):
+    """
+    Read the VASP XDATCAR file and extract the atomic symbols, lattices, and atomic positions.
+
+    Args:
+        filename (str): The XDATCAR file.
+        natom (int): The number of atoms.
+
+    Returns:
+        tuple: The atomic symbols, lattices, and atomic positions.
+    """
+
     import warnings
     from monty.io import zopen
     from pymatgen.util.io_utils import clean_lines
@@ -170,6 +223,12 @@ def read_xdatcar(filename,natom):
     def from_string(data):
         """
         Modified from the Pymatgen function Poscar.from_string
+
+        Args:
+            data (str): String representation of VASP structure.
+
+        Returns:
+            tuple: The atomic symbols, lattices, and atomic positions.
         """
         # "^\s*$" doesn't match lines with no whitespace
         chunks = re.split(r"\n\s*\n", data.rstrip(), flags=re.MULTILINE)
@@ -334,7 +393,15 @@ def read_xdatcar(filename,natom):
 
 def read_lammps_dump(filepath,specorder=None): 
     """
-    Modified from ASE lammps reading functions
+    Read the LAMMPS trajectory file and extract the atomic symbols, lattices, and atomic positions.    
+    Modified from ASE LAMMPS reading functions
+
+    Args:
+        filepath (str): The LAMMPS trajectory file.
+        specorder (list): The order of atomic species.
+
+    Returns:
+        tuple: The atomic symbols, lattices, and atomic positions.
     """
     from collections import deque
     from pymatgen.io.ase import AseAtomsAdaptor as aaa
@@ -433,11 +500,28 @@ def read_lammps_dump(filepath,specorder=None):
 
 def read_xyz(filepath): 
     """
+    Read the XYZ format trajectory file and extract the atomic symbols, lattices, and atomic positions.    
     Modified from Pymatgen xyz reading functions
+
+    Args:
+        filepath (str): The XYZ format file.
+
+    Returns:
+        tuple: The atomic symbols, lattices, and atomic positions.
     """
+
     from pymatgen.io.ase import AseAtomsAdaptor as aaa
     
     def read_xyz_block(bloc):
+        """ 
+        Read the XYZ frame block and extract the atomic symbols, lattices, and atomic positions.
+
+        Args:
+            bloc (list): The XYZ frame block.
+            
+        Returns:
+            tuple: The atomic symbols, lattices, and atomic positions.
+        """
 
         num_sites = int(bloc[0])
         if len(bloc) != num_sites+2:
@@ -500,11 +584,27 @@ def read_xyz(filepath):
 
 def read_pdb(filepath): 
     """
+    Read the protein data bank (PDB) trajectory file and extract the atomic symbols, lattices, and atomic positions.    
     Modified from Pymatgen xyz reading functions
+
+    Args:
+        filepath (str): The PDB file.
+
+    Returns:
+        tuple: The atomic symbols, lattices, and atomic positions.
     """
     from pymatgen.io.ase import AseAtomsAdaptor as aaa
     
     def read_pdb_block(bloc):
+        """
+        Read the PDB frame block and extract the atomic symbols, lattices, and atomic positions.
+
+        Args:
+            bloc (list): The PDB frame block.
+
+        Returns:
+            tuple: The atomic symbols, lattices, and atomic positions.
+        """
         
         coords = []
         sp = []
@@ -563,7 +663,14 @@ def read_pdb(filepath):
 
 def read_ase_traj(filepath): 
     """
+    Read the ASE internal trajectory file and extract the atomic symbols, lattices, and atomic positions.    
     Modified from ASE original trajectory reading functions
+
+    Args:
+        filepath (str): The ASE trajectory file.
+
+    Returns:
+        tuple: The atomic symbols, lattices, and atomic positions
     """
     
     from ase.io import Trajectory
@@ -611,6 +718,22 @@ def process_lammps_data(
     order=True,
     specorder=None,
     units="metal",):
+    """
+    Extract positions and other per-atom parameters from block of LAMMPS data.
+    Modified from ASE functions
+
+    Args:
+        data (numpy.ndarray): The LAMMPS data block.
+        colnames (list): The column names.
+        cell (numpy.ndarray): The lattice matrix.
+        celldisp (numpy.ndarray): The lattice displacement.
+        order (bool): Order the atoms.
+        specorder (list): The order of atomic species.
+        units (str): The LAMMPS units.
+
+    Returns:
+        tuple: The atomic symbols, lattices, and atomic positions.
+    """
     
     from pdyna.structural import get_frac_from_cart, get_cart_from_frac
 
@@ -632,6 +755,9 @@ def process_lammps_data(
         raise ValueError("Cannot determine atom types form LAMMPS dump file")
 
     def get_quantity(labels, quantity=None):
+        """ 
+        Extract the quantity from the LAMMPS data block.
+        """
         try:
             cols = [colnames.index(label) for label in labels]
             if quantity:
@@ -691,6 +817,20 @@ def lammps_data_to_ase_atoms( # deprecated
     """
     Extract positions and other per-atom parameters and create Atoms
     Taken directly from ASE
+
+    Args:
+        data (numpy.ndarray): The LAMMPS data block.
+        colnames (list): The column names.
+        cell (numpy.ndarray): The lattice matrix.
+        celldisp (numpy.ndarray): The lattice displacement.
+        pbc (bool): The periodic boundary conditions.
+        atomsobj (class): The atoms object class.
+        order (bool): Order the atoms.
+        specorder (list): The order of atomic species.
+        prismobj (class): The prism object.
+
+    Returns:
+        ase.Atoms: The atomic structure in ASE.Atoms format.
     """
     
     from ase.calculators.singlepoint import SinglePointCalculator
@@ -720,6 +860,9 @@ def lammps_data_to_ase_atoms( # deprecated
         raise ValueError("Cannot determine atom types form LAMMPS dump file")
 
     def get_quantity(labels, quantity=None):
+        """
+        Extract the quantity from the LAMMPS data block.
+        """
         try:
             cols = [colnames.index(label) for label in labels]
             if quantity:
@@ -820,19 +963,22 @@ def lammps_data_to_ase_atoms( # deprecated
     return out_atoms
 
 def get_max_index(index):
+    """Get the maximum index from a slice object or integer."""
     if np.isscalar(index):
         return index
     elif isinstance(index, slice):
         return index.stop if (index.stop is not None) else float("inf")
 
 def construct_cell(diagdisp, offdiag):
-    """Help function to create an ASE-cell with displacement vector from
-    the lammps coordination system parameters.
+    """
+    Help function to create an ASE-cell with displacement vector from the lammps coordination system parameters.
 
-    :param diagdisp: cell dimension convoluted with the displacement vector
-    :param offdiag: off-diagonal cell elements
-    :returns: cell and cell displacement vector
-    :rtype: tuple
+    Args:
+        diagdisp (tuple): The diagonal displacement vector.
+        offdiag (tuple): The off-diagonal displacement vector.
+
+    Returns:
+        tuple: The cell matrix and the displacement vector.
     """
     xlo, xhi, ylo, yhi, zlo, zhi = diagdisp
     xy, xz, yz = offdiag
@@ -849,93 +995,18 @@ def construct_cell(diagdisp, offdiag):
 
     return cell, celldisp
 
-def read_lammps_dump_text(fileobj, index=-1, **kwargs): # deprecated
-    """Process cleartext lammps dumpfiles 
-
-    :param fileobj: filestream providing the trajectory data
-    :param index: integer or slice object (default: get the last timestep)
-    :returns: list of Atoms objects
-    :rtype: list
-    """
-    from collections import deque
-    # Load all dumped timesteps into memory simultaneously
-    lines = deque(fileobj.readlines())
-    index_end = get_max_index(index)
-
-    n_atoms = 0
-    images = []
-
-    # avoid references before assignment in case of incorrect file structure
-    cell, celldisp, pbc = None, None, False
-
-    while len(lines) > n_atoms:
-        line = lines.popleft()
-
-        if "ITEM: TIMESTEP" in line:
-            n_atoms = 0
-            line = lines.popleft()
-            # !TODO: pyflakes complains about this line -> do something
-            # ntimestep = int(line.split()[0])  # NOQA
-
-        if "ITEM: NUMBER OF ATOMS" in line:
-            line = lines.popleft()
-            n_atoms = int(line.split()[0])
-
-        if "ITEM: BOX BOUNDS" in line:
-            # save labels behind "ITEM: BOX BOUNDS" in triclinic case
-            # (>=lammps-7Jul09)
-            tilt_items = line.split()[3:]
-            celldatarows = [lines.popleft() for _ in range(3)]
-            celldata = np.loadtxt(celldatarows)
-            diagdisp = celldata[:, :2].reshape(6, 1).flatten()
-
-            # determine cell tilt (triclinic case!)
-            if len(celldata[0]) > 2:
-                # for >=lammps-7Jul09 use labels behind "ITEM: BOX BOUNDS"
-                # to assign tilt (vector) elements ...
-                offdiag = celldata[:, 2]
-                # ... otherwise assume default order in 3rd column
-                # (if the latter was present)
-                if len(tilt_items) >= 3:
-                    sort_index = [tilt_items.index(i)
-                                  for i in ["xy", "xz", "yz"]]
-                    offdiag = offdiag[sort_index]
-            else:
-                offdiag = (0.0,) * 3
-
-            cell, celldisp = construct_cell(diagdisp, offdiag)
-
-            # Handle pbc conditions
-            if len(tilt_items) == 3:
-                pbc_items = tilt_items
-            elif len(tilt_items) > 3:
-                pbc_items = tilt_items[3:6]
-            else:
-                pbc_items = ["f", "f", "f"]
-            pbc = ["p" in d.lower() for d in pbc_items]
-
-        if "ITEM: ATOMS" in line:
-            colnames = line.split()[2:]
-            datarows = [lines.popleft() for _ in range(n_atoms)]
-            data = np.loadtxt(datarows, dtype=str)
-            out_atoms = lammps_data_to_ase_atoms(
-                data=data,
-                colnames=colnames,
-                cell=cell,
-                celldisp=celldisp,
-                atomsobj=Atoms,
-                pbc=pbc,
-                **kwargs
-            )
-            images.append(out_atoms)
-
-        if len(images) > index_end >= 0:
-            break
-
-    return images
-
 
 def chemical_from_formula(struct):
+    """
+    Get the chemical formula from the structure object.
+    Only recorded a limited range of structures.
+
+    Args:
+        struct (Structure): The structure object.
+
+    Returns:
+        str: The chemical formula.
+    """
     chem_lib = {'CsPbI3': r'CsPbI$_{3}$', 
                 'CsPbBr3': r'CsPbBr$_{3}$',
                 'H5PbCI3N2': r'FAPbI$_{3}$',
@@ -950,8 +1021,12 @@ def chemical_from_formula(struct):
     
 
 def print_time(times):
+    """
+    Print the elapsed time for each step in the calculation.
+    """
     import time
     def time_format(secs):
+        """ Format the time in hours, minutes, and seconds. """
         return time.strftime("%H:%M:%S", time.gmtime(secs))
     
     time_quantities = {'env_resolve':         "Structure Resolving:   {}",
@@ -973,6 +1048,9 @@ def print_time(times):
     
     
 def display_A_sites(A_sites):
+    """
+    Display the A-site occupancy in the structure.
+    """
     prstr = []
     for key in A_sites:
         sites = len(A_sites[key])

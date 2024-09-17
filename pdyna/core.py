@@ -20,24 +20,51 @@ from pdyna.structural import distance_matrix_handler
 
 @dataclass
 class Trajectory:
-    
     """
     Main class representing the MD trajectory to analyze.
     Initialize the class with reading the raw data.
 
-    Parameters
-    ----------
-    data_format : data format based on the MD software
-        Currently compatible formats are 'vasp', 'xyz', 'ase-traj', 'pdb' and 'lammps'.
-    data_path : tuple of input files
-        The input file path.
-        vasp: (poscar_path, xdatcar_path, incar_path)
-        lammps: (dump.out_path, MD setting tuple)
-        xyz: (xyz_path, MD setting tuple)
-        ase-trajectory: (ase_traj_path, MD setting tuple)
-        pdb: (pdb_path, MD setting tuple)
-        
-            format for MD setting tuple: (Ti,Tf,tstep) , this is the same for all formats except VASP which uses INCAR file
+    Args:
+        data_format (str): Data format based on the MD software. Currently compatible formats are 'vasp', 'xyz', 'ase-traj', 'extxyz', 'pdb', and 'lammps'.
+        data_path (tuple): The input file path.
+            - vasp: (poscar_path, xdatcar_path, incar_path)
+            - lammps: (dump.out_path, MD setting tuple)
+            - xyz: (xyz_path, MD setting tuple)
+            - ase-trajectory: (ase_traj_path, MD setting tuple)
+            - pdb: (pdb_path, MD setting tuple)
+            - extxyz: (extxyz_path, init_extxyz_file, MD setting tuple)
+            
+            Format for MD setting tuple: (Ti, Tf, tstep), this is the same for all formats except VASP which uses the INCAR file.
+
+    Attributes: 
+        Allpos (numpy.ndarray): The atomic positions of all frames.
+        latmat (numpy.ndarray): The lattice matrix of all frames.
+        uniname (str): The unique name of the trajectory, given by the user.
+        st0 (Structure): The initial structure in Pymatgen format.
+        at0 (Atoms): The initial structure in ASE format.
+        Xindex (list): The indices of X-site atoms. The same for other site types.
+        natom (int): The number of atoms in the structure.
+        species_set (set): The set of atomic species.
+        formula (str): The chemical formula of the structure.
+        nframe (int): The number of frames in the trajectory.
+        atomic_symbols (list): The list of atomic symbols.
+        MDsetting (dict): The MD settings.
+        MDTimestep (float): The time step between recorded frames.
+        Tgrad (float): The temperature gradient.
+        allow_equil (float): The fraction of the trajectory to be considered as equilibration.
+        read_every (int): The sampling (skipping) of steps to read.
+        timing (dict): The time usgae of each constituent process.
+        octahedra (numpy.ndarray): The octahedral network information.
+        prop_lib (dict): The dictionary of computed properties.
+
+        Lat (numpy.ndarray): The lattice parameters of processed frames.
+        Distortion (numpy.ndarray): The octahedral distortions of processed frames.
+        Tilting (numpy.ndarray): The octahedral tilting angles of processed frames.
+        Tilting_Corr (numpy.ndarray): The tilting correlation of processed frames.
+        MOvec (numpy.ndarray): The molecular orientation vectors of processed frames.
+        spatialCorr (numpy.ndarray): The spatial correlation function of tilting.
+        spatialCorrLength (numpy.ndarray): The fitted spatial correlation length of tilting.
+
     """
     
     data_format: str = field(repr=False)
@@ -414,7 +441,7 @@ class Trajectory:
                  lib_overwrite = False, # whether to overwrite existing lib entry, or just change upon them
                  
                  # function toggles
-                 preset = 0, # 0: no preset, uses the toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
+                 preset = 1, # 0: no preset, uses the toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
                  toggle_lat = False, # switch of lattice parameter calculation
                  toggle_tavg = False, # switch of time averaged structure
                  toggle_tilt_distort = False, # switch of octahedral tilting and distortion calculation
@@ -436,7 +463,7 @@ class Trajectory:
                  Asite_reconstruct = False, # setting a different time-averaging algo for organic A-sites
                  
                  # octahedral tilting and distortion
-                 structure_type = 1, # 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference. Please note that mode 2 and 3 are relatively less tested.   
+                 structure_type = 1, # 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference, 4: 3C structure with defects (experimental). Please note that mode 2, 3, and 4 are relatively less tested.   
                  multi_thread = 1, # if >1, enable multi-threading in this calculation, since not vectorized
                  rotation_from_orthogonal = None, # None: code will detect if the BX6 frame is not orthogonal to the principle directions, only manually input this [x,y,z] rotation angles in degrees if told by the code. 
                  tilt_corr_NN1 = True, # enable first NN correlation of tilting, reflecting the Glazer notation
@@ -461,117 +488,59 @@ class Trajectory:
                  ):
         
         """
-        Core function for analysing perovskite trajectory.
+         Core function for analysing perovskite trajectory.
         The parameters are used to enable various analysis functions and handle their functionality.
 
-        Parameters
-        ----------
+        Args:
+            read_mode (int): Key parameter, define the reading mode. 1: static mode (time-independent), 2: transient mode (time/temperature-dependent). No default.
+            uniname (str): A unique user-defined name for this trajectory, will be used in printing and figure saving. Default is "test".
+            allow_equil (float): Take the first x fraction of the trajectory as equilibration, this part will not be computed. Default is 0.5.
+            read_every (int): Read only every n steps, default is 0 which the code will decide an appropriate value according to the system size. 
+            coords_time_average (float): Time-averaging of coordinates, input t>0 as the average time window with a unit of picosecond. Use with caution. Default is 0.
+            saveFigures (bool): Whether to save produced figures. Default is False.
+            lib_saver (bool): Whether to save computed material properties in lib file. Default is False.
+            lib_overwrite (bool): Whether to overwrite existing lib entry (True), or just change upon them (False). Default is False.
+
+            preset (int): Presets of useful function toggles, if specified as non-0, the individual toggles will be disabled. 0: no preset, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all. Default is 1.
+            toggle_lat (bool): Switch of lattice parameter calculation. Default is False.
+            toggle_tavg (bool): Switch of time averaged structure. Default is False.
+            toggle_tilt_distort (bool): Switch of octahedral tilting and distortion calculation. Default is False.
+            toggle_MO (bool): Switch of molecular orientation (MO) calculation (for organic A-site). Default is False.
+            toggle_RDF (bool): Switch of radial distribution function (RDF) calculation. Default is False.
+            toggle_site_disp (bool): Switch of A-site cation displacement calculation. Default is False.
         
-        -- General Parameters
-        read_mode   -- key parameter, define the reading mode
-            1: static mode, treats all the frame equally and output equilibrated properties, generally used for constant-T MD.
-            2: transient mode, observes transient properties with respect to changing time or temperature.
-        uniname     -- unique user-defined name for this trajectory, will be used in printing and figure saving
-        allow_equil -- take the first x (0 to 1) fraction of the trajectory as equilibration, this part will not be computed, used for read_mode 1.
-            takes value from 0 to 1, e.g. 0.8 means that only the last 20% of the trajectory will be used for property calculation. default: 0.5
-        read_every  -- read only every n steps, default is 0 which the code will decide an appropriate value according to the system size
-        coords_time_average -- time-averaging of coordinates, input t>0 as the average time window with a unit of picosecond. Use with caution.
+            smoother (int): Whether to use S-G smoothing on time-dependent outputs, 0: disabled, >0: average window in picosecond. Default is 0.
         
-        -- Saving the Outputs
-        saveFigures   -- whether to save produced figures
-            True or False
-        lib_saver     -- whether to save computed material properties in lib file, a lib file written in pickle format will be created if the folder does not contain this file
-            True or False
-        lib_overwrite -- whether to overwrite existing lib entry, or just change upon them
-            True: overwrite the existing entry with properties calculated in this run
-            False: properties that are not calculated in this run will be preserved 
+            lat_method (int): Lattice parameter analysis methods, 1: direct lattice cell dimension, 2: pseudo-cubic lattice parameter (only available in 3D connectivity). Default is 1.
+            zdir (int): Specified z-direction in case of lat_method 2. Default is 2 (axis c of sample).
+            leading_crop (float): Remove the first x fraction of the trajectory on plotting. Default is 0.00.
+            vis3D_lat (int): 3D visualization of lattice parameter in time. Default is 0.
         
-        -- Function Toggles
-        preset              -- Presets of useful function toggles. Overwrtie the individual function toggles if != 0.
-            0: no preset, need to manually assign toggles, 
-            1: lat & tilt_distort, 
-            2: lat & tilt_distort & tavg & MO, 
-            3: all functions below
-        toggle_lat          -- switch of lattice parameter calculation
-            True or False
-        toggle_tavg         -- switch of time averaged structure
-            True or False
-        toggle_tilt_distort -- switch of octahedral tilting and distortion calculation
-            True or False
-        toggle_MO           -- switch of molecular orientation (MO) calculation (for organic A-site)
-            True or False
-        toggle_RDF          -- switch of radial distribution function calculation
-            True or False
-        toggle_site_disp       -- switch of A-site cation displacement calculation
-            True or False
-        smoother            -- whether to use S-G smoothing on transient outputs, used with read_mode 2
-            0: disabled, 
-            >0: average time window in ps
+            start_ratio (float): Time-averaging structure ratio, e.g. 0.9 means only averaging the last 10% of trajectory. Default is None.
+            tavg_save_dir (str): Directory for saving the time-averaging structures. Default is ".".
+            Asite_reconstruct (bool): Setting a different time-averaging algo for organic A-sites, needs the time correlation function of MD to work (MOautoCorr = True). Default is False.
         
-        -- Lattice Parameter Calculation
-        lat_method   -- lattice parameter analysis methods.
-            1: direct lattice cell dimension
-            2: pseudo-cubic lattice parameter
-        zdir         -- specify z-direction in case of lat_method 2.
-            0: x, 1: y, 2: z, considering the sample axis, default is 2. 
-        leading_crop -- remove the first x (0 to 1) fraction of the trajectory on plotting lattice parameter
-            takes value from 0 to 1, e.g. 0.05 means that the first 5% of the trajectory will not be shown. default: 0.01
-        vis3D_lat    -- 3D visualization of lattice parameter.
-            True or False
+            structure_type (int): Define connectivity of the perovskite. 1: 3C polytype, 2: other non-perovskite with orthogonal reference enabled, 3: other non-perovskite with initial config as reference, 4: 3C structure with defects (experimental). Default is 1.
+            multi_thread (int): If >1, enable multi-threading in this calculation. Default is 1.
+            rotation_from_orthogonal (list): None: code will detect if the BX6 frame is not orthogonal to the principle directions, only manually input this [x,y,z] rotation angles in degrees if told by the code. Default is None.
+            tilt_corr_NN1 (bool): Enable first NN correlation of tilting, reflecting the Glazer notation. Default is True.
+            structure_ref_NN1 (dict): List of vectors (numpy.ndarray) of an octahedron to its NN1 neighbours classified into groups and labeled with dict keys. Default is None.
+            full_NN1_corr (bool): Include off-diagonal correlation terms (tilt_corr_NN1 = True only gives the diagonal terms). Default is False.
+            tilt_corr_spatial (bool): Enable computing of spatial correlation beyond NN1. Default is False.
+            tiltautoCorr (bool): Compute Tilting autocorrelation time constant. Default is False.
+            octa_locality (str): Compute differentiated properties within binary mixed-X sample, default species are "I" and "Br", "homo" is homogeneous mixing of X-sites, "hetero" is for segregated grains of X-sites. Default is False.
+            enable_refit (bool): Refit the octahedral network in case of detected change of geometry, enabling this option will turns off the multi-threading. Default is False.
+            symm_n_fold (int): Tilting range, 0: auto, 2: [-90,90], 4: [-45,45], 8: [0,45]. Default is 0.
+            tilt_recenter (bool): Whether to eliminate the shift in tilting values according to the mean value of population. Default is False.
+            tilt_domain (bool): Compute the time constant of tilt correlation domain formation. Default is False.
+            vis3D_domain (int): 3D visualization of tilt domain in time. 0: off, 1: apparent tilting, 2: tilting correlation status. Default is 0.
         
-        -- Time Averaged Structure
-        start_ratio       -- the portion of trajectory that will be used for computing time-averaging structure.
-            takes value from 0 to 1, e.g. 0.8 means that only the last 20% of the trajectory will be used for computing time-averaging structure. default: 0.5
-        tavg_save_dir     -- directory for saving the time-averaging structures, default: current working directory
-        Asite_reconstruct -- setting a different time-averaging algo for organic A-sites, only works with MOautoCorr enabled
-            True or False
+            MOautoCorr (bool): Compute MO reorientation time constant. Default is False.
+            MO_corr_spatial (bool): Enable spatial correlation function of MO. Default is False.
+            draw_MO_anime (bool): Plot the MO in 3D animation and snapshot, can be time-consuming. Default is False.
         
-        -- Octahedral Tilting and Distortion
-        structure_type    -- define connectivity of the perovskite. 
-            1: 3C polytype, or equally conner-sharing, default
-            2: other non-3C perovskite with orthogonal reference enabled
-            3: other non-3C perovskite with initial config as tilting reference     
-        multi_thread      -- Enable multi-threading in tilting/distortion calculation, the scaling is near-linear
-            1: no multi-threading , default
-            >1, enable multi-threading with n threads
-        tilt_corr_NN1     -- enable first NN correlation of tilting, reflecting the Glazer notation (a key functionality)
-            True or False, default is True
-        full_NN1_corr     -- include off-diagonal NN1 correlation terms 
-            True or False
-        tilt_corr_spatial -- enable spatial correlation beyond NN1
-            True or False
-        tiltautoCorr      -- compute time-dependent self-correlation of tilting
-            True or False
-        octa_locality     -- compute differentiated properties within mixed-halide sample
-            "homo": homogeneous mixing of X-sites
-            "hetero": segregated grains of X-sites
-            False: off
-        enable_refit      -- refit the octahedral connectivity in case of change of geometry, use with care
-            True or False
-        symm_n_fold       -- tilting angle symmetry range
-            0: auto,  default
-            2: [-90,90], 
-            4: [-45,45], 
-            8: [0,45]
-        tilt_recenter     -- whether to eliminate the shift in tilting values according to the mean value of population
-            True or False
-        tilt_domain       -- compute the time constant of tilt correlation domain formation
-            True or False
-        vis3D_domain      -- 3D visualization of tilt domain in time. 
-            0: off 
-            1: apparent tilt angles, 
-            2: tilting correlation polarity (TCP)
-            
-        -- Molecular Orientation (MO)
-        MOautoCorr      -- compute MO reorientation time constant
-            True or False
-        MO_corr_spatial -- enable spatial correlation function of MO
-            True or False
-        draw_MO_anime   -- plot the MO in 3D animation, will take a few minutes
-            True or False
-        
-        
-        p.s. The 'True or False' options all have False as the default unless specified otherwise. 
+            system_overwrite (dict): Contains X-site and B-site info, and the default bond lengths. Default is None.
+
         """
         
         # pre-definitions
@@ -703,7 +672,7 @@ class Trajectory:
             tilt_corr_spatial = False
             MO_corr_spatial = False
         
-        if structure_type in (1,2):
+        if structure_type in (1,2,4):
             orthogonal_frame = True
         elif structure_type == 3:
             orthogonal_frame = False
@@ -838,7 +807,7 @@ class Trajectory:
             #ax.set_xlim([5,10])
         
         self._Benv = Benv
-        if structure_type != 1:
+        if not structure_type in (1,4):
             self._non_orthogonal = False
             angles = self.st0.lattice.angles
             sides = self.st0.lattice.abc
@@ -894,7 +863,7 @@ class Trajectory:
                 if_orth = np.amax(np.amin(np.concatenate((np.abs(orth-1)[:,:,np.newaxis],orth[:,:,np.newaxis]),axis=2),axis=2))
                 
                 self._non_orthogonal = False
-                if if_orth > 0.15 and structure_type == 1: # key modification
+                if if_orth > 0.15 and structure_type in (1,4): # key modification
                     self._non_orthogonal = True
                     
                 if self._non_orthogonal:
@@ -1071,7 +1040,7 @@ class Trajectory:
             if read_mode == 1:
                 print("dynamic X-site distortion:",np.round(self.prop_lib["distortion"][0],4))
                 #print("dynamic B-site distortion:",np.round(self.prop_lib["distortion_B"][0],4))
-            if structure_type in (1,3) and read_mode == 1:
+            if structure_type in (1,3,4) and read_mode == 1:
                 print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
             if 'tilt_corr_polarity' in self.prop_lib and read_mode == 1:
                 print("tilting correlation:",np.round(np.array(self.prop_lib['tilt_corr_polarity']).reshape(3,),3))
@@ -1169,16 +1138,6 @@ class Trajectory:
         """
         Lattice parameter analysis methods.
 
-        Parameters
-        ----------
-        lat_method : lattice parameter analysis methods.
-            1: direct lattice parameters from cell dimension
-            2: pseudo-cubic lattice parameters
-        allow_equil: take the first x fraction of the trajectory as equilibration
-        zdir : specified z-direction in case of lat_method 2
-            0 -> a-axis, 1 -> b-axis, 2 -> c-axis
-        smoother: whether to use S-G smoothing on outputs 
-        leading_crop: remove the first x fraction of the trajectory on plotting 
         """
         
         et0 = time.time()
@@ -1224,6 +1183,7 @@ class Trajectory:
                     if self.Tgrad != 0: 
                         Ti = self.MDsetting["Ti"]
                         Tf = self.MDsetting["Tf"]
+                        xlims = sorted([self.MDsetting["Ti"],self.MDsetting["Tf"]])
                         if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
                             print("Lattice: Incomplete run detected! \n")
                             Ti = self.MDsetting["Ti"]
@@ -1240,7 +1200,7 @@ class Trajectory:
                         self.Ltempline = steps1
                         
                         from pdyna.analysis import draw_lattice_evolution
-                        draw_lattice_evolution(sublat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                        draw_lattice_evolution(sublat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, x_lims = xlims,xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
              
                     else: 
                         timeline = np.linspace(1,sublat.shape[0],sublat.shape[0])*self.MDTimestep
@@ -1267,6 +1227,7 @@ class Trajectory:
                 if self.Tgrad != 0: 
                     Ti = self.MDsetting["Ti"]
                     Tf = self.MDsetting["Tf"]
+                    xlims = sorted([self.MDsetting["Ti"],self.MDsetting["Tf"]])
                     if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
                         print("Lattice: Incomplete run detected! \n")
                         Ti = self.MDsetting["Ti"]
@@ -1282,7 +1243,7 @@ class Trajectory:
                         
                     self.Ltempline = steps1
                     from pdyna.analysis import draw_lattice_evolution
-                    draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                    draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, x_lims = xlims, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
          
                 else: 
                     timeline = np.linspace(1,Lat.shape[0],Lat.shape[0])*self.MDTimestep
@@ -1408,16 +1369,6 @@ class Trajectory:
         """
         Octhedral tilting and distribution analysis.
 
-        Parameters
-        ----------
-        multi_thread : number of multi-threading for this calculation, input 1 to disable
-        orthogonal_frame : use True only for 3C polytype with octahedral coordination number of 6
-        tilt_corr_NN1 : enable first NN correlation of tilting, reflecting the Glazer notation
-        tilt_corr_spatial : enable spatial correlation beyond NN1
-        enable_refit : refit octahedral network when abnormal distortion values are detected (indicating change of network)
-            - only turn on when rearrangement is observed
-        symm_n_fold: enable to fold the negative axis of tilting status leaving angle in [0,45] degree
-
         """
         
         from pdyna.structural import resolve_octahedra
@@ -1473,8 +1424,8 @@ class Trajectory:
                 print(f"!Tilting: detected shifted tilting values in axes {recenter}, the population is re-centered.")
         
         hasDefect = False
-        if np.amax(Dx) > 1 and np.amax(np.abs(T)) > 45:
-            print(f"!Tilting and Distortion: detected some distortion values ({round(np.amax(Di),3)}) larger than 1 and some tilting values ({round(np.amax(np.abs(T)),1)}) outside the range -45 to 45 degree, consider defect formation. ")
+        if np.nanmax(Dx) > 1 and np.nanmax(np.abs(T)) > 45:
+            print(f"!Tilting and Distortion: detected some distortion values ({round(np.nanmax(Di),3)}) larger than 1 and some tilting values ({round(np.nanmax(np.abs(T)),1)}) outside the range -45 to 45 degree, consider defect formation. ")
             hasDefect = True
             
         if read_every > 1: # deal with the timeline if skipping some steps
@@ -1511,11 +1462,12 @@ class Trajectory:
                 from pdyna.analysis import draw_dist_evolution, draw_tilt_evolution
                 Ti = self.MDsetting["Ti"]
                 Tf = self.MDsetting["Tf"]
+                xlims = sorted([self.MDsetting["Ti"],self.MDsetting["Tf"]])
                 if self.nframe*self.MDsetting["nblock"] < self.MDsetting["nsw"]*0.99: # with tolerance
                     print("Tilt & Dist: Incomplete MD run detected! \n")
                     Ti = self.MDsetting["Ti"]
                     Tf = self.MDsetting["Ti"]+(self.MDsetting["Tf"]-self.MDsetting["Ti"])*(self.nframe*self.MDsetting["nblock"]/self.MDsetting["nsw"])
-                steps = np.linspace(self.MDsetting["Ti"],self.MDsetting["Tf"],self.nframe)
+                steps = np.linspace(Ti,Tf,self.nframe)
                 
                 if read_every != 0:
                     temp_list = []
@@ -1534,9 +1486,9 @@ class Trajectory:
                 self.TDtempline = steps
                 #draw_distortion_evolution_sca(Dx, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
                 #draw_tilt_evolution_sca(T, steps, uniname, saveFigures, xaxis_type = 'T', scasize = 1)
-                self.Dobj = draw_dist_evolution(Dx, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
-                self.DBobj = draw_dist_evolution(Db, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
-                self.Tobj = draw_tilt_evolution(T, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                self.Dobj = draw_dist_evolution(Dx, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, x_lims = xlims, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                self.DBobj = draw_dist_evolution(Db, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, x_lims = xlims, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                self.Tobj = draw_tilt_evolution(T, steps, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, x_lims = xlims, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
                 
         else: # read_mode 1, constant-T MD (equilibration)
             from pdyna.analysis import draw_dist_density, draw_tilt_density, draw_conntype_tilt_density
@@ -1544,7 +1496,7 @@ class Trajectory:
             DBmu,DBstd = draw_dist_density(Db, uniname, saveFigures, n_bins = 100, title=None)
             
             if not tilt_corr_NN1:
-                if structure_type == 1 or not hasattr(self, 'octahedral_connectivity'):
+                if structure_type in (1,4) or not hasattr(self, 'octahedral_connectivity'):
                     draw_tilt_density(T, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
                 elif structure_type in (2,3):
                     oc = self.octahedral_connectivity
@@ -1583,7 +1535,7 @@ class Trajectory:
             from pdyna.analysis import abs_sqrt, draw_tilt_corr_evolution_sca, draw_tilt_and_corr_density_shade, draw_tilt_and_corr_density_shade_non3D
             Benv = self._Benv
             
-            if structure_type == 1: # 3D perovskite
+            if structure_type in (1,4): # 3D perovskite
                 if Benv.shape[1] == 3: # indicate a 2*2*2 supercell
                     
                     #ref_coords = np.array([[0,0,0],[-6.15,0,0],[0,-6.15,0],[0,0,-6.15]])
@@ -1619,7 +1571,7 @@ class Trajectory:
                     #Corr = Corr/np.amax(Corr)
                 
                 elif Benv.shape[1] in [4,5]:
-                    if structure_type == 1:
+                    if structure_type in (1,4):
                         from pdyna.structural import apply_pbc_cart_vecs_single_frame
                         Benv_orth = np.empty((Benv.shape[0],3)).astype(int)
                         if not self._non_orthogonal:
@@ -1808,8 +1760,8 @@ class Trajectory:
                         
             scm = scm/scm[:,:,[0],:]
             scmnorm = scmnorm/scmnorm[:,:,[0],:]
-            spatialnn = np.mean(scm,axis=0)
-            spatialnorm = np.mean(scmnorm,axis=0)
+            spatialnn = np.nanmean(scm,axis=0)
+            spatialnorm = np.nanmean(scmnorm,axis=0)
             self.spatialCorr = {'raw':scm,'norm':scmnorm}           
             
             scdecay = quantify_tilt_domain(spatialnn,spatialnorm) # spatial decay length in 'unit cell'
@@ -2036,16 +1988,11 @@ class Trajectory:
         """
         A-site molecular orientation (MO) analysis.
 
-        Parameters
-        ----------
-        MOautoCorr : calculate MO decorrelation time constant
-        MO_corr_spatial : compute spatial MO correlation functions
-
         """
         
         et0 = time.time()
         
-        from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay, orientation_density_3D_sphere
+        from pdyna.analysis import MO_correlation, orientation_density, orientation_density_2pan, fit_exp_decay, orientation_density_3D_sphere, sphere_bin_count
         from pdyna.structural import apply_pbc_cart_vecs
         
         Afa = self.A_sites["FA"]
@@ -2066,6 +2013,7 @@ class Trajectory:
 
         MOvecs = {}
         MOcenter = {}
+        MOvars = {}
         
         if len(Ama) > 0:
             Clist = [i[0][0] for i in Ama]
@@ -2078,14 +2026,15 @@ class Trajectory:
             cn = apply_pbc_cart_vecs(cn,latmat)
             CN = np.divide(cn,np.expand_dims(np.linalg.norm(cn,axis=2),axis=2))
             
-            MOvecs["MA"] = cn
-            MA_MOvecnorm = CN
+            MOvecs["MA"] = MA_MOvecnorm = CN
             MA_center = Cpos - 7/13*cn
             MOcenter["MA"] = MA_center
             
             orientation_density(CN,"MA",saveFigures,uniname,title=title)
             if draw_MO_anime and saveFigures:
-                orientation_density_3D_sphere(CN,"MA",saveFigures,uniname)
+                MOvars["MA"] = orientation_density_3D_sphere(CN,"MA",saveFigures,uniname)
+            else:
+                _,_,_,_,MOvars["MA"] = sphere_bin_count(CN)
             
             
         if len(Afa) > 0:
@@ -2112,17 +2061,18 @@ class Trajectory:
             nn = apply_pbc_cart_vecs(nn,latmat)
             NN = np.divide(nn,np.expand_dims(np.linalg.norm(nn,axis=2),axis=2))
             
-            MOvecs["FA1"] = cn
-            MOvecs["FA2"] = nn
-            FA_MOvec1norm = CN
-            FA_MOvec2norm = NN
+            MOvecs["FA1"] = FA_MOvec1norm = CN
+            MOvecs["FA2"] = FA_MOvec2norm = NN
             FA_center = Cpos - 7/10*cn
             MOcenter["FA"] = FA_center
             
             orientation_density_2pan(CN,NN,"FA",saveFigures,uniname,title=title)
             if draw_MO_anime and saveFigures:
-                orientation_density_3D_sphere(CN,"FA1",saveFigures,uniname)
-                orientation_density_3D_sphere(NN,"FA2",saveFigures,uniname)
+                MOvars["FA1"] = orientation_density_3D_sphere(CN,"FA1",saveFigures,uniname)
+                MOvars["FA2"] = orientation_density_3D_sphere(NN,"FA2",saveFigures,uniname)
+            else:
+                _,_,_,_,MOvars["FA1"] = sphere_bin_count(CN)
+                _,_,_,_,MOvars["FA2"] = sphere_bin_count(NN)
         
             
         if len(Aazr) > 0:
@@ -2149,21 +2099,24 @@ class Trajectory:
             nn = apply_pbc_cart_vecs(nn,latmat)
             NN = np.divide(nn,np.expand_dims(np.linalg.norm(nn,axis=2),axis=2))
             
-            MOvecs["Azr1"] = cn
-            MOvecs["Azr2"] = nn
-            Azr_MOvec1norm = CN
-            Azr_MOvec2norm = NN
+            MOvecs["Azr1"] = Azr_MOvec1norm = CN
+            MOvecs["Azr2"] = Azr_MOvec2norm = NN
             Azr_center = Npos + 12/19*cn
             MOcenter["Azr"] = Azr_center
             
             orientation_density_2pan(CN,NN,"Azr",saveFigures,uniname,title=title)
             if draw_MO_anime and saveFigures:
-                orientation_density_3D_sphere(CN,"Azr1",saveFigures,uniname)
-                orientation_density_3D_sphere(NN,"Azr2",saveFigures,uniname)
+                MOvars["Azr1"] = orientation_density_3D_sphere(CN,"Azr1",saveFigures,uniname)
+                MOvars["Azr2"] = orientation_density_3D_sphere(NN,"Azr2",saveFigures,uniname)
+            else:
+                _,_,_,_,MOvars["Azr1"] = sphere_bin_count(CN)
+                _,_,_,_,MOvars["Azr2"] = sphere_bin_count(NN)
         
         # save the MO vectors together
         self.MOvector = MOvecs
         self.MOcenter = MOcenter
+        self.MOspread = MOvars
+        self.prop_lib['MO_spread'] = MOvars
         
         # check molecule integrity
         sampling_ms = 10
@@ -2459,9 +2412,6 @@ class Trajectory:
         """
         Radial distribution function (RDF) analysis.
 
-        Parameters
-        ----------
-
         """
         
         et0 = time.time()
@@ -2533,9 +2483,6 @@ class Trajectory:
         
         """
         A-site cation displacement analysis.
-
-        Parameters
-        ----------
 
         """
 
@@ -3069,12 +3016,6 @@ class Trajectory:
         """
         Post-processing of computed properties.
         
-        Parameters
-        ----------
-
-        octa_locality : compute differentiated properties within mixed-halide sample
-            - configuration of each octahedron, giving 10 types according to halide geometry
-            - quantify Br- and I-rich regions with concentration
         """
         
         et0 = time.time()
@@ -3416,6 +3357,10 @@ class Trajectory:
     
         
     def system_test(self, B_sites=None, X_sites=None):
+        """
+        System test for a single-frame structure, to output the structural information for a full trajectory reading.
+        
+        """
         
         if not B_sites is None:
             self._Bsite_species = B_sites
@@ -3479,14 +3424,11 @@ class Frame:
     Class for analysis of single-frame structure.
     Initialize the class with reading the raw data.
 
-    Parameters
-    ----------
-    data_format : data format based on the software
-        Currently compatible format is 'poscar'.
-    data_path : tuple of input files
-        The input file path.
-        poscar: poscar_path
-
+    Args:
+        data_format (str): Data format based on the software. Currently compatible formats are 'poscar' and 'cif'.
+        data_path (tuple): The input file path.
+            - poscar: poscar_path
+            - cif: cif_path
     """
     
     data_format: str = field(repr=False)
@@ -3594,19 +3536,16 @@ class Frame:
         Core function for analysing perovskite trajectory.
         The parameters are used to enable various analysis functions and handle their functionality.
 
-        Parameters
-        ----------
+        Args:
+            uniname (str): A unique user-defined name for this trajectory, will be used in printing and figure saving. Default is "test".
+            saveFigures (bool): Whether to save produced figures. Default is False.
+            align_rotation (list): Rotation angles about [a, b, c] in degrees to match orthogonal directions. Default is [0, 0, 0].
         
-        -- General Parameters
-        uniname     -- unique user-defined name for this trajectory, will be used in printing and figure saving
+            tilt_corr_spatial (bool): Enable spatial correlation beyond NN1. Default is False.
+            max_tilt_of_plot (float): Maximum tilt angle for plotting. Default is None.
+            min_tilt_of_plot (float): Minimum tilt angle for plotting. Default is None.
         
-        -- Saving the Outputs
-        saveFigures   -- whether to save produced figures
-            True or False
-
-        -- Octahedral Tilting and Distortion
-        align_rotation  -- rotation angles about [a,b,c] in angles 
-        p.s. The 'True or False' options all have False as the default unless specified otherwise. 
+            system_overwrite (dict): Contains X-site and B-site info, and the default bond lengths. Default is None.
         """
         
         # pre-definitions
@@ -4091,13 +4030,9 @@ class Dataset:
     Class representing the local configuration dataset to analyze.
     Initialize the class with reading the dataset.
 
-    Parameters
-    ----------
-    data_format : data format
-        Currently compatible format is 'mlab'.
-    data_path : path of input files
-        mlab: path of the ML_AB file
-        
+    Args:
+        data_format (str): Data format. Currently compatible formats are 'mlab' and 'extxyz'.
+        data_path (str): Path of input files. 
     """
     
     data_format: str = field(repr=False)
@@ -4206,6 +4141,17 @@ class Dataset:
                  # manually define system info that is saved in the class template
                  system_overwrite = None, # dict contains X-site and B-site info, and the default bond lengths
                  ):
+        """
+        Core function for featurizing the perovskite trajectory.
+        The parameters are used to enable various featurization functions and handle their functionality.
+
+        Args:
+            uniname (str): A unique user-defined name for this trajectory, will be used in printing and figure saving. Default is "test".
+            saveFigures (bool): Whether to save produced figures. Default is False.
+            tilt_corr_NN1 (bool): Enable first NN correlation of tilting, reflecting the Glazer notation. Default is True.
+        
+            system_overwrite (dict): Contains X-site and B-site info, and the default bond lengths. Default is None.
+        """
         
         from pdyna.structural import find_population_gap, apply_pbc_cart_vecs_single_frame
         from pdyna.structural import distance_matrix
@@ -4266,7 +4212,7 @@ class Dataset:
             mymat = self.latmat[f]
             
             r0=distance_matrix(Bpos,Bpos,mymat)
-            search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])
+            search_NN1 = find_population_gap(r0, self._fpg_val_BB[0], self._fpg_val_BB[1])-0.3 # empirical correction
             #default_BB_dist = np.mean(r0[np.logical_and(r0>0.1,r0<search_NN1)])
             #self.default_BB_dist = default_BB_dist
             
