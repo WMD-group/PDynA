@@ -4,7 +4,7 @@
 [![Documentation Status](https://readthedocs.org/projects/pdyna/badge/?version=latest&style=flat)](https://pdyna.readthedocs.io/en/latest/)
 [![DOI](https://zenodo.org/badge/568782890.svg)](https://zenodo.org/badge/latestdoi/568782890)
 
-<img src="./docs/logo_v1.svg" width="225">
+<img src="./docs/logo_v1.svg" width="250">
 
 **P**erovskite **Dyn**amics **A**nalysis (**PDynA**) is a Python package for analysis of perovskite structural dynamics. 
 
