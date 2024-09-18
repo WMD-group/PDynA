@@ -16,7 +16,7 @@ All features and functionality are fully-customisable:
 - **Plotting**: Generate plots of computed outputs, providing visual intuition on the key properties, and can also be easily tuned for your needs. 
 - ``Python`` **Interface**: Customisable and modular ``Python`` API. 
 
-.. image:: https://github.com/WMD-group/PDynA/blob/main/graphic.png
+.. image:: ./graphic.png
    :width: 500
    :target: https://github.com/WMD-group/PDynA
 
