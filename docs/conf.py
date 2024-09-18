@@ -76,7 +76,7 @@ html_theme = 'renku' # 'sphinx_book_theme'
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = ""
+html_logo = "./docs/logo.png"
 #html_title = ""
 
 # If true, SmartyPants will be used to convert quotes and dashes to
