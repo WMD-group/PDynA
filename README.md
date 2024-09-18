@@ -8,6 +8,8 @@
 
 **P**erovskite **Dyn**amics **A**nalysis (**PDynA**) is a Python package for analysis of perovskite structural dynamics. 
 
+The Python documentation of **PDynA** can be found at https://pdyna.readthedocs.io/en/latest/. 
+
 Code features
 --------
 - The input to the code is molecular dynamics (MD) trajectories, currently readable formats are VASP-XDATCAR, XYZ, PDB (proteindatabank), ASE-Trajectory and LAMMPS dump files. The core class of PDynA is the `Trajectory` class.
