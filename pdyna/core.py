@@ -1039,7 +1039,7 @@ class Trajectory:
             self.tilting_and_distortion(uniname=uniname,multi_thread=multi_thread,read_mode=read_mode,read_every=read_every,allow_equil=allow_equil,tilt_corr_NN1=tilt_corr_NN1,tilt_corr_spatial=tilt_corr_spatial,enable_refit=enable_refit,symm_n_fold=symm_n_fold,saveFigures=saveFigures,smoother=smoother,title=title,orthogonal_frame=orthogonal_frame,structure_type=structure_type,tilt_domain=tilt_domain,vis3D_domain=vis3D_domain,tilt_recenter=tilt_recenter,full_NN1_corr=full_NN1_corr,tiltautoCorr=tiltautoCorr,structure_ref_NN1=structure_ref_NN1)
             if read_mode == 1:
                 print("dynamic X-site distortion:",np.round(self.prop_lib["distortion"][0],4))
-                #print("dynamic B-site distortion:",np.round(self.prop_lib["distortion_B"][0],4))
+                print("dynamic B-site distortion:",np.round(self.prop_lib["distortion_B"][0],4))
             if structure_type in (1,3,4) and read_mode == 1:
                 print("dynamic tilting:",np.round(self.prop_lib["tilting"].reshape(3,),3))
             if 'tilt_corr_polarity' in self.prop_lib and read_mode == 1:
