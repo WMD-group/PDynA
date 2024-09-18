@@ -38,7 +38,6 @@ setup(
         "matplotlib",
         "pymatgen",
         "ase",
-        "scikit-learn",
     ],
     data_files=["LICENSE"],
 )
