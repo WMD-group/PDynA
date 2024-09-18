@@ -2,7 +2,7 @@
 PDynA
 =======================================
 
-.. image:: https://github.com/WMD-group/PDynA/graphics.png
+.. image:: https://github.com/WMD-group/PDynA/graphic.png
    :target: https://github.com/WMD-group/PDynA
 
 ``PDynA`` is an open-source Python package for computing structural properties of perovskites from molecular dynamics output.
