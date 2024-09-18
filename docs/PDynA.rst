@@ -1,6 +1,13 @@
 PDynA
 =============
 
+Module contents
+---------------
+.. automodule:: PDynA
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Submodules
 -----------
 
@@ -9,6 +16,6 @@ Submodules
 
    pdyna.analysis
    pdyna.core
-   pdyna.analysis
+   pdyna.structural
    pdyna.io
    pdyna.basis
