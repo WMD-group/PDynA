@@ -1,0 +1,16 @@
+sphinx
+sphinx-rtd-theme
+recommonmark
+sphinx_click
+sphinx_design
+renku-sphinx-theme
+myst_nb
+nbsphinx
+
+# required dependencies:
+numpy 
+pymatgen
+ase
+matplotlib 
+scipy  
+
