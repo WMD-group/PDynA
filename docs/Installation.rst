@@ -10,17 +10,17 @@ Download and Install
 
 .. code-block:: bash
 
-   git clone https://github.com/WMD-group/PDynA.git
-   cd pdyna
-   pip install .
+   git clone https://github.com/WMD-group/PDynA.git  # Clone the repository (or download manually)
+   cd pdyna  # cd to PDynA directory with the setup.py file
+   pip install .  # Install the package with pip
 
 Note that if you already have all the dependencies installed in your environment (namely ``numpy``, ``scipy``,
 ``pymatgen``, ``matplotlib``, and ``ASE``), you can also install ``PDynA`` without updating these dependencies
-as it only requires the very basic functionality of them. For example, do:
+as it only requires their fundamental functionality. For example, instead do:
 
 .. code-block:: bash
 
-   pip install --no-deps .
+   pip install --no-deps .  # Install the package with pip, and without changing its dependency packages
 
 Install from PyPI (not yet available)
 -------------
