@@ -14,8 +14,8 @@ Submodules
 .. toctree::
    :maxdepth: 3
 
-   pdyna.analysis
    pdyna.core
    pdyna.structural
+   pdyna.analysis
    pdyna.io
    pdyna.basis
