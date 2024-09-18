@@ -34,6 +34,7 @@ If you use ``PDynA`` in your research, please cite:
    Installation
    Python API <pdyna>
    Tutorials
+   Tips
 
 .. toctree::
    :hidden:
