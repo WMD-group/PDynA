@@ -4,7 +4,7 @@
 [![Documentation Status](https://readthedocs.org/projects/pdyna/badge/?version=latest&style=flat)](https://pdyna.readthedocs.io/en/latest/)
 [![DOI](https://zenodo.org/badge/568782890.svg)](https://zenodo.org/badge/latestdoi/568782890)
 
-<img src="logo.png" width="225">
+<img src="./docs/logo.png" width="225">
 
 **P**erovskite **Dyn**amics **A**nalysis (**PDynA**) is a Python package for analysis of perovskite structural dynamics. 
 
@@ -23,7 +23,7 @@ Code features
 - The octahedral distortion and tilting calculation can be accelerated with parallelization by joblib, this can be tuned with the input parameter `multi_thread`. 
 
 <p align="center">
-<img src="graphic.png" width="550">
+<img src="./docs/graphic.png" width="550">
 </p>
  
 List of modules
@@ -89,7 +89,7 @@ If you are not sure about the relative distances in your system, you can run the
 This will give you two plots as follows:
 
 <p align="center">
-<img src="distance.png" width="550">
+<img src="./docs/distance.png" width="550">
 </p>
 
 An alternative way is to directly define the same quantities at the beginning of the `Trajectory` class if you are working with only one system throughout. 
