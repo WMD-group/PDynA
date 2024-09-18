@@ -441,7 +441,7 @@ class Trajectory:
                  lib_overwrite = False, # whether to overwrite existing lib entry, or just change upon them
                  
                  # function toggles
-                 preset = 1, # 0: no preset, uses the toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
+                 preset = 0, # 0: no preset, uses the toggles, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all
                  toggle_lat = False, # switch of lattice parameter calculation
                  toggle_tavg = False, # switch of time averaged structure
                  toggle_tilt_distort = False, # switch of octahedral tilting and distortion calculation
@@ -501,7 +501,7 @@ class Trajectory:
             lib_saver (bool): Whether to save computed material properties in lib file. Default is False.
             lib_overwrite (bool): Whether to overwrite existing lib entry (True), or just change upon them (False). Default is False.
 
-            preset (int): Presets of useful function toggles, if specified as non-0, the individual toggles will be disabled. 0: no preset, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all. Default is 1.
+            preset (int): Presets of useful function toggles, if specified as non-0, the individual toggles will be disabled. 0: no preset, 1: lat & tilt_distort, 2: lat & tilt_distort & tavg & MO, 3: all. Default is 0.
             toggle_lat (bool): Switch of lattice parameter calculation. Default is False.
             toggle_tavg (bool): Switch of time averaged structure. Default is False.
             toggle_tilt_distort (bool): Switch of octahedral tilting and distortion calculation. Default is False.
