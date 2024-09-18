@@ -32,7 +32,7 @@ If you use ``PDynA`` in your research, please cite:
    :maxdepth: 4
 
    Installation
-   Python API <PDynA>
+   Python API <pdyna>
    Tutorials
 
 .. toctree::
