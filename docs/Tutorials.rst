@@ -1,6 +1,12 @@
+.. _tutorials:
+
 Tutorials
 ===========================================================
-.. toctree::
-   :maxdepth: 1
 
-   tutorial.ipynb
+The generalized workflow using ``PDynA`` is exemplified through these tutorials:
+
+.. toctree::
+   :maxdepth: 2
+
+   minimal_tutorial
+   lammps_tutorial
