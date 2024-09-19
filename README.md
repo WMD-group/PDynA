@@ -48,6 +48,7 @@ The main language is Python 3 and has been tested using Python 3.8+, with the fo
 
 Installation
 ------------
+**1. From GitHub**
 
 **PDynA** can be installed with the following commands:
 
@@ -62,6 +63,12 @@ cd to PDynA directory with the `setup.py` file
 Install the package with pip
 
     pip install .
+
+**2. From PyPI**
+
+Alternatively, **PDynA** can be installed directly from PyPI, with:
+
+    pip install pdyna
 
 Pre-definition of the structure
 ------------
