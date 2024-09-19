@@ -8,5 +8,5 @@ The generalized workflow using ``PDynA`` is exemplified through these tutorials:
 .. toctree::
    :maxdepth: 2
 
-   minimal_tutorial
-   lammps_tutorial
+   minimal_tutorial_link
+   lammps_tutorial_link
