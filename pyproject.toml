@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdyna"
+version = "1.1.0"
+description = "Perovskite dynamics analysis package"
+authors = [{name = "Xia Liang", email = "xia.liang16@imperial.ac.uk"}]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    ]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "pymatgen",
+    "ase",
+    "scipy",
+]
+
+[project.optional-dependencies]
+datasets = ["pymlff"]
+docs = ["sphinx", "sphinx-book-theme", "sphinx_design"]
+pdf = ["pycairo"]
+
+[project.urls]
+Homepage = "https://pdyna.readthedocs.io/en/latest/"
+Documentation = "https://pdyna.readthedocs.io/en/latest/"
+Package = "https://pypi.org/project/pdyna/"
+Repository = "https://github.com/WMD-group/PDynA"

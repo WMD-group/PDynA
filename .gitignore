@@ -1,0 +1,8 @@
+# gitignore comments have to be on their own line
+
+# Distribution/packagaing shit
+*egg-info/
+
+# No PyPi stuff
+dist/
+
