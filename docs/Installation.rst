@@ -22,8 +22,8 @@ as it only requires their fundamental functionality. For example, instead do:
 
    pip install --no-deps .  # Install the package with pip, and without changing its dependency packages
 
-Install from PyPI (not yet available)
--------------
+Install from PyPI
+--------------------
 
 ``PDynA`` can be installed directly from PyPI:
 
