@@ -415,8 +415,8 @@ def fit_octahedral_network_defect_tol_non_orthogonal(Bpos_frame,Xpos_frame,r,mym
         numpy.ndarray: The B-X connectivity matrix of octahedra with shape (N, 6).
     """
     
-    if structure_type != 1:
-        raise TypeError("The non-orthogonal initial structure can only be analysed under the 3C (corner-sharing) connectivity. ")
+    #if structure_type != 1:
+    #    raise TypeError("The non-orthogonal initial structure can only be analysed under the 3C (corner-sharing) connectivity. ")
     #rotmat = np.linalg.inv(rotmat)
         
     try:

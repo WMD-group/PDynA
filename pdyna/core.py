@@ -163,8 +163,11 @@ class Trajectory:
             if len(lammps_setting) == 3:
                 atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path)
             elif len(lammps_setting) == 5:
-                nsw = lammps_setting[3]
                 atomic_symbols, lattice, latmat, Allpos, st0, max_step, stepsize = read_lammps_dump(dump_path,lammps_setting[4])
+                if not nsw is None:
+                    nsw = lammps_setting[3]
+                else:
+                    nsw = max_step
             else:
                 raise ValueError("Incorrect MD setting input. ")
             
@@ -524,7 +527,7 @@ class Trajectory:
             multi_thread (int): If >1, enable multi-threading in this calculation. Default is 1.
             rotation_from_orthogonal (list): None: code will detect if the BX6 frame is not orthogonal to the principle directions, only manually input this [x,y,z] rotation angles in degrees if told by the code. Default is None.
             tilt_corr_NN1 (bool): Enable first NN correlation of tilting, reflecting the Glazer notation. Default is True.
-            structure_ref_NN1 (dict): List of vectors (numpy.ndarray) of an octahedron to its NN1 neighbours classified into groups and labeled with dict keys. Default is None.
+            structure_ref_NN1 (dict): Dict of vectors (numpy.ndarray) of an octahedron to its NN1 neighbours classified into groups and labeled with dict keys. Default is None.
             full_NN1_corr (bool): Include off-diagonal correlation terms (tilt_corr_NN1 = True only gives the diagonal terms). Default is False.
             tilt_corr_spatial (bool): Enable computing of spatial correlation beyond NN1. Default is False.
             tiltautoCorr (bool): Compute Tilting autocorrelation time constant. Default is False.
@@ -807,8 +810,15 @@ class Trajectory:
             #ax.set_xlim([5,10])
         
         self._Benv = Benv
-        if not structure_type in (1,4):
-            self._non_orthogonal = False
+        if structure_type in (2,3):
+            if rotation_from_orthogonal is None:
+                self._non_orthogonal = False
+            else:
+                self._non_orthogonal = True
+                tempvec = np.array(rotation_from_orthogonal)/180*np.pi
+                rtr = sstr.from_rotvec(tempvec).as_matrix().reshape(3,3)
+                self._rotmat_from_orthogonal = rtr
+            
             angles = self.st0.lattice.angles
             sides = self.st0.lattice.abc
             self.complex_pbc = True
@@ -836,7 +846,17 @@ class Trajectory:
                         matches = np.where(norm_diff<norm_tol)[0]
                         
                         benv_type.append(Benv[i,matches])
-                    Benv_type[typekey] = np.array(benv_type)
+                    tempenv = np.array(benv_type)
+                    if tempenv.shape[1] == 0: # the given neighbour is not recorded in Benv
+                        tempenv = []
+                        for b in range(len(self.Bindex)):
+                            tempv = apply_pbc_cart_vecs_single_frame(st0Bpos[b,:]-st0Bpos,mymat)
+                            norm_diff = np.linalg.norm(np.repeat(refarr[np.newaxis,:],tempv.shape[0],axis=0)-np.repeat(tempv[:,np.newaxis,:],refarr.shape[0],axis=1),axis=2)
+                            matches = np.where(norm_diff<norm_tol)[0].tolist()
+                            
+                            tempenv.append(np.arange(len(self.Bindex))[matches])
+                        tempenv = np.array(tempenv)
+                    Benv_type[typekey] = tempenv
                     
                 self._Benv_type = Benv_type # update list again
             
@@ -903,7 +923,7 @@ class Trajectory:
             self._non_orthogonal = False
             self.complex_pbc = False
                    
-        else:
+        else: #
             self._flag_cubic_cell = False
             self._non_orthogonal = False
             self.complex_pbc = True
