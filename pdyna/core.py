@@ -35,7 +35,9 @@ class Trajectory:
             - pdb: (pdb_path, MD setting tuple)
             - extxyz: (extxyz_path, init_extxyz_file, MD setting tuple)
 
-            Format for MD setting tuple: (Ti, Tf, tstep), this is the same for all formats except VASP which uses the INCAR file.
+            Format for MD setting tuple: (Ti, Tf, tstep, tstep_recorded), this is the same for all formats except VASP which uses the INCAR file.
+            - `Ti` and `Tf` are the initial and final temperatures.
+            - `tstep` is the time step while `tstep_recorded` is the number of steps between recorded frames.
 
     Attributes:
         Allpos (numpy.ndarray): The atomic positions of all frames.
