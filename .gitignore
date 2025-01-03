@@ -6,3 +6,4 @@
 # No PyPi stuff
 dist/
 
+pdyna/__pycache__/*
