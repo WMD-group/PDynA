@@ -166,6 +166,14 @@ Used in
 ------------
 ["Phase transitions, dielectric response, and nonlinear optical properties of aziridinium lead halide perovskites" Chemistry of Materials (2023)](https://pubs.acs.org/doi/10.1021/acs.chemmater.3c02200)
 
+["Dynamic local structure in caesium lead iodide: spatial correlation and transient domains" Small (2024)](https://onlinelibrary.wiley.com/doi/full/10.1002/smll.202303565)
+
+["Picosecond Lifetimes of Hydrogen Bonds in the Halide Perovskite CH3NH3PbBr3" Journal of Physical Chemistry C (2024)](https://pubs.acs.org/doi/full/10.1021/acs.jpcc.4c04686)
+
+["Dynamic nanodomains dictate macroscopic properties in lead halide perovskites" Nature Nanotechnology (2025)](https://www.nature.com/articles/s41565-025-01917-0)
+
+["Phase Stability and Transformations in Lead Mixed Halide Perovskites from Machine Learning Force Fields" (2025)](https://arxiv.org/abs/2507.07926)
+
 License and attribution
 -----------------------
 
