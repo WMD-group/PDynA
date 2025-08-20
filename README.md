@@ -162,6 +162,10 @@ Citation
 }
 ```
 
+<p align="left">
+<img src="./docs/cover.jpg" width="300">
+</p>
+
 Used in
 ------------
 ["Phase transitions, dielectric response, and nonlinear optical properties of aziridinium lead halide perovskites" Chemistry of Materials (2023)](https://pubs.acs.org/doi/10.1021/acs.chemmater.3c02200)
