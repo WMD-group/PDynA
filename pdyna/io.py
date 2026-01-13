@@ -189,7 +189,9 @@ def process_lat_reverse(cellpar):
     cx = cos_beta
     cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma
     cz_sqr = 1. - cx * cx - cy * cy
-    assert cz_sqr >= 0
+    if cz_sqr < -1e-10:
+        raise ValueError(f"Invalid lattice parameters: cz_sqr = {cz_sqr}")
+    cz_sqr = max(0, cz_sqr)  # clamp to valid range for floating point tolerance
     cz = np.sqrt(cz_sqr)
     vc = c * np.array([cx, cy, cz])
 
@@ -334,49 +336,49 @@ def read_xdatcar(filename,natom):
     coords_str = []
     preamble_done = False
 
-    f = zopen(filename, "rt")
     fcount = 0
     Allpos = np.empty((0,natom,3))
     lattice = np.empty((0,6))
     latmat = np.empty((0,3,3))
 
-    for l in f:
-        new_frame = False
-        l = l.strip()
-        if preamble is None:
-            preamble = [l]
-            title = l
-        elif title == l:
-            preamble_done = False
-            p = "\n".join(preamble + ["Direct"] + coords_str)
-            new_frame = True #texts.append(p)
-            coords_str = []
-            preamble = [l]
-        elif not preamble_done:
-            if l == "" or "Direct configuration=" in l:
-                preamble_done = True
-                tmp_preamble = [preamble[0]]
-                for i in range(1, len(preamble)):
-                    if preamble[0] != preamble[i]:
-                        tmp_preamble.append(preamble[i])
-                    else:
-                        break
-                preamble = tmp_preamble
+    with zopen(filename, "rt") as f:
+        for l in f:
+            new_frame = False
+            l = l.strip()
+            if preamble is None:
+                preamble = [l]
+                title = l
+            elif title == l:
+                preamble_done = False
+                p = "\n".join(preamble + ["Direct"] + coords_str)
+                new_frame = True #texts.append(p)
+                coords_str = []
+                preamble = [l]
+            elif not preamble_done:
+                if l == "" or "Direct configuration=" in l:
+                    preamble_done = True
+                    tmp_preamble = [preamble[0]]
+                    for i in range(1, len(preamble)):
+                        if preamble[0] != preamble[i]:
+                            tmp_preamble.append(preamble[i])
+                        else:
+                            break
+                    preamble = tmp_preamble
+                else:
+                    preamble.append(l)
+            elif l == "" or "Direct configuration=" in l:
+                p = "\n".join(preamble + ["Direct"] + coords_str)
+                new_frame = True #texts.append(p)
+                coords_str = []
             else:
-                preamble.append(l)
-        elif l == "" or "Direct configuration=" in l:
-            p = "\n".join(preamble + ["Direct"] + coords_str)
-            new_frame = True #texts.append(p)
-            coords_str = []
-        else:
-            coords_str.append(l)
-        if new_frame:
-            fcount += 1
-            atomic_symbols, lat, l6, frac_coords, cart_coords = from_string(p)
-            Allpos = np.concatenate((Allpos,cart_coords[np.newaxis,:]),axis=0)
-            lattice = np.concatenate((lattice,l6),axis=0)
-            latmat = np.concatenate((latmat,lat[np.newaxis,:]),axis=0)
-            
+                coords_str.append(l)
+            if new_frame:
+                fcount += 1
+                atomic_symbols, lat, l6, frac_coords, cart_coords = from_string(p)
+                Allpos = np.concatenate((Allpos,cart_coords[np.newaxis,:]),axis=0)
+                lattice = np.concatenate((lattice,l6),axis=0)
+                latmat = np.concatenate((latmat,lat[np.newaxis,:]),axis=0)
+
     p = "\n".join(preamble + ["Direct"] + coords_str)
     fcount += 1
     atomic_symbols, lat, l6, frac_coords, cart_coords = from_string(p)
@@ -384,10 +386,13 @@ def read_xdatcar(filename,natom):
     lattice = np.concatenate((lattice,l6),axis=0)
     latmat = np.concatenate((latmat,lat[np.newaxis,:]),axis=0)
 
-    assert Allpos.shape[0] == fcount
-    assert lattice.shape[0] == fcount
-    assert latmat.shape[0] == fcount
-    
+    if Allpos.shape[0] != fcount:
+        raise ValueError(f"Shape mismatch: Allpos has {Allpos.shape[0]} frames, expected {fcount}")
+    if lattice.shape[0] != fcount:
+        raise ValueError(f"Shape mismatch: lattice has {lattice.shape[0]} frames, expected {fcount}")
+    if latmat.shape[0] != fcount:
+        raise ValueError(f"Shape mismatch: latmat has {latmat.shape[0]} frames, expected {fcount}")
+
     return atomic_symbols, lattice, latmat, Allpos
 
 
@@ -406,8 +411,8 @@ def read_lammps_dump(filepath,specorder=None):
     from collections import deque
     from pymatgen.io.ase import AseAtomsAdaptor as aaa
     # Load all dumped timesteps into memory simultaneously
-    fp = open(filepath,"r")
-    lines = deque(fp.readlines())
+    with open(filepath, "r") as fp:
+        lines = deque(fp.readlines())
     index_end = -1
 
     n_atoms = 0
@@ -486,15 +491,16 @@ def read_lammps_dump(filepath,specorder=None):
         lattice = lattice[1:,:]
         latmat = latmat[1:,:]
     
-    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
-    
+    if not (Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]):
+        raise ValueError(f"Shape mismatch: Allpos={Allpos.shape[0]}, lattice={lattice.shape[0]}, latmat={latmat.shape[0]}")
+
     out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=celldisp,cell=cell)
     st0 = aaa.get_structure(out_atoms)
-    
+
     maxframe = framenums[-1]
     if framenums[1]-framenums[0] > framenums[-1]-framenums[-2]:
         maxframe -= (framenums[1]-framenums[0])
-    
+
     return asymb, lattice, latmat, Allpos, st0, maxframe, framenums[-1]-framenums[-2]
 
 
@@ -542,12 +548,13 @@ def read_xyz(filepath):
                 xyz = [val.lower().replace("d", "e").replace("*^", "e") for val in m.groups()[1:4]]
                 coords.append([float(val) for val in xyz])
         return sp, np.array(coords), np.array(cell)
-    
-    contents = open(filepath, "rt").read()
+
+    with open(filepath, "rt") as f:
+        contents = f.read()
     lines = re.split("\n", contents)
-    blockheads = [i for i,s in enumerate(lines) if bool(re.match("\s*\d+\s*$", s))]
-    if len(blockheads) < 2: 
-        raise ValueError("The frames can be read correctly, please check the file integrity.")
+    blockheads = [i for i,s in enumerate(lines) if bool(re.match(r"\s*\d+\s*$", s))]
+    if len(blockheads) < 2:
+        raise ValueError("The frames cannot be read correctly, please check the file integrity.")
     frames = []
     cart = []
     celldim = []
@@ -564,21 +571,22 @@ def read_xyz(filepath):
         cart.append(ci)
         celldim.append(celli)
         cellmat.append(process_lat_reverse(celli))
-    
+
     Allpos = np.array(cart)
     lattice = np.array(celldim)
-    latmat = np.array(cellmat)    
-        
-    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
-    
+    latmat = np.array(cellmat)
+
+    if not (Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]):
+        raise ValueError(f"Shape mismatch: Allpos={Allpos.shape[0]}, lattice={lattice.shape[0]}, latmat={latmat.shape[0]}")
+
     # isolate the first frame which is the initial structure as st0
     Allpos = Allpos[1:,:]
     lattice = lattice[1:,:]
     latmat = latmat[1:,:]
-        
+
     out_atoms = Atoms(symbols=np.array(asymb),positions=Allpos[0,:],pbc=[True,True,True],celldisp=np.array([0., 0., 0.]),cell=latmat[0,:])
     st0 = aaa.get_structure(out_atoms)
-    
+
     return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
 
 
@@ -617,8 +625,9 @@ def read_pdb(filepath):
                 sp.append(line[76:78].strip())
         
         return sp, np.array(coords), cell
-    
-    contents = open(filepath, "rt").read()
+
+    with open(filepath, "rt") as f:
+        contents = f.read()
     lines = re.split("\n", contents)
     b0 = []
     b1 = []
@@ -641,23 +650,24 @@ def read_pdb(filepath):
         cart.append(ci)
         celldim.append(celli)
         cellmat.append(process_lat_reverse(celli))
-    
+
     Allpos = np.array(cart)
     lattice = np.array(celldim)
-    latmat = np.array(cellmat)    
-        
-    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
-    
+    latmat = np.array(cellmat)
+
+    if not (Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]):
+        raise ValueError(f"Shape mismatch: Allpos={Allpos.shape[0]}, lattice={lattice.shape[0]}, latmat={latmat.shape[0]}")
+
     # isolate the first frame which is the initial structure as st0
     pos0 = Allpos[0,:]
     lat0 = latmat[0,:]
     Allpos = Allpos[1:,:]
     lattice = lattice[1:,:]
     latmat = latmat[1:,:]
-        
+
     out_atoms = Atoms(symbols=np.array(asymb),positions=pos0,pbc=[True,True,True],celldisp=np.array([0., 0., 0.]),cell=lat0)
     st0 = aaa.get_structure(out_atoms)
-    
+
     return asymb, lattice, latmat, Allpos, st0, latmat.shape[0]
 
 
@@ -688,18 +698,19 @@ def read_ase_traj(filepath):
         cart.append(ci)
         celldim.append(process_lat(cmat)[0,:])
         cellmat.append(cmat)
-    
+
     Allpos = np.array(cart)
     lattice = np.array(celldim)
-    latmat = np.array(cellmat)    
-        
-    assert Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]
-    
+    latmat = np.array(cellmat)
+
+    if not (Allpos.shape[0] == lattice.shape[0] == latmat.shape[0]):
+        raise ValueError(f"Shape mismatch: Allpos={Allpos.shape[0]}, lattice={lattice.shape[0]}, latmat={latmat.shape[0]}")
+
     # isolate the first frame which is the initial structure as st0
     Allpos = Allpos[1:,:]
     lattice = lattice[1:,:]
     latmat = latmat[1:,:]
-        
+
     st0 = aaa.get_structure(contents[0])
     if not np.array_equal(np.array(st0.atomic_numbers),np.array(contents[0].numbers)):
         raise TypeError("Fatal: the converted Pymatgen structure does not match with the ASE Atoms. ")

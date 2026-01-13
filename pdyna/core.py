@@ -9,6 +9,7 @@ It returns the processed data class (with callable attributes) and a series of p
 
 from __future__ import annotations
 
+import os
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -108,7 +109,7 @@ class Trajectory:
                 raise TypeError("The atomic species in the POSCAR does not match with those in the trajectory. ")
             
             # read INCAR to obatin MD settings
-            if type(incar_path) == str:
+            if isinstance(incar_path, str):
                 with open(incar_path,"r") as fp:
                     lines = fp.readlines()
                     nblock = 1
@@ -126,7 +127,7 @@ class Trajectory:
                             tstep = float(line.split()[2])
                         if line.startswith('NSW'):
                             nsw = int(line.split()[2])
-            elif type(incar_path) == tuple:
+            elif isinstance(incar_path, tuple):
                 Ti, Tf, tstep, nsw, nblock = incar_path
                 
             else:
@@ -1076,22 +1077,22 @@ class Trajectory:
             if (not Asite_reconstruct): # or (not 'reorientation' in self.prop_lib):
                 #if Asite_reconstruct and (not 'reorientation' in self.prop_lib):
                 #    print("!Time-averaged structure: please enable MOautoCorr to allow Asite_reconstruct. ")
-                struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif",force_periodicity=True)
+                struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path=os.path.join(tavg_save_dir, f"{uniname}_tavg.cif"),force_periodicity=True)
             else: # Asite_reconstruct is on and reorientation has been calculated
                 if ('reorientation' in self.prop_lib):
                     dec = []
                     for elem in self.prop_lib['reorientation']:
                         dec1 = self.prop_lib['reorientation'][elem]
-                        if type(dec1) == int:
+                        if isinstance(dec1, (int, float)):
                             dec.append(dec1)
-                        elif type(dec1) == list:
+                        elif isinstance(dec1, list):
                             dec.append(sum(dec1)/len(dec1))
                     tavgspan = round(min(dec)/self.MDTimestep/3)
                 else: # MO_autocorr is not calculated
                     tavgspan = round(5/self.MDTimestep/3)
                     if tavgspan < 1: tavgspan = 1
                 
-                struct = structure_time_average_ase_organic(self,tavgspan,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif")
+                struct = structure_time_average_ase_organic(self,tavgspan,start_ratio= start_ratio, cif_save_path=os.path.join(tavg_save_dir, f"{uniname}_tavg.cif"))
 
             self.tavg_struct = struct
             if hasattr(self,"octahedra"):

@@ -278,7 +278,7 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis
         plt.xlabel("Time (ps)")
     elif xaxis_type == 'T':
         plt.xlabel("Temperature (K)")
-    plt.ylabel('Lattice Parameter ($\mathrm{AA}$)')
+    plt.ylabel(r'Lattice Parameter ($\mathrm{\AA}$)')
 
     if not x_lims is None:
         ax.set_xlim(x_lims)
@@ -335,7 +335,7 @@ def draw_lattice_evolution(dm, steps, Tgrad, uniname, saveFigures = False, xaxis
         plt.xlabel("Time (ps)")
     elif xaxis_type == 'T':
         plt.xlabel("Temperature (K)")
-    plt.ylabel('Lattice Parameter ($\mathrm{AA}$)')
+    plt.ylabel(r'Lattice Parameter ($\mathrm{\AA}$)')
 
     if not x_lims is None:
         ax.set_xlim(x_lims)
@@ -399,7 +399,7 @@ def draw_lattice_evolution_time(dm, steps, Ti,uniname, saveFigures, smoother = 0
     ax.set_xlim([0,max(steps)])
     ax.tick_params(axis='both', which='major', labelsize=12)
     plt.xlabel("Time (ps)", fontsize=14)
-    plt.ylabel(r'Lattice Parameter ($\mathrm{AA}$)', fontsize=14)
+    plt.ylabel(r'Lattice Parameter ($\mathrm{\AA}$)', fontsize=14)
     plt.legend(prop={'size': 12})
     
 
@@ -6505,7 +6505,7 @@ def draw_RDF(da, rdftype, uniname, saveFigures, n_bins=200):
         ax.text(0.14, 0.92, title, horizontalalignment='center', fontsize=15, verticalalignment='center', transform=ax.transAxes)
     
     ax.tick_params(axis='both', which='major', labelsize=14)
-    plt.xlabel('Bond Length ($\AA$)', fontsize=15)
+    plt.xlabel(r'Bond Length ($\AA$)', fontsize=15)
     plt.ylabel('counts (a.u.)', fontsize=15)    
     
     if saveFigures:
