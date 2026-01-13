@@ -1120,7 +1120,6 @@ class Trajectory:
             draw_transient_properties(self.Lobj, self.Tobj, self.Cobj, self.Mobj, uniname, saveFigures)
         
         if lib_saver and read_mode == 1:
-            import os
             import pickle
             lib_name = "perovskite_gaussian_data"
             if not os.path.isfile(lib_name): # create the data file if not found in work dir

@@ -11,7 +11,7 @@ Download and Install
 .. code-block:: bash
 
    git clone https://github.com/WMD-group/PDynA.git  # Clone the repository (or download manually)
-   cd pdyna  # cd to PDynA directory with the setup.py file
+   cd PDynA  # cd to PDynA directory with the setup.py file
    pip install .  # Install the package with pip
 
 Note that if you already have all the dependencies installed in your environment (namely ``numpy``, ``scipy``,
@@ -29,4 +29,29 @@ Install from PyPI
 
 .. code-block:: bash
 
-   pip install pdyna  
+   pip install pdyna
+
+Optional Dependencies
+---------------------
+
+``PDynA`` has several optional dependency groups that can be installed as needed:
+
+**For running tests:**
+
+.. code-block:: bash
+
+   pip install pdyna[test]
+   # or for development
+   pip install -e ".[test]"
+
+**For building documentation:**
+
+.. code-block:: bash
+
+   pip install pdyna[docs]
+
+**For PDF export features:**
+
+.. code-block:: bash
+
+   pip install pdyna[pdf]

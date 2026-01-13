@@ -1,6 +1,7 @@
 <!---  [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5553202.svg)](https://doi.org/10.5281/zenodo.5553202) --->
 [![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/WMD-group/PDynA/actions/workflows/test.yml/badge.svg)](https://github.com/WMD-group/PDynA/actions/workflows/test.yml)
 [![Documentation Status](https://readthedocs.org/projects/pdyna/badge/?version=latest&style=flat)](https://pdyna.readthedocs.io/en/latest/)
 [![DOI](https://zenodo.org/badge/568782890.svg)](https://zenodo.org/badge/latestdoi/568782890)
 
@@ -184,11 +185,18 @@ License and attribution
 Python code and original data tables are licensed under the MIT License.
 
 
-Development notes
------------------
+Development
+-----------
+
+### Running tests
+
+To run the test suite, install the package with test dependencies:
+
+    pip install -e ".[test]"
+    pytest tests/ -v
 
 ### Bugs, features and questions
-Please use the [Issue Tracker](https://github.com/WMD-group/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16[at]imperial.ac.uk. 
+Please use the [Issue Tracker](https://github.com/WMD-group/PDynA/issues) to report bugs or request features in the first instance. For other queries about any aspect of the code, please contact Xia Liang by e-mail: xia.liang16[at]imperial.ac.uk.
 
 ### Lead developer
 - Xia Liang (Department of Materials, Imperial College London)
