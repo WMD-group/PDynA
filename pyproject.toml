@@ -30,9 +30,16 @@ dependencies = [
 datasets = ["pymlff"]
 docs = ["sphinx", "sphinx-book-theme", "sphinx_design"]
 pdf = ["pycairo"]
+test = ["pytest>=7.0", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://pdyna.readthedocs.io/en/latest/"
 Documentation = "https://pdyna.readthedocs.io/en/latest/"
 Package = "https://pypi.org/project/pdyna/"
 Repository = "https://github.com/WMD-group/PDynA"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"

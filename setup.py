@@ -24,7 +24,6 @@ setup(
         "Operating System :: OS Independent",
     ],
     keywords="perovskite dynamics analysis",
-    test_suite="nose.collector", 
     packages=find_packages(),
     # Specify any non-python files to be distributed with the package
     package_data={'pdyna': ['basis/*.json']},  # include json files in the basis directory

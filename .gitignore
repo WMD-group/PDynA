@@ -1,8 +1,23 @@
 # gitignore comments have to be on their own line
 
-# Distribution/packagaing shit
-*egg-info/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# No PyPi stuff
+# Distribution/packaging
+*egg-info/
 dist/
+build/
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
 
