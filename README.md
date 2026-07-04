@@ -177,7 +177,7 @@ Used in
 
 ["Dynamic nanodomains dictate macroscopic properties in lead halide perovskites" Nature Nanotechnology (2025)](https://www.nature.com/articles/s41565-025-01917-0)
 
-["Phase Stability and Transformations in Lead Mixed Halide Perovskites from Machine Learning Force Fields" Chemistry of Materials (2025)]([https://arxiv.org/abs/2507.07926](https://pubs.acs.org/doi/full/10.1021/acs.chemmater.5c01730))
+["Phase Stability and Transformations in Lead Mixed Halide Perovskites from Machine Learning Force Fields" Chemistry of Materials (2025)](https://pubs.acs.org/doi/full/10.1021/acs.chemmater.5c01730)
 
 License and attribution
 -----------------------
