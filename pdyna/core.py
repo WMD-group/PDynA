@@ -109,7 +109,7 @@ class Trajectory:
                 raise TypeError("The atomic species in the POSCAR does not match with those in the trajectory. ")
             
             # read INCAR to obatin MD settings
-            if type(incar_path) == str:
+            if isinstance(incar_path, str):
                 with open(incar_path,"r") as fp:
                     lines = fp.readlines()
                     nblock = 1
@@ -127,7 +127,7 @@ class Trajectory:
                             tstep = float(line.split()[2])
                         if line.startswith('NSW'):
                             nsw = int(line.split()[2])
-            elif type(incar_path) == tuple:
+            elif isinstance(incar_path, tuple):
                 Ti, Tf, tstep, nsw, nblock = incar_path
                 
             else:
@@ -1319,9 +1319,9 @@ class Trajectory:
                     dec = []
                     for elem in self.prop_lib['reorientation']:
                         dec1 = self.prop_lib['reorientation'][elem]
-                        if type(dec1) == int:
+                        if isinstance(dec1, (int, float)):
                             dec.append(dec1)
-                        elif type(dec1) == list:
+                        elif isinstance(dec1, list):
                             dec.append(sum(dec1)/len(dec1))
                     tavgspan = round(min(dec)/self.MDTimestep/3)
                 else: # MO_autocorr is not calculated
@@ -1643,6 +1643,17 @@ class Trajectory:
         
         mymat=st0.lattice.matrix
         
+        # NEW: per-pair row indices into the octahedron axis (axis=1 of Distortion/Tilting arrays),
+        # only used when paired_BX was specified, to additionally plot each B-X pair's contribution separately.
+        pair_rows = None
+        if self._paired_BX is not None:
+            Bspecies_row = [self.atomic_symbols[i] for i in Bindex]
+            pair_rows = {}
+            for bsp in self._paired_BX:
+                rows = [i for i,sp in enumerate(Bspecies_row) if sp == bsp]
+                if len(rows) > 0:
+                    pair_rows[bsp] = rows
+        
         # tilting and distortion calculations
         ranger = self.nframe
         timeline = np.linspace(1,ranger,ranger)*self.MDTimestep
@@ -1752,24 +1763,50 @@ class Trajectory:
             Dmu,Dstd = draw_dist_density(Dx, uniname, saveFigures, n_bins = 100, title=None)
             DBmu,DBstd = draw_dist_density(Db, uniname, saveFigures, n_bins = 100, title=None)
             
+            # NEW: separate distortion plots per B-X pair
+            if pair_rows is not None:
+                for bsp, rows in pair_rows.items():
+                    draw_dist_density(Dx[:,rows,:], uniname+f"_{bsp}", saveFigures, n_bins = 100, title=f"{bsp} X-site distortion")
+                    draw_dist_density(Db[:,rows,:], uniname+f"_{bsp}", saveFigures, n_bins = 100, title=f"{bsp} B-site distortion")
+            
+            
             if not tilt_corr_NN1:
                 if structure_type in (1,4) or not hasattr(self, 'octahedral_connectivity'):
                     draw_tilt_density(T, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
+                    # NEW: separate tilting plot per B-X pair
+                    if pair_rows is not None:
+                        for bsp, rows in pair_rows.items():
+                            draw_tilt_density(T[:,rows,:], uniname+f"_{bsp}", saveFigures,symm_n_fold=symm_n_fold,title=f"{bsp} tilting")
                 elif structure_type in (2,3):
                     oc = self.octahedral_connectivity
                     if len(oc) == 1:
                         title = list(oc.keys())[0]+", "+title
                         draw_tilt_density(T, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
+                        # NEW: separate tilting plot per B-X pair
+                        if pair_rows is not None:
+                            for bsp, rows in pair_rows.items():
+                                draw_tilt_density(T[:,rows,:], uniname+f"_{bsp}", saveFigures,symm_n_fold=symm_n_fold,title=f"{bsp}, {title}")
                     else:
                         title = "mixed, "+title
                         draw_conntype_tilt_density(T, oc, uniname, saveFigures,symm_n_fold=symm_n_fold,title=title)
-            
+                        # NEW: separate tilting plot per B-X pair
+                        if pair_rows is not None:
+                            for bsp, rows in pair_rows.items():
+                                oc_rows = {k: sorted(set(v) & set(rows)) for k, v in oc.items()}
+                                oc_rows = {k: v for k, v in oc_rows.items() if len(v) > 0}
+                                if len(oc_rows) == 0:
+                                    continue
+                                elif len(oc_rows) == 1:
+                                    draw_tilt_density(T[:,list(oc_rows.values())[0],:], uniname+f"_{bsp}", saveFigures,symm_n_fold=symm_n_fold,title=f"{bsp}, {list(oc_rows.keys())[0]}")
+                                else:
+                                    draw_conntype_tilt_density(T[:,rows,:], oc_rows, uniname+f"_{bsp}", saveFigures,symm_n_fold=symm_n_fold,title=f"{bsp}, mixed")
+                                    
             self.prop_lib['distortion'] = [Dmu,Dstd]
             self.prop_lib['distortion_B'] = [DBmu,DBstd]
             Tval = np.array(compute_tilt_density(T,plot_fitting=False)).reshape((3,-1))
             self.prop_lib['tilting'] = Tval
             
-            
+
         # autocorr
         if tiltautoCorr:
             from pdyna.analysis import fit_exp_decay_both, fit_exp_decay_both_correct, Tilt_correlation
@@ -1924,6 +1961,11 @@ class Trajectory:
                     # justify if there is a true split of tilting peaks with TCP
                     Tval = np.array(compute_tilt_density(T,plot_fitting=True,corr_vals=polarity)).reshape((3,-1))
                     self.prop_lib['tilting'] = Tval
+                    
+                    # NEW: separate tilting (Glazer) plot per B-X pair
+                    if pair_rows is not None:
+                        for bsp, rows in pair_rows.items():
+                            draw_tilt_and_corr_density_shade(T[:,rows,:], Corr[:,rows,:], uniname+f"_{bsp}", saveFigures, title=f"{bsp} tilting")
             
             elif structure_type in [2,3]: # non-3D perovskite
                 if structure_ref_NN1 is None:
