@@ -9,7 +9,6 @@ It returns the processed data class (with callable attributes) and a series of p
 
 from __future__ import annotations
 
-import os
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -83,6 +82,7 @@ class Trajectory:
     _fpg_val_BX = [[0.1,8], [3,6.8]] # empirical values for lead halide perovskites
     #_fpg_val_BB = [[2,6], [3.2,5.7]] # WSe2
     #_fpg_val_BX = [[1,4.6], [2.5,4.1]] # WSe2
+    _paired_BX = None # default to no pairs
     
     def __post_init__(self):
         
@@ -109,7 +109,7 @@ class Trajectory:
                 raise TypeError("The atomic species in the POSCAR does not match with those in the trajectory. ")
             
             # read INCAR to obatin MD settings
-            if isinstance(incar_path, str):
+            if type(incar_path) == str:
                 with open(incar_path,"r") as fp:
                     lines = fp.readlines()
                     nblock = 1
@@ -127,7 +127,7 @@ class Trajectory:
                             tstep = float(line.split()[2])
                         if line.startswith('NSW'):
                             nsw = int(line.split()[2])
-            elif isinstance(incar_path, tuple):
+            elif type(incar_path) == tuple:
                 Ti, Tf, tstep, nsw, nblock = incar_path
                 
             else:
@@ -193,6 +193,26 @@ class Trajectory:
             self.MDsetting["tstep"] = lammps_setting[2]
             self.MDTimestep = lammps_setting[2]/1000*stepsize  # the timestep between recorded frames
             self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(max_step*lammps_setting[2]/1000)   # temeperature gradient
+            
+# =============================================================================
+#             # temp piece
+#             Allpos[:, :, [0, 2]] = Allpos[:, :, [2, 0]]
+#             latmat[:, :, [0, 2]] = latmat[:, :, [2, 0]]
+#             latmat[:, [0, 2], :] = latmat[:, [2, 0], :]
+#             lattice[:, [0, 2]] = lattice[:, [2, 0]]
+#             lattice[:, [3, 5]] = lattice[:, [5, 3]]
+#             at0 = aaa.get_atoms(st0)
+#             pos = at0.positions
+#             pos[:, [2, 0]] = pos[:, [0, 2]]
+#             at0.positions = pos
+#             lato = at0.cell.array
+#             lato[:, [0, 2]] = lato[:, [2, 0]]
+#             lato[[0, 2], :] = lato[[2, 0], :]
+#             at0.cell.array = lato
+#             st0 = aaa.get_structure(at0)
+# =============================================================================
+            
+
         
         
         elif self.data_format == 'xyz':
@@ -262,7 +282,92 @@ class Trajectory:
             self.MDsetting["tstep"] = md_setting[2]
             self.MDTimestep = md_setting[2]/1000*md_setting[3]  # the timestep between recorded frames
             self.Tgrad = (md_setting[1]-md_setting[0])/(md_setting[3]*md_setting[2]/1000)   # temeperature gradient
+
+
+        elif self.data_format == 'npz-fixedcell': # only for internal use, not generalised 
+            from pdyna.io import process_lat, chemical_from_formula
+            from ase.io.lammpsdata import read_lammps_data as rld
+            import pymatgen.io.ase as pia
+            from ase import Atoms
             
+            if len(self.data_path) != 3:
+                raise TypeError("The input format for lammps must be (npz_path, init_lammps-data_file, MD setting tuple). ")
+            npz_path,init_path,lammps_setting = self.data_path 
+            print("------------------------------------------------------------")
+            print("Loading Trajectory files...")      
+
+            # special treatment for diffuse data
+            if type(npz_path) is str:
+                atomic_numbers_code = np.load(npz_path)['types']
+            elif type(npz_path) is list:
+                atomic_numbers_code = np.load(npz_path[0])['types']
+            atomic_number_map = [55, 1, 82, 6, 53, 35, 7]
+            atomic_numbers = np.array([atomic_number_map[i] for i in atomic_numbers_code])
+            
+            if type(npz_path) is str:
+                ll = np.load(npz_path)
+                Allpos = ll['carts']
+                latmat = ll['latmat']
+                if latmat.ndim == 2:
+                    latmat = np.repeat(latmat[np.newaxis,:],Allpos.shape[0],axis=0)
+
+                if latmat.ndim == 2:
+                    newmat = np.zeros((latmat.shape[0],3,3))
+                    for i in range(3):
+                        newmat[:,i,i]=latmat[:,i]
+                    latmat = newmat.copy()
+                
+                if latmat.ndim == 2:
+                    lattice = np.repeat(process_lat(latmat)[np.newaxis,:],Allpos.shape[0],axis=0)
+                else:
+                    lattice = np.empty((0,6))
+                    for i in range(latmat.shape[0]):
+                        lattice = np.vstack((lattice,process_lat(latmat[i,:])))
+
+            elif type(npz_path) is list:
+                Allpos = []
+                latmat = []
+                for fp in npz_path:
+                    ll = np.load(fp)
+                    Allpos.append(ll['carts'])
+                    latmat1 = ll['latmat']
+                    if latmat1.ndim == 2:
+                        latmat1 = np.repeat(latmat1[np.newaxis,:],ll['carts'].shape[0],axis=0)
+                    latmat.append(latmat1)
+                Allpos = np.concatenate(Allpos,axis=0)
+                latmat = np.concatenate(latmat,axis=0)
+                
+                if latmat.ndim == 2:
+                    lattice = np.repeat(process_lat(latmat)[np.newaxis,:],Allpos.shape[0],axis=0)
+                else:
+                    lattice = np.empty((0,6))
+                    for i in range(latmat.shape[0]):
+                        lattice = np.vstack((lattice,process_lat(latmat[i,:])))
+                
+            else:
+                raise TypeError("The input npz_path must be either str or list. ")
+            
+            if not init_path is None:
+                at = rld(init_path, Z_of_type=None, style='atomic', sort_by_id=True, units='metal')
+                at.numbers = list(atomic_numbers)
+                st0 = pia.AseAtomsAdaptor.get_structure(at)
+            else:
+                at = Atoms(positions=Allpos[0,:], numbers=atomic_numbers, cell=latmat[0,:], pbc=True)
+                st0 = pia.AseAtomsAdaptor.get_structure(at)
+            
+            atomic_symbols = []
+            for site in st0.sites:
+                atomic_symbols.append(site.species_string)
+
+            self.MDsetting = {}
+            self.MDsetting["nsw"] = Allpos.shape[0]*lammps_setting[3]
+            self.MDsetting["Ti"] = lammps_setting[0]
+            self.MDsetting["Tf"] = lammps_setting[1]
+            self.MDsetting["tstep"] = lammps_setting[2]
+            self.MDsetting["nblock"] = lammps_setting[3]
+            self.MDTimestep = lammps_setting[2]/1000*lammps_setting[3]  # the timestep between recorded frames
+            self.Tgrad = (lammps_setting[1]-lammps_setting[0])/(lammps_setting[3]*lammps_setting[2]/1000)   # temeperature gradient
+                    
         
         elif self.data_format == 'npz': # only for internal use, not generalised 
             from pdyna.io import process_lat, chemical_from_formula
@@ -316,7 +421,7 @@ class Trajectory:
                 at.numbers = list(atomic_numbers[0,:])
                 st0 = pia.AseAtomsAdaptor.get_structure(at)
             else:
-                at = Atoms(positions=Allpos[0,:], numbers=atomic_numbers[0,:], cell=latmat[0,:], pbc=True)
+                at = Atoms(positions=Allpos[0,:], numbers=atomic_numbers, cell=latmat[0,:], pbc=True)
                 st0 = pia.AseAtomsAdaptor.get_structure(at)
             
             atomic_symbols = []
@@ -489,6 +594,7 @@ class Trajectory:
                  
                  # manually define system info that is saved in the class template
                  system_overwrite = None, # dict contains X-site and B-site info, and the default bond lengths
+                 flip2z = None, # flip this selected axis to the z-axis, input 'x' or 'y'
                  ):
         
         """
@@ -544,7 +650,8 @@ class Trajectory:
             draw_MO_anime (bool): Plot the MO in 3D animation and snapshot, can be time-consuming. Default is False.
         
             system_overwrite (dict): Contains X-site and B-site info, and the default bond lengths. Default is None.
-
+            flip2z (str): Flip a selected axis to the z-axis. Default is None.
+            
         """
         
         # pre-definitions
@@ -582,6 +689,50 @@ class Trajectory:
             pass
         else:
             raise TypeError("The calculation mode preset must be within (0,1,2,3). ")
+            
+        if not (flip2z is None or flip2z == 'z'):
+            from pdyna.structural import flip_structure
+            if flip2z == 'x':
+                temp = self.Allpos.copy()
+                temp[:,:,0] = self.Allpos[:,:,2]
+                temp[:,:,2] = self.Allpos[:,:,0]
+                self.Allpos = temp
+                
+                temp = self.latmat.copy()
+                temp[:,1,0] = self.latmat[:,1,2]
+                temp[:,1,2] = self.latmat[:,1,0]
+                temp[:,0,0] = self.latmat[:,2,2]
+                temp[:,2,2] = self.latmat[:,0,0]
+                temp[:,2,0] = self.latmat[:,0,2]
+                temp[:,0,2] = self.latmat[:,2,0]
+                temp[:,0,1] = self.latmat[:,2,1]
+                temp[:,2,1] = self.latmat[:,0,1]
+                self.latmat = temp
+                
+                self.st0 = flip_structure(self.st0,0)
+                
+            elif flip2z == 'y':
+                temp = self.Allpos.copy()
+                temp[:,:,1] = self.Allpos[:,:,2]
+                temp[:,:,2] = self.Allpos[:,:,1]
+                self.Allpos = temp
+                
+                temp = self.latmat.copy()
+                temp[:,0,1] = self.latmat[:,0,2]
+                temp[:,0,2] = self.latmat[:,0,1]
+                temp[:,1,1] = self.latmat[:,2,2]
+                temp[:,2,2] = self.latmat[:,1,1]
+                temp[:,2,1] = self.latmat[:,1,2]
+                temp[:,1,2] = self.latmat[:,2,1]
+                temp[:,1,0] = self.latmat[:,2,0]
+                temp[:,2,0] = self.latmat[:,1,0]
+                self.latmat = temp
+                
+                self.st0 = flip_structure(self.st0,1)
+            
+            else:
+                raise TypeError("The input for flip2z must be either x or y. ")
+            
         
         if not system_overwrite is None:
             if 'B-sites' in system_overwrite and (not system_overwrite['B-sites'] is None):
@@ -592,6 +743,8 @@ class Trajectory:
                 self._fpg_val_BB = system_overwrite['fpg_val_BB']
             if 'fpg_val_BX' in system_overwrite and (not system_overwrite['fpg_val_BX'] is None):
                 self._fpg_val_BX = system_overwrite['fpg_val_BX']
+            if 'paired_BX' in system_overwrite and (not system_overwrite['paired_BX'] is None):
+                self._paired_BX = system_overwrite['paired_BX']
         
         # register the atomic symbols   
         Xindex = []
@@ -828,7 +981,7 @@ class Trajectory:
             self._flag_cubic_cell = False
             
             if not structure_ref_NN1 is None:
-                norm_tol = default_BB_dist/6 # empirical value scaled from BB distance
+                norm_tol = min(default_BB_dist/6,1.0) # empirical value scaled from BB distance
                 
                 Benv_type = {}
                 for typekey in structure_ref_NN1:
@@ -924,7 +1077,7 @@ class Trajectory:
             self._non_orthogonal = False
             self.complex_pbc = False
                    
-        else: #
+        else: # all other B-B connectivity
             self._flag_cubic_cell = False
             self._non_orthogonal = False
             self.complex_pbc = True
@@ -941,60 +1094,141 @@ class Trajectory:
         # label the constituent octahedra
         if toggle_tavg or toggle_tilt_distort or toggle_site_disp: 
             from pdyna.structural import fit_octahedral_network_defect_tol, fit_octahedral_network_defect_tol_non_orthogonal, find_polytype_network
-            rt = distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
-            
-            try: # use the initial frame first
-                if orthogonal_frame:
-                    if not self._non_orthogonal:
-                        neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
-                    else: # non-orthogonal
-                        neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
-                    self.octahedra = neigh_list
-                else:
-                    neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
-                    self.octahedra = neigh_list
-                    self.octahedra_ref = ref_initial
-            
-            except ValueError:# use averaged distances from multiple frames
-                
-                sampling = 5
-                blen = self.nframe
-                if (blen-1)-round(blen*self.allow_equil) < sampling-1:
-                    sampling = (blen-1)-round(blen*self.allow_equil)+1
-                frs_avg = np.round(np.linspace(round(blen*self.allow_equil),(blen-1),sampling)).astype(int)
-                angles = st0.lattice.angles
-                rt = np.zeros_like(rt)
-                for fr in frs_avg:
-                    if (max(angles) < 100 and min(angles) > 80):
-                        r0=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:])
+    
+            if self._paired_BX is None:
+                # ---- original single B-X sublattice path ----
+                rt = distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+        
+                try: # use the initial frame first
+                    if orthogonal_frame:
+                        if not self._non_orthogonal:
+                            neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                        else: # non-orthogonal
+                            neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
+                        self.octahedra = neigh_list
                     else:
-                        r0=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],at0.cell,self.latmat[fr,:],at0.pbc,False)
-                    rt += r0
-                rt = rt/sampling
-                #self.rt=rt
-                
-                #Bpos_samp = self.Allpos[frs_avg,:][:,self.Bindex,:]
-                #Xpos_samp = self.Allpos[frs_avg,:][:,self.Xindex,:]
-                #lmat_samp = self.latmat[frs_avg,:]
-                
-                if orthogonal_frame:
-                    if not self._non_orthogonal:
-                        neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
-                    else: # non-orthogonal
-                        neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
-                    self.octahedra = neigh_list
-                else:
-                    neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
-                    self.octahedra = neigh_list
-                    self.octahedra_ref = ref_initial
+                        neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                        self.octahedra = neigh_list
+                        self.octahedra_ref = ref_initial
+        
+                except ValueError:# use averaged distances from multiple frames
+                    sampling = 5
+                    blen = self.nframe
+                    if (blen-1)-round(blen*self.allow_equil) < sampling-1:
+                        sampling = (blen-1)-round(blen*self.allow_equil)+1
+                    frs_avg = np.round(np.linspace(round(blen*self.allow_equil),(blen-1),sampling)).astype(int)
+                    angles = st0.lattice.angles
+                    rt = np.zeros_like(rt)
+                    for fr in frs_avg:
+                        if (max(angles) < 100 and min(angles) > 80):
+                            r0=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],self.latmat[fr,:])
+                        else:
+                            r0=distance_matrix_handler(Bpos[fr,:],Xpos[fr,:],at0.cell,self.latmat[fr,:],at0.pbc,False)
+                        rt += r0
+                    rt = rt/sampling
             
+                    if orthogonal_frame:
+                        if not self._non_orthogonal:
+                            neigh_list = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                        else: # non-orthogonal
+                            neigh_list = fit_octahedral_network_defect_tol_non_orthogonal(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type,self._rotmat_from_orthogonal)
+                        self.octahedra = neigh_list
+                    else:
+                        neigh_list, ref_initial = fit_octahedral_network_defect_tol(st0Bpos,st0Xpos,rt,mymat,self._fpg_val_BX,structure_type)
+                        self.octahedra = neigh_list
+                        self.octahedra_ref = ref_initial
+    
+            else:
+                # ---- NEW: multiple paired B-X sublattices, e.g. {'Mn':'N','Fe':'C'} ----
+                # Each B-site species is matched only against its designated X-site species,
+                # each pair fitted independently with its own (optionally per-pair) fpg_val_BX,
+                # then merged back into one neigh_list indexed exactly like the single-pair case
+                # (i.e. neigh_list[b,:] holds row-indices into self.Xindex / st0Xpos / Xpos).
+        
+                Bindex_row = {atom_idx: row for row, atom_idx in enumerate(self.Bindex)}
+                Xindex_row = {atom_idx: row for row, atom_idx in enumerate(self.Xindex)}
+        
+                neigh_list = np.full((len(self.Bindex), 6), np.nan)
+                ref_initial_global = None  # allocated lazily once we know its per-atom shape
+        
+                for bsp, xsp in self._paired_BX.items():
+            
+                    Bsub_rows = [Bindex_row[i] for i,site in enumerate(self.atomic_symbols) if site == bsp]
+                    Xsub_rows = [Xindex_row[i] for i,site in enumerate(self.atomic_symbols) if site == xsp]
+                    Xsub_rows_arr = np.array(Xsub_rows)
+            
+                    if len(Bsub_rows) == 0:
+                        continue
+                    if len(Xsub_rows) == 0:
+                        raise ValueError(f"paired_BX: no X-site atoms of species '{xsp}' found for B-site species '{bsp}'.")
+            
+                    Bpos_sub = st0Bpos[Bsub_rows,:]
+                    Xpos_sub = st0Xpos[Xsub_rows,:]
+            
+                    fpg_BX = self._fpg_val_BX[bsp] if isinstance(self._fpg_val_BX, dict) else self._fpg_val_BX
+            
+                    rt_sub = distance_matrix_handler(Bpos_sub,Xpos_sub,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
+            
+                    try:
+                        if orthogonal_frame:
+                            if not self._non_orthogonal:
+                                neigh_list_sub = fit_octahedral_network_defect_tol(Bpos_sub,Xpos_sub,rt_sub,mymat,fpg_BX,structure_type)
+                            else:
+                                neigh_list_sub = fit_octahedral_network_defect_tol_non_orthogonal(Bpos_sub,Xpos_sub,rt_sub,mymat,fpg_BX,structure_type,self._rotmat_from_orthogonal)
+                        else:
+                            neigh_list_sub, ref_initial_sub = fit_octahedral_network_defect_tol(Bpos_sub,Xpos_sub,rt_sub,mymat,fpg_BX,structure_type)
+            
+                    except ValueError: # use averaged distances from multiple frames, for this pair only
+                        sampling = 5
+                        blen = self.nframe
+                        if (blen-1)-round(blen*self.allow_equil) < sampling-1:
+                            sampling = (blen-1)-round(blen*self.allow_equil)+1
+                        frs_avg = np.round(np.linspace(round(blen*self.allow_equil),(blen-1),sampling)).astype(int)
+                        angles = st0.lattice.angles
+                        rt_sub = np.zeros_like(rt_sub)
+                        for fr in frs_avg:
+                            Bpos_fr = Bpos[fr,:][Bsub_rows,:]
+                            Xpos_fr = Xpos[fr,:][Xsub_rows,:]
+                            if (max(angles) < 100 and min(angles) > 80):
+                                r0=distance_matrix_handler(Bpos_fr,Xpos_fr,self.latmat[fr,:])
+                            else:
+                                r0=distance_matrix_handler(Bpos_fr,Xpos_fr,at0.cell,self.latmat[fr,:],at0.pbc,False)
+                            rt_sub += r0
+                        rt_sub = rt_sub/sampling
+                
+                        if orthogonal_frame:
+                            if not self._non_orthogonal:
+                                neigh_list_sub = fit_octahedral_network_defect_tol(Bpos_sub,Xpos_sub,rt_sub,mymat,fpg_BX,structure_type)
+                            else:
+                                neigh_list_sub = fit_octahedral_network_defect_tol_non_orthogonal(Bpos_sub,Xpos_sub,rt_sub,mymat,fpg_BX,structure_type,self._rotmat_from_orthogonal)
+                        else:
+                            neigh_list_sub, ref_initial_sub = fit_octahedral_network_defect_tol(Bpos_sub,Xpos_sub,rt_sub,mymat,fpg_BX,structure_type)
+            
+                    # neigh_list_sub indexes rows of Xpos_sub -> remap to rows of st0Xpos (global X ordering)
+                    valid = ~np.isnan(neigh_list_sub)
+                    neigh_list_global_sub = np.full(neigh_list_sub.shape, np.nan)
+                    neigh_list_global_sub[valid] = Xsub_rows_arr[neigh_list_sub[valid].astype(int)]
+            
+                    for k, row in enumerate(Bsub_rows):
+                        neigh_list[row,:] = neigh_list_global_sub[k,:]
+            
+                    if not orthogonal_frame:
+                        if ref_initial_global is None:
+                            ref_initial_global = np.full((len(self.Bindex),) + ref_initial_sub.shape[1:], np.nan)
+                        for k, row in enumerate(Bsub_rows):
+                            ref_initial_global[row,:] = ref_initial_sub[k,:]
+        
+                self.octahedra = neigh_list
+                if not orthogonal_frame:
+                    self.octahedra_ref = ref_initial_global
+    
             # determine polytype (experimental)
             #rt=distance_matrix_handler(st0Bpos,st0Xpos,mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             #conntypeStr, connectivity, conn_category = find_polytype_network(st0Bpos,st0Xpos,rt,mymat,neigh_list)
             #self.octahedral_connectivity = conn_category
         
         # label the constituent A-sites
-        if toggle_MO or (toggle_site_disp and self._flag_organic_A):
+        if toggle_MO or toggle_site_disp:
             from pdyna.io import display_A_sites
             
             Nindex = self.Nindex
@@ -1005,34 +1239,36 @@ class Trajectory:
             Aindex_ma = []
             Aindex_azr = []
             
-            dm = distance_matrix_handler(st0.cart_coords[Cindex,:],st0.cart_coords[Nindex,:],mymat,at0.cell,at0.pbc,self.complex_pbc)
-            dm1 = distance_matrix_handler(st0.cart_coords[Cindex,:],st0.cart_coords[Cindex,:],mymat,at0.cell,at0.pbc,self.complex_pbc)
-            
-            CN_max_distance = 2.5
-            
-            # search all A-site cations and their constituent atoms (if organic)
-            Cpass = []
-            for i in range(dm.shape[0]):
-                if i in Cpass: continue # repetitive C atom in case of Azr
+            if len(Nindex)>0 and len(Cindex)>0:
+                dm = distance_matrix_handler(st0.cart_coords[Cindex,:],st0.cart_coords[Nindex,:],mymat,at0.cell,at0.pbc,self.complex_pbc)
+                dm1 = distance_matrix_handler(st0.cart_coords[Cindex,:],st0.cart_coords[Cindex,:],mymat,at0.cell,at0.pbc,self.complex_pbc)
                 
-                Ns = []
-                temp = np.argwhere(dm[i,:] < CN_max_distance).reshape(-1)
-                for j in temp:
-                    Ns.append(Nindex[j])
-                moreC = np.argwhere(np.logical_and(dm1[i,:]<CN_max_distance,dm1[i,:]>0.01)).reshape(-1)
-                if len(moreC) == 1: # aziridinium
-                    Aindex_azr.append([[Cindex[i],Cindex[moreC[0]]],Ns])
-                    Cpass.append(moreC[0])
-                elif len(moreC) == 0:
-                    if len(temp) == 1:
-                        Aindex_ma.append([[Cindex[i]],Ns])
-                    elif len(temp) == 2:
-                        Aindex_fa.append([[Cindex[i]],Ns])
-                    else:
-                        raise ValueError(f"There are {len(temp)} N atom connected to C atom number {i}")
-                else:
-                    raise ValueError(f"There are {len(moreC)+1} C atom connected to C atom number {i}")
+                CN_max_distance = 2.5
+                
+                # search all A-site cations and their constituent atoms (if organic)
+                Cpass = []
+                for i in range(dm.shape[0]):
+                    if i in Cpass: continue # repetitive C atom in case of Azr
                     
+                    Ns = []
+                    temp = np.argwhere(dm[i,:] < CN_max_distance).reshape(-1)
+                    for j in temp:
+                        Ns.append(Nindex[j])
+                    moreC = np.argwhere(np.logical_and(dm1[i,:]<CN_max_distance,dm1[i,:]>0.01)).reshape(-1)
+                    if len(moreC) == 1: # aziridinium
+                        Aindex_azr.append([[Cindex[i],Cindex[moreC[0]]],Ns])
+                        Cpass.append(moreC[0])
+                    elif len(moreC) == 0:
+                        if len(temp) == 1:
+                            Aindex_ma.append([[Cindex[i]],Ns])
+                        elif len(temp) == 2:
+                            Aindex_fa.append([[Cindex[i]],Ns])
+                        else:
+                            raise ValueError(f"There are {len(temp)} N atom connected to C atom number {i}")
+                    else:
+                        raise ValueError(f"There are {len(moreC)+1} C atom connected to C atom number {i}")
+                        
+                
             Aindex_cs = []
             
             for i,site in enumerate(st0.sites):
@@ -1077,22 +1313,22 @@ class Trajectory:
             if (not Asite_reconstruct): # or (not 'reorientation' in self.prop_lib):
                 #if Asite_reconstruct and (not 'reorientation' in self.prop_lib):
                 #    print("!Time-averaged structure: please enable MOautoCorr to allow Asite_reconstruct. ")
-                struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path=os.path.join(tavg_save_dir, f"{uniname}_tavg.cif"),force_periodicity=True)
+                struct = structure_time_average_ase(self,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif",force_periodicity=True)
             else: # Asite_reconstruct is on and reorientation has been calculated
                 if ('reorientation' in self.prop_lib):
                     dec = []
                     for elem in self.prop_lib['reorientation']:
                         dec1 = self.prop_lib['reorientation'][elem]
-                        if isinstance(dec1, (int, float)):
+                        if type(dec1) == int:
                             dec.append(dec1)
-                        elif isinstance(dec1, list):
+                        elif type(dec1) == list:
                             dec.append(sum(dec1)/len(dec1))
                     tavgspan = round(min(dec)/self.MDTimestep/3)
                 else: # MO_autocorr is not calculated
                     tavgspan = round(5/self.MDTimestep/3)
                     if tavgspan < 1: tavgspan = 1
                 
-                struct = structure_time_average_ase_organic(self,tavgspan,start_ratio= start_ratio, cif_save_path=os.path.join(tavg_save_dir, f"{uniname}_tavg.cif"))
+                struct = structure_time_average_ase_organic(self,tavgspan,start_ratio= start_ratio, cif_save_path=tavg_save_dir+f"\\{uniname}_tavg.cif")
 
             self.tavg_struct = struct
             if hasattr(self,"octahedra"):
@@ -1120,6 +1356,7 @@ class Trajectory:
             draw_transient_properties(self.Lobj, self.Tobj, self.Cobj, self.Mobj, uniname, saveFigures)
         
         if lib_saver and read_mode == 1:
+            import os
             import pickle
             lib_name = "perovskite_gaussian_data"
             if not os.path.isfile(lib_name): # create the data file if not found in work dir
@@ -1190,7 +1427,7 @@ class Trajectory:
         num_crop = round(self.nframe*(1-self.allow_equil)*leading_crop)      
         
         # data visualization
-        if type(Lat) is list:
+        if type(Lat) is list: # multiple z-orientation 
             for sublat in Lat:
                 if read_mode == 1:
                     from pdyna.analysis import draw_lattice_density
@@ -1263,7 +1500,7 @@ class Trajectory:
                         
                     self.Ltempline = steps1
                     from pdyna.analysis import draw_lattice_evolution
-                    draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, x_lims = xlims, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
+                    self.Lobj = draw_lattice_evolution(Lat, steps1, Tgrad = self.Tgrad, uniname=uniname, saveFigures = saveFigures, x_lims = xlims, xaxis_type = 'T', Ti = Ti,invert_x=invert_x) 
          
                 else: 
                     timeline = np.linspace(1,Lat.shape[0],Lat.shape[0])*self.MDTimestep
@@ -1549,6 +1786,7 @@ class Trajectory:
             kt = np.array(kt)
             self.tilt_autocorr = kt
             self.prop_lib['tilt_autocorr'] = kt
+            self.tilt_autocorr_raw = (xt, yt)
         
         # NN1 correlation function of tilting (Glazer notation)
         if tilt_corr_NN1:
@@ -1752,6 +1990,7 @@ class Trajectory:
 
             #thr = 3
             bin_indices = bin_indices-1 # 0-indexing
+            self._B3dbin = bin_indices
             
             num_nn = math.ceil((supercell_size-1)/2)
             scmnorm = np.empty((bin_indices.shape[1],3,num_nn+1,3))
@@ -2044,14 +2283,14 @@ class Trajectory:
             
             cn = Cpos-Npos
             cn = apply_pbc_cart_vecs(cn,latmat)
-            CN = np.divide(cn,np.expand_dims(np.linalg.norm(cn,axis=2),axis=2))
+            CN = np.divide(cn,np.linalg.norm(cn,axis=2)[:,:,np.newaxis])
             
             MOvecs["MA"] = MA_MOvecnorm = CN
             MA_center = Cpos - 7/13*cn
             MOcenter["MA"] = MA_center
             
             orientation_density(CN,"MA",saveFigures,uniname,title=title)
-            if draw_MO_anime and saveFigures:
+            if draw_MO_anime:
                 MOvars["MA"] = orientation_density_3D_sphere(CN,"MA",saveFigures,uniname)
             else:
                 _,_,_,_,MOvars["MA"] = sphere_bin_count(CN)
@@ -2075,11 +2314,11 @@ class Trajectory:
             cn2 = apply_pbc_cart_vecs(cn2,latmat)
             
             cn = (cn1+cn2)/2
-            CN = np.divide(cn,np.expand_dims(np.linalg.norm(cn,axis=2),axis=2))
+            CN = np.divide(cn,np.linalg.norm(cn,axis=2)[:,:,np.newaxis])
             
             nn = N1pos-N2pos
             nn = apply_pbc_cart_vecs(nn,latmat)
-            NN = np.divide(nn,np.expand_dims(np.linalg.norm(nn,axis=2),axis=2))
+            NN = np.divide(nn,np.linalg.norm(nn,axis=2)[:,:,np.newaxis])
             
             MOvecs["FA1"] = FA_MOvec1norm = CN
             MOvecs["FA2"] = FA_MOvec2norm = NN
@@ -2087,7 +2326,7 @@ class Trajectory:
             MOcenter["FA"] = FA_center
             
             orientation_density_2pan(CN,NN,"FA",saveFigures,uniname,title=title)
-            if draw_MO_anime and saveFigures:
+            if draw_MO_anime:
                 MOvars["FA1"] = orientation_density_3D_sphere(CN,"FA1",saveFigures,uniname)
                 MOvars["FA2"] = orientation_density_3D_sphere(NN,"FA2",saveFigures,uniname)
             else:
@@ -2113,11 +2352,11 @@ class Trajectory:
             cn2 = apply_pbc_cart_vecs(cn2,latmat)
             
             cn = (cn1+cn2)/2
-            CN = np.divide(cn,np.expand_dims(np.linalg.norm(cn,axis=2),axis=2))
+            CN = np.divide(cn,np.linalg.norm(cn,axis=2)[:,:,np.newaxis])
             
             nn = C1pos-C2pos
             nn = apply_pbc_cart_vecs(nn,latmat)
-            NN = np.divide(nn,np.expand_dims(np.linalg.norm(nn,axis=2),axis=2))
+            NN = np.divide(nn,np.linalg.norm(nn,axis=2)[:,:,np.newaxis])
             
             MOvecs["Azr1"] = Azr_MOvec1norm = CN
             MOvecs["Azr2"] = Azr_MOvec2norm = NN
@@ -2125,7 +2364,7 @@ class Trajectory:
             MOcenter["Azr"] = Azr_center
             
             orientation_density_2pan(CN,NN,"Azr",saveFigures,uniname,title=title)
-            if draw_MO_anime and saveFigures:
+            if draw_MO_anime:
                 MOvars["Azr1"] = orientation_density_3D_sphere(CN,"Azr1",saveFigures,uniname)
                 MOvars["Azr2"] = orientation_density_3D_sphere(NN,"Azr2",saveFigures,uniname)
             else:
@@ -2150,17 +2389,24 @@ class Trajectory:
             dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[self.Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
             assert len(Hs) == 5
+            env.append(Hs)
             allmole.append(env[0]+env[1]+[self.Hindex[i] for i in Hs])
         for env in Ama:
             dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[self.Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
             assert len(Hs) == 6
+            env.append(Hs)
             allmole.append(env[0]+env[1]+[self.Hindex[i] for i in Hs])
         for env in Aazr:
             dm = distance_matrix_handler(st0pos[env[0]+env[1],:],st0pos[self.Hindex,:],mymat,self.at0.cell,self.at0.pbc,self.complex_pbc)
             Hs = sorted(set(np.argwhere(dm<CN_H_tol)[:,1]))
             assert len(Hs) == 6
+            env.append(Hs)
             allmole.append(env[0]+env[1]+[self.Hindex[i] for i in Hs])
+        
+        self.A_sites["FA"] = Afa
+        self.A_sites["MA"] = Ama
+        self.A_sites["Azr"] = Aazr
         
         molediff = []
         for env in allmole:
@@ -2325,25 +2571,10 @@ class Trajectory:
             
             safety_margin = np.array([1-1/supercell_size,1])
             
-            cc = get_frac_from_cart(MOcent, latmat)[0,:]
-            
-            rect = [0,0,0]
-            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,0])-np.amin(cc[:,0])))): 
-                cc[:,0] = cc[:,0]-(np.amax(cc[:,0])-(1-1/supercell_size/2))
-                rect[0] = 1
-            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,1])-np.amin(cc[:,1])))): 
-                cc[:,1] = cc[:,1]-(np.amax(cc[:,1])-(1-1/supercell_size/2))
-                rect[1] = 1
-            if np.argmin(np.abs(safety_margin - (np.amax(cc[:,2])-np.amin(cc[:,2])))): 
-                cc[:,2] = cc[:,2]-(np.amax(cc[:,2])-(1-1/supercell_size/2))
-                rect[2] = 1
-            
-            for i in range(3):
-                if rect[i] == 0:
-                    if np.amin(cc[:,i]) < 1/supercell_size/4:
-                        cc[:,i] = cc[:,i] + 1/supercell_size/8*3
-                    if np.amin(cc[:,i]) > 1-1/supercell_size/4:
-                        cc[:,i] = cc[:,i] - 1/supercell_size/8*3
+            cc = get_frac_from_cart(MOcent, latmat)
+            ccm = np.mean(np.mean(cc,axis=0),axis=0)
+            cc = cc-ccm+0.5 # center the structure with respect to all molecules 
+            cc = np.mean(cc,axis=0)
             
             for i in range(cc.shape[0]):
                 for j in range(cc.shape[1]):
@@ -2391,6 +2622,7 @@ class Trajectory:
                 C3denv[i,:] = binned
             
             C3denv = C3denv.astype(int)
+            self._C3denv = C3denv
 
             num_nn = math.ceil((supercell_size-1)/2)
                           
@@ -2531,10 +2763,14 @@ class Trajectory:
         
         if self._flag_organic_A:
             # A-site displacements
-            Afa = self.A_sites["FA"]
-            Ama = self.A_sites["MA"]
-            Aazr = self.A_sites["Azr"]
-            Aindex_cs = self.A_sites["Cs"]
+            if "FA" in self.A_sites:
+                Afa = self.A_sites["FA"]
+            if "MA" in self.A_sites:
+                Ama = self.A_sites["MA"]
+            if "Azr" in self.A_sites:
+                Aazr = self.A_sites["Azr"]
+            if "Cs" in self.A_sites:
+                Aindex_cs = self.A_sites["Cs"]
             
             ABsep = 1.3*self.default_BB_dist
             st0Bpos = st0pos[Bindex,:]
@@ -2649,7 +2885,11 @@ class Trajectory:
                             Bs.append(Bindex[j])
                     assert len(Bs) == 8
                     B8envs[env] = Bs
-
+                    
+            self._B8envs = B8envs
+            
+            self.Asite_disp = {}
+            self.Asite_vibcent = {}
             if len(Aindex_ma) > 0:
                 disp_ma = np.empty((Allposfr.shape[0],len(Aindex_ma),3))
                 for ai, envs in enumerate(Aindex_ma):
@@ -2661,6 +2901,7 @@ class Trajectory:
                 
                 moltype = "MA"
                 peaks_ma = fit_3D_disp_atomwise(disp_ma,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                self.Asite_vibcent['MA'] = peaks_ma
                 fit_3D_disp_total(dispvec_ma,uniname,moltype,saveFigures,title=moltype)
                 peaks_3D_scatter(peaks_ma,uniname,moltype,saveFigures)
                 
@@ -2675,6 +2916,7 @@ class Trajectory:
                 
                 moltype = "Azr"
                 peaks_azr = fit_3D_disp_atomwise(disp_azr,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                self.Asite_vibcent['Azr'] = peaks_azr
                 fit_3D_disp_total(dispvec_azr,uniname,moltype,saveFigures,title=moltype)
                 peaks_3D_scatter(peaks_azr,uniname,moltype,saveFigures)
                 
@@ -2689,6 +2931,7 @@ class Trajectory:
                 
                 moltype = "FA"
                 peaks_fa = fit_3D_disp_atomwise(disp_fa,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                self.Asite_vibcent['FA'] = peaks_fa
                 fit_3D_disp_total(dispvec_fa,uniname,moltype,saveFigures,title=moltype)
                 peaks_3D_scatter(peaks_fa,uniname,moltype,saveFigures)
 
@@ -2703,6 +2946,7 @@ class Trajectory:
                 
                 moltype = "Cs"
                 peaks_cs = fit_3D_disp_atomwise(disp_cs,readTimestep,uniname,moltype,saveFigures,title=moltype)
+                self.Asite_vibcent['Cs'] = peaks_cs
                 fit_3D_disp_total(dispvec_cs,uniname,moltype,saveFigures,title=moltype)
                 peaks_3D_scatter(peaks_cs,uniname,moltype,saveFigures)
         
@@ -2826,7 +3070,7 @@ class Trajectory:
             self.prop_lib["spatial_corr_length_Bdisp"] = scdecay 
             self.spatialCorrLength_Bdisp = scdecay  
         
-        if self._flag_organic_A:
+        if self._flag_organic_A and (len(Aindex_cs)>0+len(Aindex_ma)>0+len(Aindex_fa)>0+len(Aindex_azr)>0)==1:
             # A-A displacement corr
             if len(Aindex_cs) > 0:
                 trajnum = list(range(round(self.nframe*self.allow_equil),self.nframe))
@@ -3051,8 +3295,10 @@ class Trajectory:
             neigh_list = self.octahedra
             
             if read_mode == 2:
-                stepsL = self.Ltempline
-                stepsT = self.TDtempline
+                if hasattr(self,"Lat"):
+                    stepsL = self.Ltempline
+                if hasattr(self,"Tilting"):
+                    stepsT = self.TDtempline
             
             mymat = st0.lattice.matrix
             
@@ -3124,6 +3370,8 @@ class Trajectory:
         
             syscode = np.average(syscode,axis=0) # label each B atom with its neighbouring halide density in one-hot manner, key output
             brconc = syscode[:,1]
+            
+            self.octahedra_by_conc = brconc
 
             # categorize the octa into different configs
             config_types = sorted(set(octa_halide_code_single))
@@ -3153,6 +3401,8 @@ class Trajectory:
                     
                 bincent = (Bins[1:]+Bins[:-1])/2
             
+            self.octahedra_in_types = typelib
+            self.octahedral_types = config_types
             
             # partition properties
             if octa_locality == 'homo':
@@ -3219,7 +3469,10 @@ class Trajectory:
                         Tmaxs_type = draw_octatype_tilt_density(Ttype, typelib, config_types, uniname, saveFigures, corr_vals=tcptype)
                         Dgauss_type, Dgaussstd_type = draw_octatype_dist_density(Dtype, config_types, uniname, saveFigures)
                         DBgauss_type, DBgaussstd_type = draw_octatype_dist_density(DBtype, config_types, uniname, saveFigures)
-                    
+                        
+                        self.tilt_wrt_octatype = [config_types,Tmaxs_type,tcptype]
+                        self.prop_lib['tilting_octatype'] = self.tilt_wrt_octatype
+                        
                     elif read_mode == 2:
                         self.tilt_wrt_octatype_transient = draw_octatype_tilt_density_transient(Ttype, stepsT, typelib, config_types, uniname, saveFigures)
                         self.tilt_wrt_halideconc_transient = draw_halideconc_tilt_density_transient(Tconc, stepsT, concent, uniname, saveFigures)
@@ -3313,7 +3566,7 @@ class Trajectory:
                         occs[1].extend(tn)
                 
                 print(f"hetero-structure octahedral categories: (bulk: {len(occs[0])}, g.b.: {len(occs[1])}, grain: {len(occs[2])}). ")
-                    
+                
                 if hasattr(self,"Tilting"):
                     Dx = self.Distortion
                     Db = self.Distortion_B
@@ -3324,7 +3577,7 @@ class Trajectory:
                         TCN = self.Tilting_Corr
                         #TCN = get_norm_corr(TCN,T)
                         
-                    from pdyna.analysis import draw_hetero_tilt_density, draw_hetero_dist_density, draw_hetero_lat_density
+                    from pdyna.analysis import draw_hetero_tilt_density, draw_hetero_dist_density, draw_hetero_lat_density, draw_hetero_tilt_density_transient
                     
                     Dcls = []
                     DBcls = []
@@ -3344,7 +3597,19 @@ class Trajectory:
                         Tmaxs_type = draw_hetero_tilt_density(Tcls, TCNcls, occs, uniname, saveFigures, corr_vals=tcpcls)
                         Dgauss_type, Dgaussstd_type = draw_hetero_dist_density(Dcls, uniname, saveFigures)
                         DBgauss_type, DBgaussstd_type = draw_hetero_dist_density(DBcls, uniname, saveFigures)
+                        
+                        self.tilt_wrt_region = Tmaxs_type
+                        self.dist_wrt_region = Dgauss_type
+                        self.distB_wrt_region = DBgauss_type
                     
+                        self.prop_lib['distortion_hetero_region'] = self.dist_wrt_region
+                        self.prop_lib['distortion_B_hetero_region'] = self.distB_wrt_region
+                        self.prop_lib['tilting_hetero_region'] = self.tilt_wrt_region
+                        
+                    elif read_mode == 2:
+                        Tobj_region = draw_hetero_tilt_density_transient(Tcls, stepsT, occs, uniname, saveFigures)
+                        self.tilt_wrt_region_transient = Tobj_region
+                        
                     # partition tilting correlation length wrt local config
                     if hasattr(self,"spatialCorrLength"):
                         TC = self.spatialCorr['raw']
@@ -3370,7 +3635,81 @@ class Trajectory:
                     
                     if read_mode == 1:
                         Lgauss_type, Lgaussstd_type = draw_hetero_lat_density(Lcls, uniname, saveFigures)
+                
+                # hetero but instead with distance from grain as classifier
+                from pdyna.structural import get_core_and_shells
+                dists, disoccs = get_core_and_shells(self,occs,b0,mymat,nsplit=5)
+                
+                if hasattr(self,"Tilting"):
+                    Dx = self.Distortion
+                    Db = self.Distortion_B
+                    T = self.Tilting
+                    TCNcls = []
+                    if hasattr(self,"Tilting_Corr"):
+                        from pdyna.analysis import get_tcp_from_list
+                        TCN = self.Tilting_Corr
+                        #TCN = get_norm_corr(TCN,T)
+                        
+                    from pdyna.analysis import draw_hetero_tilt_density, draw_hetero_dist_density, draw_hetero_lat_density, draw_hetero_tilt_density_transient
                     
+                    Dcls = []
+                    DBcls = []
+                    Tcls = []
+                    for ti, types in enumerate(disoccs):
+                        Dcls.append(Dx[:,types,:])
+                        DBcls.append(Db[:,types,:])
+                        Tcls.append(T[:,types,:])
+                    if hasattr(self,"Tilting_Corr"):
+                        for ti, types in enumerate(disoccs):
+                            TCNcls.append(TCN[:,types,:])
+                        tcpcls = get_tcp_from_list(TCNcls)
+                    if len(TCNcls) == 0:
+                        tcpcls = None
+                    
+                    if read_mode == 1:
+                        Tmaxs_type = draw_hetero_tilt_density(Tcls, TCNcls, disoccs, uniname, saveFigures, corr_vals=tcpcls, overtypes=dists)
+                        Dgauss_type, Dgaussstd_type = draw_hetero_dist_density(Dcls, uniname, saveFigures, overtypes=dists)
+                        DBgauss_type, DBgaussstd_type = draw_hetero_dist_density(DBcls, uniname, saveFigures, overtypes=dists)
+                        
+                        self.tilt_wrt_hetero = Tmaxs_type
+                        self.dist_wrt_hetero = Dgauss_type
+                        self.distB_wrt_hetero = DBgauss_type
+                    
+                        self.prop_lib['distortion_hetero_hetero'] = self.dist_wrt_hetero
+                        self.prop_lib['distortion_B_hetero_hetero'] = self.distB_wrt_hetero
+                        self.prop_lib['tilting_hetero_hetero'] = self.tilt_wrt_hetero
+                        
+                    elif read_mode == 2:
+                        Tobj_hetero = draw_hetero_tilt_density_transient(Tcls, stepsT, occs, uniname, saveFigures, overtypes=dists, smoother = 42)
+                        self.tilt_wrt_hetero_transient = Tobj_hetero 
+                        
+                    # partition tilting correlation length wrt local config
+                    if hasattr(self,"spatialCorrLength"):
+                        TC = self.spatialCorr['raw']
+                        TC = np.sqrt(np.abs(TC))*np.sign(TC)
+
+                        from pdyna.analysis import quantify_hetero_tilt_domain
+                        
+                        TCcls = []
+                        for ti, types in enumerate(disoccs):
+                            temp = TC[types,:]
+                            temp = temp/temp[:,:,[0],:]
+                            TCcls.append(temp)
+                        
+                        if read_mode == 1:
+                            Tmaxs_type = quantify_hetero_tilt_domain(TCcls, uniname, saveFigures, overtypes=dists)
+
+                    
+                if hasattr(self,"Lat") and self.Lat.ndim == 3: #partition lattice parameter as well
+                    L = self.Lat
+                    Lcls = []
+                    for ti, types in enumerate(disoccs):
+                        Lcls.append(L[:,types,:])
+                    
+                    if read_mode == 1:
+                        Lgauss_type, Lgaussstd_type = draw_hetero_lat_density(Lcls, uniname, saveFigures, overtypes=dists)
+                
+                
             
         et1 = time.time()
         self.timing["property_processing"] = et1-et0
@@ -3489,7 +3828,6 @@ class Frame:
             self.natom = len(st0)
             self.species_set = st0.symbol_set
             self.formula = chemical_from_formula(st0)
-            self.scaled_up = False
             
         elif self.data_format == 'cif':
             
@@ -3514,13 +3852,12 @@ class Frame:
             self.natom = len(st0)
             self.species_set = st0.symbol_set
             self.formula = chemical_from_formula(st0)
-            self.scaled_up = False
-
-
+            
         else:
             raise TypeError("Unsupported data format: {}".format(self.data_format))
         
         et1 = time.time()
+        self.scaled_up = False
         self.timing = {}
         self.timing["reading"] = et1-et0
 
@@ -3603,11 +3940,12 @@ class Frame:
              if site.species_string in self._Bsite_species:
                  Bindex.append(i)  
         
-        if len(Bindex) < 16:
+        if len(Bindex) < 48:
+            self.st0_original = st0.copy()
+            
             st0.make_supercell([2,2,2])
             
             self.st0 = st0
-            self.natom = len(st0)
             self.scaled_up = True
             
             Xindex = []
