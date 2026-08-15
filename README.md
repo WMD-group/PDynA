@@ -169,6 +169,8 @@ Citation
 
 Used in
 ------------
+["Kinetically Arrested Twin-Domain State in Formamidinium Lead Iodide" Journal of the American Chemical Society (2026)](https://pubs.acs.org/jacsat/article/doi/10.1021/jacs.6c09938)
+
 ["Phase transitions, dielectric response, and nonlinear optical properties of aziridinium lead halide perovskites" Chemistry of Materials (2023)](https://pubs.acs.org/doi/10.1021/acs.chemmater.3c02200)
 
 ["Dynamic local structure in caesium lead iodide: spatial correlation and transient domains" Small (2024)](https://onlinelibrary.wiley.com/doi/full/10.1002/smll.202303565)
